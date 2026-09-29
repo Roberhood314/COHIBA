@@ -90,6 +90,37 @@ function lockAll() {
   if (sweepAll) sweepAll.disabled = true;
 }
 
+async function syncServerTokenStatus() {
+  try {
+    const response = await fetch(`/api/token-status?network=${encodeURIComponent(network())}`, {
+      cache: "no-store"
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) return false;
+
+    if (!result.launched || !result.mint) {
+      localStorage.removeItem(mintStorageKey());
+      setMint("");
+      tokenBalance.textContent = "—";
+      tokenState.textContent = "NOT LAUNCHED";
+      return false;
+    }
+
+    setMint(result.mint);
+    const amount = result.onChain?.destinationUiAmount || result.supply || "0";
+    tokenBalance.textContent = `${amount} COH`;
+    const mintAuth = result.onChain?.mintAuthority ?? result.mintAuthority ?? null;
+    const freezeAuth = result.onChain?.freezeAuthority ?? result.freezeAuthority ?? null;
+    tokenState.textContent =
+      mintAuth === null && freezeAuth === null
+        ? `${isMainnet() ? "MAINNET" : "DEVNET"} LOCKED`
+        : `${isMainnet() ? "MAINNET" : "DEVNET"} VERIFIED`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function refreshBalance(address) {
   try {
     const lamports = await connection.getBalance(new PublicKey(address), "confirmed");
@@ -627,6 +658,7 @@ async function revokeAuthority(type) {
 
 async function switchNetwork() {
   connection = makeConnection();
+  await syncServerTokenStatus();
   setMint(currentMint());
   tokenBalance.textContent = "—";
   tokenState.textContent = "NOT LAUNCHED";
@@ -657,6 +689,7 @@ if (mainnetLaunchKey) mainnetLaunchKey.addEventListener("input", refreshControls
 
 lockAll();
 setMint(currentMint());
+syncServerTokenStatus().then(() => refreshControls());
 
 const p = provider();
 if (p) {
