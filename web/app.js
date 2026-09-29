@@ -136,6 +136,15 @@ async function refreshControls() {
   const p = provider();
   const connected = p?.publicKey?.toString();
   lockAll();
+
+  if (!isMainnet()) {
+    launchToken.disabled = false;
+    verifyToken.disabled = !currentMint();
+    if (resetMintState) resetMintState.disabled = false;
+    if (sweepAll) sweepAll.disabled = true;
+    return;
+  }
+
   if (!connected || connected !== AUTHORIZED_WALLET) return;
 
   verifyToken.disabled = false;
@@ -297,61 +306,85 @@ async function requiredLamports() {
 }
 
 async function launch() {
+  // Devnet creation is fully server-side and does NOT require Phantom.
+  if (!isMainnet()) {
+    launchToken.disabled = true;
+    try {
+      setAlert("warn", "Creating COH on Devnet server-side. Phantom is not used…");
+
+      const response = await fetch("/api/create-coh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ network: "devnet" })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Server-side Devnet COH creation failed.");
+      }
+
+      setMint(result.mint);
+      tokenState.textContent = "DEVNET MINTED";
+      tokenBalance.textContent = "1,000,000,000 COH";
+      setAlert(
+        "ok",
+        `Created 1,000,000,000 COH directly to ${result.destinationWallet}. Mint: ${result.mint}`
+      );
+    } catch (error) {
+      setAlert("error", error?.message || "Devnet COH launch failed.");
+    } finally {
+      launchToken.disabled = false;
+    }
+    return;
+  }
+
+  // Mainnet remains deliberately gated.
   const p = provider();
-  if (!p?.publicKey) return connectPhantom();
+  if (!p?.publicKey) {
+    setAlert("warn", "Mainnet still requires the authorized wallet context and server signer configuration.");
+    return;
+  }
 
   const owner = p.publicKey.toString();
   if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
 
-  if (isMainnet() && !mainnetArmed()) {
+  if (!mainnetArmed()) {
     setAlert("warn", "Type MAINNET COHIBA before creating the Mainnet token.");
     return;
   }
 
-  if (currentMint()) {
-    const valid = await validateStoredMintState();
-    if (valid) {
-      setAlert("warn", "A COH mint already exists for this network. Verify it before creating another.");
-      return;
-    }
-  }
-
   launchToken.disabled = true;
-
   try {
-    setAlert("warn", `Creating COH on ${isMainnet() ? "Mainnet" : "Devnet"} server-side…`);
+    setAlert("warn", "Creating COH on Mainnet server-side…");
 
     const response = await fetch("/api/create-coh", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ network: network() })
+      body: JSON.stringify({ network: "mainnet-beta" })
     });
 
     const result = await response.json();
-
     if (!response.ok || !result.ok) {
       if (result.error === "MAINNET_LOCKED") {
-        throw new Error("Mainnet server signer is still locked. Devnet works without Phantom signing.");
+        throw new Error("Mainnet server signer is locked.");
       }
       if (result.error === "MAINNET_SIGNER_NOT_CONFIGURED") {
-        throw new Error("Mainnet signer is not configured in Railway Secret yet.");
+        throw new Error("Mainnet signer is not configured in Railway Secret.");
       }
-      throw new Error(result.error || "Server-side COH creation failed.");
+      throw new Error(result.error || "Server-side Mainnet COH creation failed.");
     }
 
     setMint(result.mint);
-    tokenState.textContent = `${isMainnet() ? "MAINNET" : "DEVNET"} MINTED`;
+    tokenState.textContent = "MAINNET MINTED";
+    tokenBalance.textContent = "1,000,000,000 COH";
     setAlert(
       "ok",
-      `Created 1,000,000,000 COH directly to your wallet. Mint: ${result.mint}`
+      `Created 1,000,000,000 COH directly to ${result.destinationWallet}. Mint: ${result.mint}`
     );
-
-    await verifyOnChain(true);
-
   } catch (error) {
-    setAlert("error", error?.message || "COH launch failed.");
+    setAlert("error", error?.message || "Mainnet COH launch failed.");
   } finally {
-    await refreshControls();
+    launchToken.disabled = false;
   }
 }
 
