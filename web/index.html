@@ -62,6 +62,7 @@
     <div class="console-card"><span>COH Mint</span><code id="mintAddress">—</code></div>
     <div class="console-card"><span>Wallet COH balance</span><strong id="tokenBalance">—</strong></div>
     <div class="console-card"><span>Mainnet safety</span><input id="mainnetConfirm" placeholder="Type MAINNET COHIBA to arm" autocomplete="off"></div>
+    <div class="console-card"><span>Mainnet launch key</span><input id="mainnetLaunchKey" type="password" placeholder="Railway secret launch key" autocomplete="off"></div>
   </div>
 
   <div class="release-actions">
@@ -69,11 +70,8 @@
     <button id="launchToken" disabled>Create 1B COH</button>
     <button id="verifyToken" disabled>Verify Supply & Wallet</button>
     <button id="resetMintState" disabled>Reset Failed Mint State</button>
-    <button id="sweepAll" disabled>Sweep All COH to My Wallet</button>
-    <button id="revokeFreeze" class="danger" disabled>Revoke Freeze Authority</button>
-    <button id="revokeMint" class="danger" disabled>Revoke Mint Authority</button>
   </div>
-  <p class="fineprint">Signing authority remains inside Phantom. COHIBA never asks for or stores your recovery phrase or private key. Mainnet requires explicit arming, sufficient real SOL, successful preflight, wallet-side signatures, and on-chain verification before authority revocation is enabled.</p>
+  <p class="fineprint">COHIBA never asks for your Phantom recovery phrase or private key. Devnet creation is server-side: the system payer creates the mint, mints exactly 1,000,000,000 COH directly to the authorized wallet, verifies supply, then permanently revokes mint and freeze authorities. Mainnet remains locked until Railway secrets and an explicit launch key are configured.</p>
 </section>
 </main>
 <footer class="wrap">COHIBA · $COH · Fear the Machine. Defend the Human.</footer>
