@@ -238,26 +238,55 @@ async function sendSimpleTransaction(tx, extraSigner, label) {
   const p = provider();
   if (!p?.publicKey) throw new Error("Connect Phantom first.");
 
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = p.publicKey;
-  tx.recentBlockhash = blockhash;
-  if (extraSigner) tx.partialSign(extraSigner);
-
+  // 1) Simulate first. The simulation may use a temporary/replaced blockhash.
   setAlert("warn", `Preflight ${label}…`);
   await simulateBeforePhantom(tx, extraSigner);
 
-  setAlert("ok", `Preflight PASS: ${label}. Confirm in Phantom.`);
-  const signed = await p.signTransaction(tx);
-  const sig = await connection.sendRawTransaction(signed.serialize(), {
-    skipPreflight:false,
-    maxRetries:3
-  });
+  // 2) IMPORTANT: fetch a brand-new blockhash immediately before Phantom signs.
+  // This prevents "block height exceeded" while the user is reviewing the prompt.
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash("processed");
 
-  await connection.confirmTransaction(
-    { signature:sig, blockhash, lastValidBlockHeight },
-    "confirmed"
-  );
-  return sig;
+  tx.feePayer = p.publicKey;
+  tx.recentBlockhash = blockhash;
+
+  // Changing the blockhash changes the signed message, so re-sign any local
+  // ephemeral signer (e.g. the new mint account) with the fresh blockhash.
+  if (extraSigner) tx.partialSign(extraSigner);
+
+  setAlert("ok", `Preflight PASS: ${label}. Confirm promptly in Phantom.`);
+
+  let signed;
+  try {
+    signed = await p.signTransaction(tx);
+  } catch (error) {
+    throw new Error(error?.message || "Phantom signing was cancelled.");
+  }
+
+  try {
+    const sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight:false,
+      maxRetries:5
+    });
+
+    await connection.confirmTransaction(
+      { signature:sig, blockhash, lastValidBlockHeight },
+      "confirmed"
+    );
+    return sig;
+  } catch (error) {
+    const msg = String(error?.message || error || "");
+    if (
+      msg.includes("block height exceeded") ||
+      msg.includes("Blockhash not found") ||
+      msg.includes("expired")
+    ) {
+      throw new Error(
+        "Transaction expired before Solana accepted it. Click the action again; COHIBA will generate a fresh blockhash and reopen Phantom."
+      );
+    }
+    throw error;
+  }
 }
 
 async function requiredLamports() {
