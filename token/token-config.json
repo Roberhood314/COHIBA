@@ -1,0 +1,13 @@
+{
+  "name":"COHIBA",
+  "symbol":"COH",
+  "chain":"Solana",
+  "standard":"SPL Token",
+  "decimals":9,
+  "totalSupply":"1000000000",
+  "taxPercent":0,
+  "tagline":"Fear the Machine. Defend the Human.",
+  "theme":"AI Fear / Human Resistance",
+  "mintAuthorityAfterLaunch":"revoked",
+  "freezeAuthorityAfterLaunch":"revoked"
+}
