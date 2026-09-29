@@ -1,14 +1,21 @@
 {
-  "name":"cohiba-meme-coin",
-  "version":"0.1.0",
-  "private":true,
-  "type":"module",
-  "scripts":{
-    "serve":"python3 -m http.server 8080 --directory web",
-    "typecheck":"tsc --noEmit",
-    "token:create:devnet":"tsx scripts/create-token.ts --network devnet",
-    "token:check:devnet":"tsx scripts/check-token.ts --network devnet"
+  "name": "cohiba-meme-coin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory web",
+    "typecheck": "tsc --noEmit",
+    "token:create:devnet": "tsx scripts/create-token.ts --network devnet",
+    "token:check:devnet": "tsx scripts/check-token.ts --network devnet"
   },
-  "dependencies":{"@solana/spl-token":"^0.4.14","@solana/web3.js":"^1.98.4"},
-  "devDependencies":{"tsx":"^4.20.6","typescript":"^5.9.2"}
+  "dependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.10.0"
+  }
 }
