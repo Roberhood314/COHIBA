@@ -34,7 +34,8 @@ const network=arg("network",process.env.SOLANA_NETWORK||"devnet") as Cluster|"ma
 if(!["devnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
 
 if(process.env.AUTO_SWEEP_ENABLED!=="true"){
-  throw new Error("Auto-sweep disabled. Set AUTO_SWEEP_ENABLED=true.");
+  console.log(JSON.stringify({status:"DISABLED",message:"Auto-sweep is safely disabled."}));
+  process.exit(0);
 }
 if(network==="mainnet-beta"&&process.env.ALLOW_MAINNET!=="true"){
   throw new Error("Mainnet auto-sweep is safety-locked. Set ALLOW_MAINNET=true only after release approval.");
