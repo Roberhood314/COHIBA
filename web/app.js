@@ -106,45 +106,141 @@ async function sendWithPhantom(tx, extraSigner) {
   await connection.confirmTransaction({ signature:sig, blockhash, lastValidBlockHeight }, "confirmed");
   return sig;
 }
+
+async function buildLaunchTransaction(p, mint) {
+  const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
+  const ata = await getAssociatedTokenAddress(
+    mint.publicKey, p.publicKey, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  const tx = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: p.publicKey,
+      newAccountPubkey: mint.publicKey,
+      space: MINT_SIZE,
+      lamports: mintRent,
+      programId: TOKEN_PROGRAM_ID
+    }),
+    createInitializeMint2Instruction(
+      mint.publicKey, DECIMALS, p.publicKey, p.publicKey, TOKEN_PROGRAM_ID
+    ),
+    createAssociatedTokenAccountInstruction(
+      p.publicKey, ata, p.publicKey, mint.publicKey,
+      TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+    ),
+    createMintToInstruction(
+      mint.publicKey, ata, p.publicKey, SUPPLY_BASE, [], TOKEN_PROGRAM_ID
+    )
+  );
+  return { tx, mintRent, ata };
+}
+
+async function estimateLaunchCost(tx, owner) {
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+  tx.feePayer = owner;
+  tx.recentBlockhash = blockhash;
+  const feeResp = await connection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  const fee = feeResp?.value ?? 10_000;
+  const accountRents = tx.instructions
+    .filter(ix => ix.programId.equals(SystemProgram.programId))
+    .reduce((sum, ix) => sum, 0);
+  const ataRentEstimate = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
+  const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
+  const safetyBuffer = 500_000;
+  return mintRent + ataRentEstimate + fee + safetyBuffer;
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function simulateBeforePhantom(tx, extraSigner) {
+  const p = provider();
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+  tx.feePayer = p.publicKey;
+  tx.recentBlockhash = blockhash;
+  if (extraSigner) tx.partialSign(extraSigner);
+
+  const raw = tx.serialize({ requireAllSignatures:false, verifySignatures:false });
+  const response = await fetch(DEVNET_RPC, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "simulateTransaction",
+      params: [
+        bytesToBase64(raw),
+        {
+          encoding: "base64",
+          sigVerify: false,
+          replaceRecentBlockhash: true,
+          commitment: "confirmed"
+        }
+      ]
+    })
+  });
+  const json = await response.json();
+  if (json.error) throw new Error(json.error.message || "Devnet simulation RPC failed.");
+  if (json.result?.value?.err) {
+    const logs = (json.result.value.logs || []).slice(-6).join(" | ");
+    throw new Error(
+      "Simulation failed before Phantom opens: " +
+      JSON.stringify(json.result.value.err) +
+      (logs ? " · " + logs : "")
+    );
+  }
+}
+
 async function createDevnetToken() {
   const p = provider();
   if (!p?.publicKey) return connectPhantom();
+
   const owner = p.publicKey.toString();
   if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
+
   if (currentMint()) {
     walletAlert.className = "wallet-alert warn";
     walletAlert.textContent = "A COHIBA Devnet mint is already stored in this browser. Verify it before creating another.";
     return;
   }
+
   prepareDevnet.disabled = true;
+
   try {
-    const balance = await refreshBalance(owner);
-    if (balance < 5_000_000) throw new Error("Not enough Devnet SOL. Fund this Phantom address on Devnet, then retry.");
-
     const mint = Keypair.generate();
-    const rent = await getMinimumBalanceForRentExemptMint(connection);
-    const ata = await getAssociatedTokenAddress(mint.publicKey, p.publicKey, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+    const { tx } = await buildLaunchTransaction(p, mint);
+    const required = await estimateLaunchCost(tx, p.publicKey);
+    const balance = await refreshBalance(owner);
 
-    const tx = new Transaction().add(
-      SystemProgram.createAccount({
-        fromPubkey:p.publicKey,
-        newAccountPubkey:mint.publicKey,
-        space:MINT_SIZE,
-        lamports:rent,
-        programId:TOKEN_PROGRAM_ID
-      }),
-      createInitializeMint2Instruction(mint.publicKey, DECIMALS, p.publicKey, p.publicKey, TOKEN_PROGRAM_ID),
-      createAssociatedTokenAccountInstruction(p.publicKey, ata, p.publicKey, mint.publicKey, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID),
-      createMintToInstruction(mint.publicKey, ata, p.publicKey, SUPPLY_BASE, [], TOKEN_PROGRAM_ID)
-    );
+    if (balance < required) {
+      const have = (balance / 1e9).toFixed(6);
+      const need = (required / 1e9).toFixed(6);
+      const missing = ((required - balance) / 1e9).toFixed(6);
+      walletAlert.className = "wallet-alert warn";
+      walletAlert.textContent =
+        `Chưa mở Phantom: Devnet SOL chưa đủ. Có ${have} SOL · cần tối thiểu khoảng ${need} SOL · thiếu ${missing} SOL.`;
+      prepareDevnet.disabled = false;
+      return;
+    }
 
     walletAlert.className = "wallet-alert warn";
-    walletAlert.textContent = "Phantom is ready to sign the Devnet token creation transaction.";
+    walletAlert.textContent = "Preflight: checking Devnet transaction before opening Phantom…";
+    await simulateBeforePhantom(tx, mint);
+
+    walletAlert.className = "wallet-alert ok";
+    walletAlert.textContent = "Preflight PASS. Opening Phantom for your signature…";
+
     const sig = await sendWithPhantom(tx, mint);
     setMint(mint.publicKey.toBase58());
     tokenState.textContent = "DEVNET MINTED";
+
     walletAlert.className = "wallet-alert ok";
-    walletAlert.textContent = `Devnet token created. Transaction: ${sig}`;
+    walletAlert.textContent = `Devnet token created successfully. Transaction: ${sig}`;
     await verifyOnChain(false);
   } catch (error) {
     walletAlert.className = "wallet-alert error";
@@ -152,6 +248,7 @@ async function createDevnetToken() {
     prepareDevnet.disabled = false;
   }
 }
+
 async function verifyOnChain(showMessage=true) {
   const address = currentMint();
   if (!address) {
