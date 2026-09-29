@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Connection, Keypair, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint } from "@solana/spl-token";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10,7 +10,7 @@ const root = path.join(__dirname, "dist");
 const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
-const SUPPLY = 1_000_000_000n * 10n ** 9n;
+const SUPPLY = 1_000_000_000n * 10n ** 9n;\nconst DEVNET_PAYER = Keypair.generate();
 
 const types = {
   ".html":"text/html; charset=utf-8",
@@ -53,15 +53,7 @@ async function createCoh(network){
 
   if(network==="devnet"){
     connection=new Connection(clusterApiUrl("devnet"),"confirmed");
-    payer=Keypair.generate();
-
-    const sig=await connection.requestAirdrop(payer.publicKey, LAMPORTS_PER_SOL);
-    const latest=await connection.getLatestBlockhash("confirmed");
-    await connection.confirmTransaction({
-      signature:sig,
-      blockhash:latest.blockhash,
-      lastValidBlockHeight:latest.lastValidBlockHeight
-    },"confirmed");
+    payer=DEVNET_PAYER;
   }else{
     if(process.env.ALLOW_MAINNET!=="true") throw new Error("MAINNET_LOCKED");
     payer=loadMainnetSigner();
@@ -126,6 +118,22 @@ const server=http.createServer(async (req,res)=>{
       const message=String(error?.message||error);
       const status=message==="MAINNET_LOCKED"||message==="MAINNET_SIGNER_NOT_CONFIGURED"?409:500;
       json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/system-wallet"){
+    try{
+      const connection=new Connection(clusterApiUrl("devnet"),"confirmed");
+      const balance=await connection.getBalance(DEVNET_PAYER.publicKey,"confirmed");
+      json(res,200,{
+        ok:true,
+        network:"devnet",
+        address:DEVNET_PAYER.publicKey.toBase58(),
+        balanceSol:balance/1e9
+      });
+    }catch(error){
+      json(res,500,{ok:false,error:String(error?.message||error)});
     }
     return;
   }
