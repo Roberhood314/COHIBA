@@ -18,25 +18,26 @@ function loadKeypair(walletPath:string){
   return Keypair.fromSecretKey(Uint8Array.from(secret));
 }
 
-const network=arg("network","devnet") as Cluster|"mainnet-beta";
-if(!["devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
+const network=arg("network","devnet") as Cluster|"mainnet-beta"|"localnet";
+if(!["localnet","devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
 if(network==="mainnet-beta"&&process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet is safety-locked. Set ALLOW_MAINNET=true only after final review.");
 
 const walletPath=process.env.SOLANA_WALLET_PATH;
 if(!walletPath) throw new Error("Set SOLANA_WALLET_PATH to a dedicated Solana JSON keypair file.");
 
 const payer=loadKeypair(walletPath);
-const rpc=process.env.SOLANA_RPC_URL||clusterApiUrl(network as Cluster);
+const defaultRpc=network==="localnet"?"http://127.0.0.1:8899":clusterApiUrl(network as Cluster);
+const rpc=process.env.SOLANA_RPC_URL||defaultRpc;
 const connection=new Connection(rpc,"confirmed");
 
 console.log(`Network: ${network}`);
+console.log(`RPC: ${rpc}`);
 console.log(`Payer: ${payer.publicKey.toBase58()}`);
 
 const mint=await createMint(connection,payer,payer.publicKey,payer.publicKey,DECIMALS);
 const treasury=await getOrCreateAssociatedTokenAccount(connection,payer,mint,payer.publicKey);
 await mintTo(connection,payer,mint,treasury.address,payer,BASE_UNITS);
 
-// Irreversible launch locks.
 await setAuthority(connection,payer,mint,payer,AuthorityType.FreezeAccount,null);
 await setAuthority(connection,payer,mint,payer,AuthorityType.MintTokens,null);
 
@@ -49,6 +50,7 @@ console.log(JSON.stringify({
   mint:mint.toBase58(),
   treasuryAta:treasury.address.toBase58(),
   decimals:info.decimals,
+  baseUnitSupply:info.supply.toString(),
   supply:TOTAL_SUPPLY_UI.toString(),
   mintAuthority:null,
   freezeAuthority:null
