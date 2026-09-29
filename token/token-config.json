@@ -1,13 +1,21 @@
 {
-  "name":"COHIBA",
-  "symbol":"COH",
-  "chain":"Solana",
-  "standard":"SPL Token",
-  "decimals":9,
-  "totalSupply":"1000000000",
-  "taxPercent":0,
-  "tagline":"Fear the Machine. Defend the Human.",
-  "theme":"AI Fear / Human Resistance",
-  "mintAuthorityAfterLaunch":"revoked",
-  "freezeAuthorityAfterLaunch":"revoked"
+  "name": "COHIBA",
+  "symbol": "COH",
+  "chain": "Solana",
+  "standard": "SPL Token",
+  "decimals": 9,
+  "totalSupply": "1000000000",
+  "taxPercent": 0,
+  "tagline": "Fear the Machine. Defend the Human.",
+  "theme": "AI Fear / Human Resistance",
+  "mintAuthorityAfterLaunch": "revoked",
+  "freezeAuthorityAfterLaunch": "revoked",
+  "developerWallet": "pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t",
+  "treasuryWallet": "pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t",
+  "authorityPolicy": {
+    "initialAuthority": "developer wallet",
+    "mintAuthorityAfterLaunch": "revoked",
+    "freezeAuthorityAfterLaunch": "revoked",
+    "privateKeysInRepository": false
+  }
 }
