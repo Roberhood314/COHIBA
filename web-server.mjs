@@ -32,6 +32,30 @@ function loadOrCreateDevnetPayer(){
 
 const DEVNET_PAYER = loadOrCreateDevnetPayer();
 
+function launchRecordPath(network){
+  const safe=network==="mainnet-beta"?"mainnet":"devnet";
+  return path.join("/data",`cohiba-${safe}-launch.json`);
+}
+
+function loadLaunchRecord(network){
+  try{
+    const file=launchRecordPath(network);
+    if(!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file,"utf8"));
+  }catch{
+    return null;
+  }
+}
+
+function saveLaunchRecord(network,record){
+  fs.mkdirSync("/data",{recursive:true});
+  fs.writeFileSync(
+    launchRecordPath(network),
+    JSON.stringify(record,null,2),
+    {mode:0o600}
+  );
+}
+
 const types = {
   ".html":"text/html; charset=utf-8",
   ".css":"text/css; charset=utf-8",
@@ -175,7 +199,7 @@ async function createCoh(network){
   if(info.mintAuthority!==null) throw new Error("MINT_AUTHORITY_REVOKE_FAILED");
   if(info.freezeAuthority!==null) throw new Error("FREEZE_AUTHORITY_REVOKE_FAILED");
 
-  return {
+  const record={
     network,
     mint:mint.toBase58(),
     destinationWallet:DESTINATION.toBase58(),
@@ -185,8 +209,11 @@ async function createCoh(network){
     decimals:info.decimals,
     mintAuthority:null,
     freezeAuthority:null,
-    locked:true
+    locked:true,
+    launchedAt:new Date().toISOString()
   };
+  saveLaunchRecord(network,record);
+  return record;
 }
 
 const server=http.createServer(async (req,res)=>{
@@ -198,6 +225,11 @@ const server=http.createServer(async (req,res)=>{
       for await (const chunk of req) body+=chunk;
       const parsed=body?JSON.parse(body):{};
       const network=parsed.network||"devnet";
+      const existing=loadLaunchRecord(network);
+      if(existing?.mint){
+        json(res,409,{ok:false,error:"TOKEN_ALREADY_LAUNCHED",...existing});
+        return;
+      }
       if(network==="mainnet-beta") requireMainnetLaunchKey(req);
       const result=await createCoh(network);
       json(res,200,{ok:true,...result});
@@ -215,6 +247,46 @@ const server=http.createServer(async (req,res)=>{
       }
       const status=["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:(message==="MAINNET_LAUNCH_KEY_INVALID"?403:500);
       json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/token-status"){
+    try{
+      const url=new URL(req.url||"/","http://localhost");
+      const network=url.searchParams.get("network")||"devnet";
+      if(network!=="devnet" && network!=="mainnet-beta"){
+        json(res,400,{ok:false,error:"UNSUPPORTED_NETWORK"});
+        return;
+      }
+      const record=loadLaunchRecord(network);
+      if(!record?.mint){
+        json(res,200,{ok:true,launched:false,network});
+        return;
+      }
+      const connection=new Connection(
+        network==="devnet"
+          ? clusterApiUrl("devnet")
+          : (process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta")),
+        "confirmed"
+      );
+      const info=await getMint(connection,new PublicKey(record.mint),"confirmed");
+      const balance=await connection.getTokenAccountBalance(new PublicKey(record.destinationAta),"confirmed");
+      json(res,200,{
+        ok:true,
+        launched:true,
+        ...record,
+        onChain:{
+          supply:info.supply.toString(),
+          decimals:info.decimals,
+          mintAuthority:info.mintAuthority?.toBase58()||null,
+          freezeAuthority:info.freezeAuthority?.toBase58()||null,
+          destinationAmount:balance.value.amount,
+          destinationUiAmount:balance.value.uiAmountString
+        }
+      });
+    }catch(error){
+      json(res,500,{ok:false,error:String(error?.message||error)});
     }
     return;
   }
