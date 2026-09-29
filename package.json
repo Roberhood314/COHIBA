@@ -7,7 +7,8 @@
     "serve": "python3 -m http.server 8080 --directory web",
     "typecheck": "tsc --noEmit",
     "token:create:devnet": "tsx scripts/create-token.ts --network devnet",
-    "token:check:devnet": "tsx scripts/check-token.ts --network devnet"
+    "token:check:devnet": "tsx scripts/check-token.ts --network devnet",
+    "token:create:local": "tsx scripts/create-token.ts --network localnet"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
