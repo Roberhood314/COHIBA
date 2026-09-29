@@ -10,7 +10,8 @@ const root = path.join(__dirname, "dist");
 const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
-const SUPPLY = 1_000_000_000n * 10n ** 9n;\nconst DEVNET_PAYER = Keypair.generate();
+const SUPPLY = 1_000_000_000n * 10n ** 9n;
+const DEVNET_PAYER = Keypair.generate();
 
 const types = {
   ".html":"text/html; charset=utf-8",
