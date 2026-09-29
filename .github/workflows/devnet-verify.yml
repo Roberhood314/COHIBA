@@ -1,4 +1,4 @@
-name: COHIBA Devnet Verify
+name: COHIBA Local Token Verify
 
 on:
   push:
@@ -25,43 +25,61 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Create ephemeral Devnet wallet
+      - name: Create ephemeral local wallet
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import { Keypair } from "@solana/web3.js";
           const kp=Keypair.generate();
-          fs.writeFileSync("/tmp/cohiba-devnet-wallet.json", JSON.stringify(Array.from(kp.secretKey)));
-          console.log("DEVNET_WALLET="+kp.publicKey.toBase58());
+          fs.writeFileSync("/tmp/cohiba-local-wallet.json", JSON.stringify(Array.from(kp.secretKey)));
+          console.log("LOCAL_WALLET="+kp.publicKey.toBase58());
           NODE
 
-      - name: Install compatible Rust + PoW Devnet faucet CLI
+      - name: Install Solana development environment
         run: |
-          rustup toolchain install 1.70.0 --profile minimal
-          cargo +1.70.0 install devnet-pow --locked
-          devnet-pow --version
+          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Fund ephemeral wallet via PoW faucet
+      - name: Start local Solana validator
         run: |
-          devnet-pow --keypair-path /tmp/cohiba-devnet-wallet.json --url dev mine --target-lamports 100000000
-          node --input-type=module <<'NODE'
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$PATH"
+          solana --version
+          solana-test-validator --reset --quiet > /tmp/validator.log 2>&1 &
+          echo $! > /tmp/validator.pid
+          for i in {1..30}; do
+            if solana cluster-version --url http://127.0.0.1:8899 >/dev/null 2>&1; then
+              echo "LOCAL_VALIDATOR_READY"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/validator.log
+          exit 1
+
+      - name: Fund local wallet
+        run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.cargo/bin:$PATH"
+          PUBKEY=$(node --input-type=module <<'NODE'
           import fs from "node:fs";
-          import {Connection,Keypair,LAMPORTS_PER_SOL,clusterApiUrl} from "@solana/web3.js";
-          const kp=Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("/tmp/cohiba-devnet-wallet.json","utf8"))));
-          const c=new Connection(clusterApiUrl("devnet"),"confirmed");
-          const bal=await c.getBalance(kp.publicKey,"confirmed");
-          console.log("DEVNET_BALANCE_SOL="+(bal/LAMPORTS_PER_SOL));
-          if (bal < 20_000_000) throw new Error("Insufficient Devnet SOL after PoW faucet.");
+          import {Keypair} from "@solana/web3.js";
+          const kp=Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("/tmp/cohiba-local-wallet.json","utf8"))));
+          console.log(kp.publicKey.toBase58());
           NODE
+          )
+          solana airdrop 10 "$PUBKEY" --url http://127.0.0.1:8899
+          solana balance "$PUBKEY" --url http://127.0.0.1:8899
 
-      - name: Mint fixed-supply Devnet token and revoke authorities
+      - name: Mint fixed supply and revoke authorities on local validator
         env:
-          SOLANA_WALLET_PATH: /tmp/cohiba-devnet-wallet.json
-          SOLANA_RPC_URL: https://api.devnet.solana.com
-        run: npm run token:create:devnet | tee /tmp/mint-output.txt
+          SOLANA_WALLET_PATH: /tmp/cohiba-local-wallet.json
+          SOLANA_RPC_URL: http://127.0.0.1:8899
+        run: npm run token:create:local | tee /tmp/mint-output.txt
 
       - name: Upload verification output
         uses: actions/upload-artifact@v4
         with:
-          name: cohiba-devnet-verification
-          path: /tmp/mint-output.txt
+          name: cohiba-local-verification
+          path: |
+            /tmp/mint-output.txt
+            /tmp/validator.log
