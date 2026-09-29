@@ -35,9 +35,10 @@ jobs:
           console.log("DEVNET_WALLET="+kp.publicKey.toBase58());
           NODE
 
-      - name: Install PoW Devnet faucet CLI
+      - name: Install compatible Rust + PoW Devnet faucet CLI
         run: |
-          cargo install devnet-pow --locked
+          rustup toolchain install 1.70.0 --profile minimal
+          cargo +1.70.0 install devnet-pow --locked
           devnet-pow --version
 
       - name: Fund ephemeral wallet via PoW faucet
