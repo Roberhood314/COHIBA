@@ -320,7 +320,11 @@ async function launch() {
 
       const result = await response.json();
       if (!response.ok || !result.ok) {
-        throw new Error(result.error || "Server-side Devnet COH creation failed.");
+        if(result.error==="DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"){
+        const need=((Number(result.requiredLamports||0)-Number(result.balanceLamports||0))/1e9).toFixed(4);
+        throw new Error(`Devnet system wallet needs test SOL. Send about ${need} Devnet SOL to: ${result.systemWallet}`);
+      }
+      throw new Error(result.error || "Server-side Devnet COH creation failed.");
       }
 
       setMint(result.mint);
