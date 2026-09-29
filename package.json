@@ -12,7 +12,8 @@
     "token:create:staged:devnet": "tsx scripts/create-token-staged.ts --network devnet",
     "token:revoke:devnet": "tsx scripts/revoke-authorities.ts --network devnet",
     "token:create:staged:mainnet": "tsx scripts/create-token-staged.ts --network mainnet-beta",
-    "token:revoke:mainnet": "tsx scripts/revoke-authorities.ts --network mainnet-beta"
+    "token:revoke:mainnet": "tsx scripts/revoke-authorities.ts --network mainnet-beta",
+    "start": "node web-server.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
