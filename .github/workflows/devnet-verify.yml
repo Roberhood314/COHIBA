@@ -11,16 +11,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install
+
+      - name: Install JS dependencies
         run: npm install
+
       - name: Typecheck
         run: npm run typecheck
+
       - name: Create ephemeral Devnet wallet
         run: |
           node --input-type=module <<'NODE'
@@ -30,35 +34,31 @@ jobs:
           fs.writeFileSync("/tmp/cohiba-devnet-wallet.json", JSON.stringify(Array.from(kp.secretKey)));
           console.log("DEVNET_WALLET="+kp.publicKey.toBase58());
           NODE
-      - name: Fund wallet from Devnet faucet
-        env:
-          SOLANA_WALLET_PATH: /tmp/cohiba-devnet-wallet.json
+
+      - name: Install PoW Devnet faucet CLI
         run: |
+          cargo install devnet-pow --locked
+          devnet-pow --version
+
+      - name: Fund ephemeral wallet via PoW faucet
+        run: |
+          devnet-pow --keypair-path /tmp/cohiba-devnet-wallet.json --url dev mine --target-lamports 100000000
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import {Connection,Keypair,LAMPORTS_PER_SOL,clusterApiUrl} from "@solana/web3.js";
-          const kp=Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(process.env.SOLANA_WALLET_PATH,"utf8"))));
+          const kp=Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("/tmp/cohiba-devnet-wallet.json","utf8"))));
           const c=new Connection(clusterApiUrl("devnet"),"confirmed");
-          let funded=false;
-          for (const amount of [0.5,0.25,0.1,0.1,0.1]) {
-            try {
-              const sig=await c.requestAirdrop(kp.publicKey,amount*LAMPORTS_PER_SOL);
-              await c.confirmTransaction(sig,"confirmed");
-              const bal=await c.getBalance(kp.publicKey,"confirmed");
-              console.log("AIRDROP_SIG="+sig+" BALANCE_SOL="+(bal/LAMPORTS_PER_SOL));
-              if (bal>0) { funded=true; break; }
-            } catch (e) {
-              console.log("AIRDROP_RETRY amount="+amount+" error="+String(e));
-              await new Promise(r=>setTimeout(r,3000));
-            }
-          }
-          if(!funded) throw new Error("Devnet faucet unavailable after retries.");
+          const bal=await c.getBalance(kp.publicKey,"confirmed");
+          console.log("DEVNET_BALANCE_SOL="+(bal/LAMPORTS_PER_SOL));
+          if (bal < 20_000_000) throw new Error("Insufficient Devnet SOL after PoW faucet.");
           NODE
+
       - name: Mint fixed-supply Devnet token and revoke authorities
         env:
           SOLANA_WALLET_PATH: /tmp/cohiba-devnet-wallet.json
           SOLANA_RPC_URL: https://api.devnet.solana.com
         run: npm run token:create:devnet | tee /tmp/mint-output.txt
+
       - name: Upload verification output
         uses: actions/upload-artifact@v4
         with:
