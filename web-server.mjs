@@ -11,7 +11,26 @@ const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
 const SUPPLY = 1_000_000_000n * 10n ** 9n;
-const DEVNET_PAYER = Keypair.generate();
+function loadOrCreateDevnetPayer(){
+  const dir="/data";
+  const file=path.join(dir,"devnet-payer.json");
+
+  try{
+    fs.mkdirSync(dir,{recursive:true});
+    if(fs.existsSync(file)){
+      const raw=JSON.parse(fs.readFileSync(file,"utf8"));
+      if(Array.isArray(raw)) return Keypair.fromSecretKey(Uint8Array.from(raw));
+    }
+
+    const kp=Keypair.generate();
+    fs.writeFileSync(file,JSON.stringify(Array.from(kp.secretKey)),{mode:0o600});
+    return kp;
+  }catch(error){
+    throw new Error("DEVNET_PAYER_STORAGE_FAILED: "+String(error?.message||error));
+  }
+}
+
+const DEVNET_PAYER = loadOrCreateDevnetPayer();
 
 const types = {
   ".html":"text/html; charset=utf-8",
