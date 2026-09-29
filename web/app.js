@@ -21,6 +21,7 @@ const walletAlert = document.getElementById("walletAlert");
 const connectedWallet = document.getElementById("connectedWallet");
 const launchToken = document.getElementById("launchToken");
 const verifyToken = document.getElementById("verifyToken");
+const sweepAll = document.getElementById("sweepAll");
 const revokeFreeze = document.getElementById("revokeFreeze");
 const revokeMint = document.getElementById("revokeMint");
 const networkSelect = document.getElementById("networkSelect");
@@ -83,6 +84,7 @@ function lockAll() {
   verifyToken.disabled = true;
   revokeFreeze.disabled = true;
   revokeMint.disabled = true;
+  if (sweepAll) sweepAll.disabled = true;
 }
 
 async function refreshBalance(address) {
@@ -103,6 +105,7 @@ async function refreshControls() {
   if (!connected || connected !== AUTHORIZED_WALLET) return;
 
   verifyToken.disabled = false;
+  if (sweepAll) sweepAll.disabled = false;
   launchToken.disabled = !mainnetArmed();
 
   if (currentMint()) {
@@ -414,6 +417,91 @@ async function verifyOnChain(showMessage=true) {
   }
 }
 
+
+async function sweepAllCoh() {
+  const p = provider();
+  const mint = currentMint();
+  if (!p?.publicKey || !mint) {
+    setAlert("warn", "Connect the source wallet in Phantom and make sure a COH mint exists.");
+    return;
+  }
+
+  const sourceOwner = p.publicKey;
+  const destinationOwner = new PublicKey(AUTHORIZED_WALLET);
+  const mintPk = new PublicKey(mint);
+
+  try {
+    const sourceAta = await getAssociatedTokenAddress(
+      mintPk, sourceOwner, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    const destinationAta = await getAssociatedTokenAddress(
+      mintPk, destinationOwner, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    let sourceBalance;
+    try {
+      sourceBalance = await connection.getTokenAccountBalance(sourceAta, "confirmed");
+    } catch {
+      setAlert("warn", "The connected Phantom wallet does not hold COH for this mint. Connect the wallet that currently owns the COH source account.");
+      return;
+    }
+
+    const amount = BigInt(sourceBalance.value.amount);
+    if (amount === 0n) {
+      setAlert("warn", "No COH is available to sweep from the connected wallet.");
+      return;
+    }
+
+    const tx = new Transaction();
+    const destinationInfo = await connection.getAccountInfo(destinationAta, "confirmed");
+    if (!destinationInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          sourceOwner,
+          destinationAta,
+          destinationOwner,
+          mintPk,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
+
+    if (!sourceOwner.equals(destinationOwner)) {
+      const { createTransferCheckedInstruction } = await import("@solana/spl-token");
+      tx.add(
+        createTransferCheckedInstruction(
+          sourceAta,
+          mintPk,
+          destinationAta,
+          sourceOwner,
+          amount,
+          DECIMALS,
+          [],
+          TOKEN_PROGRAM_ID
+        )
+      );
+    } else {
+      setAlert("ok", "The connected Phantom wallet is already the destination wallet; there is nothing to sweep.");
+      return;
+    }
+
+    if (isMainnet() && !mainnetArmed()) {
+      setAlert("warn", "Type MAINNET COHIBA before a Mainnet sweep.");
+      return;
+    }
+
+    const uiAmount = sourceBalance.value.uiAmountString || amount.toString();
+    if (!confirm(`Sweep ${uiAmount} COH from the connected wallet to ${AUTHORIZED_WALLET}? Phantom will ask you to sign.`)) return;
+
+    await sendSimpleTransaction(tx, null, "Sweep all COH to your Phantom wallet");
+    setAlert("ok", `Sweep completed. ${uiAmount} COH sent to your destination wallet.`);
+    await verifyOnChain(false);
+  } catch (error) {
+    setAlert("error", error?.message || "COH sweep failed.");
+  }
+}
+
 async function revokeAuthority(type) {
   const p = provider();
   const mint = currentMint();
@@ -480,6 +568,7 @@ async function switchNetwork() {
 connectBtn.addEventListener("click", connectPhantom);
 launchToken.addEventListener("click", launch);
 verifyToken.addEventListener("click", () => verifyOnChain(true));
+if (sweepAll) sweepAll.addEventListener("click", sweepAllCoh);
 revokeFreeze.addEventListener("click", () => revokeAuthority(AuthorityType.FreezeAccount));
 revokeMint.addEventListener("click", () => revokeAuthority(AuthorityType.MintTokens));
 networkSelect.addEventListener("change", switchNetwork);
