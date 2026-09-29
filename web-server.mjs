@@ -39,35 +39,35 @@ function json(res,status,body){
 }
 
 async function ensureDevnetFunding(payer){
-  const rpcCandidates=[
-    "https://api.devnet.solana.com",
-    "https://rpc.ankr.com/solana_devnet"
-  ];
+  const rpc="https://api.devnet.solana.com";
+  const conn=new Connection(rpc,"confirmed");
 
-  let lastError="DEVNET_AIRDROP_FAILED";
+  // Use raw JSON-RPC for balance to avoid provider-specific schema issues.
+  const response=await fetch(rpc,{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({
+      jsonrpc:"2.0",
+      id:1,
+      method:"getBalance",
+      params:[payer.publicKey.toBase58(),{"commitment":"confirmed"}]
+    })
+  });
 
-  for(const rpc of rpcCandidates){
-    try{
-      const conn=new Connection(rpc,"confirmed");
-      let balance=await conn.getBalance(payer.publicKey,"confirmed");
-      if(balance>=20_000_000) return conn;
-
-      const sig=await conn.requestAirdrop(payer.publicKey,100_000_000);
-      const latest=await conn.getLatestBlockhash("confirmed");
-      await conn.confirmTransaction({
-        signature:sig,
-        blockhash:latest.blockhash,
-        lastValidBlockHeight:latest.lastValidBlockHeight
-      },"confirmed");
-
-      balance=await conn.getBalance(payer.publicKey,"confirmed");
-      if(balance>=20_000_000) return conn;
-    }catch(error){
-      lastError=String(error?.message||error);
-    }
+  const jsonBody=await response.json();
+  if(jsonBody.error){
+    throw new Error(`DEVNET_RPC_ERROR: ${jsonBody.error.message||"getBalance failed"}`);
   }
 
-  throw new Error(`DEVNET_FUNDING_FAILED: ${lastError}`);
+  const lamports=Number(jsonBody?.result?.value||0);
+  if(lamports<20_000_000){
+    const error=new Error("DEVNET_SYSTEM_WALLET_NEEDS_FUNDING");
+    error.systemWallet=payer.publicKey.toBase58();
+    error.balanceLamports=lamports;
+    throw error;
+  }
+
+  return conn;
 }
 
 function loadMainnetSigner(){
@@ -149,6 +149,16 @@ const server=http.createServer(async (req,res)=>{
       json(res,200,{ok:true,...result});
     }catch(error){
       const message=String(error?.message||error);
+      if(message==="DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"){
+        json(res,409,{
+          ok:false,
+          error:message,
+          systemWallet:error.systemWallet||DEVNET_PAYER.publicKey.toBase58(),
+          balanceLamports:error.balanceLamports||0,
+          requiredLamports:20000000
+        });
+        return;
+      }
       const status=message==="MAINNET_LOCKED"||message==="MAINNET_SIGNER_NOT_CONFIGURED"?409:500;
       json(res,status,{ok:false,error:message});
     }
