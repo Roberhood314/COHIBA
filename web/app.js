@@ -303,103 +303,48 @@ async function launch() {
   const owner = p.publicKey.toString();
   if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
 
-  if (!mainnetArmed()) {
+  if (isMainnet() && !mainnetArmed()) {
     setAlert("warn", "Type MAINNET COHIBA before creating the Mainnet token.");
     return;
   }
 
-  if (isMainnet()) {
-    const ok = confirm(
-      "MAINNET: this spends real SOL and creates the real COH token. Continue to Phantom signing?"
-    );
-    if (!ok) return;
+  if (currentMint()) {
+    const valid = await validateStoredMintState();
+    if (valid) {
+      setAlert("warn", "A COH mint already exists for this network. Verify it before creating another.");
+      return;
+    }
   }
 
   launchToken.disabled = true;
 
   try {
-    const balance = await refreshBalance(owner);
-    const { mintRent, total } = await requiredLamports();
+    setAlert("warn", `Creating COH on ${isMainnet() ? "Mainnet" : "Devnet"} server-side…`);
 
-    if (balance < total) {
-      setAlert(
-        "warn",
-        `Insufficient ${isMainnet() ? "Mainnet" : "Devnet"} SOL. Have ${(balance/1e9).toFixed(6)} SOL; need about ${(total/1e9).toFixed(6)} SOL.`
-      );
-      return;
+    const response = await fetch("/api/create-coh", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ network: network() })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      if (result.error === "MAINNET_LOCKED") {
+        throw new Error("Mainnet server signer is still locked. Devnet works without Phantom signing.");
+      }
+      if (result.error === "MAINNET_SIGNER_NOT_CONFIGURED") {
+        throw new Error("Mainnet signer is not configured in Railway Secret yet.");
+      }
+      throw new Error(result.error || "Server-side COH creation failed.");
     }
 
-    let mint = currentMint();
-
-    if (!mint) {
-      const mintKeypair = Keypair.generate();
-
-      const createMintTx = new Transaction().add(
-        SystemProgram.createAccount({
-          fromPubkey:p.publicKey,
-          newAccountPubkey:mintKeypair.publicKey,
-          space:MINT_SIZE,
-          lamports:mintRent,
-          programId:TOKEN_PROGRAM_ID
-        }),
-        createInitializeMint2Instruction(
-          mintKeypair.publicKey,
-          DECIMALS,
-          p.publicKey,
-          p.publicKey,
-          TOKEN_PROGRAM_ID
-        )
-      );
-
-      await sendSimpleTransaction(
-        createMintTx,
-        mintKeypair,
-        `Create COH mint on ${isMainnet() ? "Mainnet" : "Devnet"}`
-      );
-
-      mint = mintKeypair.publicKey.toBase58();
-      setMint(mint);
-    }
-
-    const mintPk = new PublicKey(mint);
-    const ata = await getAssociatedTokenAddress(
-      mintPk,
-      p.publicKey,
-      false,
-      TOKEN_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID
+    setMint(result.mint);
+    tokenState.textContent = `${isMainnet() ? "MAINNET" : "DEVNET"} MINTED`;
+    setAlert(
+      "ok",
+      `Created 1,000,000,000 COH directly to your wallet. Mint: ${result.mint}`
     );
-
-    const ataInfo = await connection.getAccountInfo(ata, "confirmed");
-    if (!ataInfo) {
-      const createAtaTx = new Transaction().add(
-        createAssociatedTokenAccountInstruction(
-          p.publicKey,
-          ata,
-          p.publicKey,
-          mintPk,
-          TOKEN_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      );
-      await sendSimpleTransaction(createAtaTx, null, "Create your COH token account");
-    }
-
-    const infoBefore = await getMint(connection, mintPk, "confirmed", TOKEN_PROGRAM_ID);
-
-    if (infoBefore.supply === 0n) {
-      const mintTx = new Transaction().add(
-        createMintToInstruction(
-          mintPk,
-          ata,
-          p.publicKey,
-          SUPPLY_BASE,
-          [],
-          TOKEN_PROGRAM_ID
-        )
-      );
-      await sendSimpleTransaction(mintTx, null, "Mint 1,000,000,000 COH directly to your Phantom wallet");
-    }
 
     await verifyOnChain(true);
 
