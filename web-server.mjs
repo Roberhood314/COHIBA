@@ -38,6 +38,38 @@ function json(res,status,body){
   res.end(JSON.stringify(body));
 }
 
+async function ensureDevnetFunding(payer){
+  const rpcCandidates=[
+    "https://api.devnet.solana.com",
+    "https://rpc.ankr.com/solana_devnet"
+  ];
+
+  let lastError="DEVNET_AIRDROP_FAILED";
+
+  for(const rpc of rpcCandidates){
+    try{
+      const conn=new Connection(rpc,"confirmed");
+      let balance=await conn.getBalance(payer.publicKey,"confirmed");
+      if(balance>=20_000_000) return conn;
+
+      const sig=await conn.requestAirdrop(payer.publicKey,100_000_000);
+      const latest=await conn.getLatestBlockhash("confirmed");
+      await conn.confirmTransaction({
+        signature:sig,
+        blockhash:latest.blockhash,
+        lastValidBlockHeight:latest.lastValidBlockHeight
+      },"confirmed");
+
+      balance=await conn.getBalance(payer.publicKey,"confirmed");
+      if(balance>=20_000_000) return conn;
+    }catch(error){
+      lastError=String(error?.message||error);
+    }
+  }
+
+  throw new Error(`DEVNET_FUNDING_FAILED: ${lastError}`);
+}
+
 function loadMainnetSigner(){
   const raw=process.env.SYSTEM_WALLET_SECRET_JSON;
   if(!raw) throw new Error("MAINNET_SIGNER_NOT_CONFIGURED");
@@ -53,8 +85,8 @@ async function createCoh(network){
   let connection;
 
   if(network==="devnet"){
-    connection=new Connection(clusterApiUrl("devnet"),"confirmed");
     payer=DEVNET_PAYER;
+    connection=await ensureDevnetFunding(payer);
   }else{
     if(process.env.ALLOW_MAINNET!=="true") throw new Error("MAINNET_LOCKED");
     payer=loadMainnetSigner();
