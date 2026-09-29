@@ -198,6 +198,79 @@ async function simulateBeforePhantom(tx, extraSigner) {
   }
 }
 
+async function sendSimpleTransaction(tx, extraSigner, label) {
+  const p = provider();
+  if (!p?.publicKey) throw new Error("Connect Phantom first.");
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  tx.feePayer = p.publicKey;
+  tx.recentBlockhash = blockhash;
+  if (extraSigner) tx.partialSign(extraSigner);
+
+  walletAlert.className = "wallet-alert warn";
+  walletAlert.textContent = `Preflight ${label}…`;
+  await simulateBeforePhantom(tx, extraSigner);
+
+  walletAlert.className = "wallet-alert ok";
+  walletAlert.textContent = `Preflight PASS: ${label}. Opening Phantom…`;
+
+  const signed = await p.signTransaction(tx);
+  const sig = await connection.sendRawTransaction(signed.serialize(), {
+    skipPreflight: false,
+    maxRetries: 3
+  });
+  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+  return sig;
+}
+
+async function completeDevnetLaunch(mintAddress) {
+  const p = provider();
+  const mintPubkey = new PublicKey(mintAddress);
+  const ata = await getAssociatedTokenAddress(
+    mintPubkey, p.publicKey, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const ataInfo = await connection.getAccountInfo(ata, "confirmed");
+  if (!ataInfo) {
+    const ataTx = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        p.publicKey,
+        ata,
+        p.publicKey,
+        mintPubkey,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      )
+    );
+    await sendSimpleTransaction(ataTx, null, "Create COH token account");
+  }
+
+  const mintInfo = await getMint(connection, mintPubkey, "confirmed", TOKEN_PROGRAM_ID);
+  if (mintInfo.supply === 0n) {
+    const mintTx = new Transaction().add(
+      createMintToInstruction(
+        mintPubkey,
+        ata,
+        p.publicKey,
+        SUPPLY_BASE,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+    await sendSimpleTransaction(mintTx, null, "Mint 1B COH");
+  }
+
+  const finalInfo = await getMint(connection, mintPubkey, "confirmed", TOKEN_PROGRAM_ID);
+  if (finalInfo.supply !== SUPPLY_BASE) {
+    throw new Error(`Unexpected supply after mint: ${finalInfo.supply.toString()}`);
+  }
+
+  tokenState.textContent = "DEVNET MINTED";
+  walletAlert.className = "wallet-alert ok";
+  walletAlert.textContent = "COHIBA Devnet launch complete: 1,000,000,000 COH minted.";
+  await verifyOnChain(false);
+}
+
 async function createDevnetToken() {
   const p = provider();
   if (!p?.publicKey) return connectPhantom();
@@ -205,48 +278,59 @@ async function createDevnetToken() {
   const owner = p.publicKey.toString();
   if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
 
-  if (currentMint()) {
-    walletAlert.className = "wallet-alert warn";
-    walletAlert.textContent = "A COHIBA Devnet mint is already stored in this browser. Verify it before creating another.";
-    return;
-  }
-
   prepareDevnet.disabled = true;
 
   try {
-    const mint = Keypair.generate();
-    const { tx } = await buildLaunchTransaction(p, mint);
-    const required = await estimateLaunchCost(tx, p.publicKey);
     const balance = await refreshBalance(owner);
+
+    // Conservative balance check for three small Devnet transactions + account rent.
+    const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
+    const ataRent = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
+    const required = mintRent + ataRent + 1_000_000;
 
     if (balance < required) {
       const have = (balance / 1e9).toFixed(6);
       const need = (required / 1e9).toFixed(6);
-      const missing = ((required - balance) / 1e9).toFixed(6);
       walletAlert.className = "wallet-alert warn";
       walletAlert.textContent =
-        `Chưa mở Phantom: Devnet SOL chưa đủ. Có ${have} SOL · cần tối thiểu khoảng ${need} SOL · thiếu ${missing} SOL.`;
+        `Chưa mở Phantom: có ${have} Devnet SOL, cần khoảng ${need} SOL cho toàn bộ 3 bước.`;
       prepareDevnet.disabled = false;
       return;
     }
 
-    walletAlert.className = "wallet-alert warn";
-    walletAlert.textContent = "Preflight: checking Devnet transaction before opening Phantom…";
-    await simulateBeforePhantom(tx, mint);
+    let mintAddress = currentMint();
 
-    walletAlert.className = "wallet-alert ok";
-    walletAlert.textContent = "Preflight PASS. Opening Phantom for your signature…";
+    if (!mintAddress) {
+      const mint = Keypair.generate();
+      const createMintTx = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: p.publicKey,
+          newAccountPubkey: mint.publicKey,
+          space: MINT_SIZE,
+          lamports: mintRent,
+          programId: TOKEN_PROGRAM_ID
+        }),
+        createInitializeMint2Instruction(
+          mint.publicKey,
+          DECIMALS,
+          p.publicKey,
+          p.publicKey,
+          TOKEN_PROGRAM_ID
+        )
+      );
 
-    const sig = await sendWithPhantom(tx, mint);
-    setMint(mint.publicKey.toBase58());
-    tokenState.textContent = "DEVNET MINTED";
+      await sendSimpleTransaction(createMintTx, mint, "Create COH mint account");
+      mintAddress = mint.publicKey.toBase58();
+      setMint(mintAddress);
+      walletAlert.className = "wallet-alert ok";
+      walletAlert.textContent = `Mint account created: ${mintAddress}. Continue signing the next steps in Phantom.`;
+    }
 
-    walletAlert.className = "wallet-alert ok";
-    walletAlert.textContent = `Devnet token created successfully. Transaction: ${sig}`;
-    await verifyOnChain(false);
+    await completeDevnetLaunch(mintAddress);
   } catch (error) {
     walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = error?.message || "Devnet token creation failed.";
+    walletAlert.textContent = error?.message || "Devnet launch failed.";
+  } finally {
     prepareDevnet.disabled = false;
   }
 }
