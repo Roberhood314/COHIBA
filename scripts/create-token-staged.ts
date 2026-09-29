@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Connection, Keypair, clusterApiUrl, type Cluster } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, clusterApiUrl, type Cluster } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint } from "@solana/spl-token";
 
 const DECIMALS = 9;
@@ -29,12 +29,13 @@ if(!walletPath) throw new Error("Set SOLANA_WALLET_PATH to a dedicated signer ke
 const payer=loadKeypair(walletPath);
 const rpc=process.env.SOLANA_RPC_URL||clusterApiUrl(network as Cluster);
 const connection=new Connection(rpc,"confirmed");
+const treasuryOwner = new PublicKey(process.env.TREASURY_OWNER || payer.publicKey.toBase58());
 
 console.log(`Network: ${network}`);
 console.log(`Payer: ${payer.publicKey.toBase58()}`);
 
 const mint=await createMint(connection,payer,payer.publicKey,payer.publicKey,DECIMALS);
-const treasury=await getOrCreateAssociatedTokenAccount(connection,payer,mint,payer.publicKey);
+const treasury=await getOrCreateAssociatedTokenAccount(connection,payer,mint,treasuryOwner);
 await mintTo(connection,payer,mint,treasury.address,payer,BASE_UNITS);
 
 const info=await getMint(connection,mint);
@@ -44,6 +45,7 @@ if(!info.freezeAuthority?.equals(payer.publicKey)) throw new Error("Unexpected f
 
 console.log(JSON.stringify({
   mint: mint.toBase58(),
+  treasuryOwner: treasuryOwner.toBase58(),
   treasuryAta: treasury.address.toBase58(),
   decimals: info.decimals,
   baseUnitSupply: info.supply.toString(),
