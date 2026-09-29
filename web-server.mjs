@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Connection, Keypair, PublicKey, clusterApiUrl } from "@solana/web3.js";
-import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint } from "@solana/spl-token";
+import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint, setAuthority, AuthorityType } from "@solana/spl-token";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -89,6 +89,13 @@ async function ensureDevnetFunding(payer){
   return conn;
 }
 
+function requireMainnetLaunchKey(req){
+  const configured=process.env.COHIBA_MAINNET_LAUNCH_KEY;
+  if(!configured) throw new Error("MAINNET_LAUNCH_KEY_NOT_CONFIGURED");
+  const supplied=String(req.headers["x-cohiba-launch-key"]||"");
+  if(!supplied || supplied!==configured) throw new Error("MAINNET_LAUNCH_KEY_INVALID");
+}
+
 function loadMainnetSigner(){
   const raw=process.env.SYSTEM_WALLET_SECRET_JSON;
   if(!raw) throw new Error("MAINNET_SIGNER_NOT_CONFIGURED");
@@ -139,8 +146,34 @@ async function createCoh(network){
     SUPPLY
   );
 
-  const info=await getMint(connection,mint,"confirmed");
+  let info=await getMint(connection,mint,"confirmed");
   if(info.supply!==SUPPLY) throw new Error("SUPPLY_VERIFY_FAILED");
+
+  // Fixed-supply policy: after the full 1B supply is minted, permanently
+  // revoke freeze first and mint authority last. The server payer is used
+  // only as the temporary launch authority.
+  await setAuthority(
+    connection,
+    payer,
+    mint,
+    payer,
+    AuthorityType.FreezeAccount,
+    null
+  );
+
+  await setAuthority(
+    connection,
+    payer,
+    mint,
+    payer,
+    AuthorityType.MintTokens,
+    null
+  );
+
+  info=await getMint(connection,mint,"confirmed");
+  if(info.supply!==SUPPLY) throw new Error("POST_REVOKE_SUPPLY_VERIFY_FAILED");
+  if(info.mintAuthority!==null) throw new Error("MINT_AUTHORITY_REVOKE_FAILED");
+  if(info.freezeAuthority!==null) throw new Error("FREEZE_AUTHORITY_REVOKE_FAILED");
 
   return {
     network,
@@ -150,8 +183,9 @@ async function createCoh(network){
     supply:"1000000000",
     baseUnitSupply:info.supply.toString(),
     decimals:info.decimals,
-    mintAuthority:info.mintAuthority?.toBase58()||null,
-    freezeAuthority:info.freezeAuthority?.toBase58()||null
+    mintAuthority:null,
+    freezeAuthority:null,
+    locked:true
   };
 }
 
@@ -164,6 +198,7 @@ const server=http.createServer(async (req,res)=>{
       for await (const chunk of req) body+=chunk;
       const parsed=body?JSON.parse(body):{};
       const network=parsed.network||"devnet";
+      if(network==="mainnet-beta") requireMainnetLaunchKey(req);
       const result=await createCoh(network);
       json(res,200,{ok:true,...result});
     }catch(error){
@@ -178,7 +213,7 @@ const server=http.createServer(async (req,res)=>{
         });
         return;
       }
-      const status=message==="MAINNET_LOCKED"||message==="MAINNET_SIGNER_NOT_CONFIGURED"?409:500;
+      const status=["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:(message==="MAINNET_LAUNCH_KEY_INVALID"?403:500);
       json(res,status,{ok:false,error:message});
     }
     return;
