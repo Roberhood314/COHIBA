@@ -51,19 +51,26 @@
   <div class="console-grid">
     <div class="console-card"><span>Authorized developer</span><code id="authorizedWallet">pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t</code></div>
     <div class="console-card"><span>Connected wallet</span><code id="connectedWallet">—</code></div>
-    <div class="console-card"><span>Network</span><strong id="networkState">DEVNET SAFE MODE</strong></div>
+    <div class="console-card"><span>Network</span>
+  <select id="networkSelect">
+    <option value="devnet">DEVNET</option>
+    <option value="mainnet-beta">MAINNET</option>
+  </select>
+</div>
     <div class="console-card"><span>Token status</span><strong id="tokenState">NOT LAUNCHED</strong></div>
-    <div class="console-card"><span>Devnet SOL balance</span><strong id="devnetBalance">—</strong></div>
-    <div class="console-card"><span>Devnet mint</span><code id="devnetMint">—</code></div>
+    <div class="console-card"><span>SOL balance</span><strong id="solBalance">—</strong></div>
+    <div class="console-card"><span>COH Mint</span><code id="mintAddress">—</code></div>
+    <div class="console-card"><span>Wallet COH balance</span><strong id="tokenBalance">—</strong></div>
+    <div class="console-card"><span>Mainnet safety</span><input id="mainnetConfirm" placeholder="Type MAINNET COHIBA to arm" autocomplete="off"></div>
   </div>
 
   <div class="release-actions">
-    <button id="prepareDevnet" disabled>Create 1B COH on Devnet</button>
-    <button id="verifyToken" disabled>Verify On-chain</button>
+    <button id="launchToken" disabled>Create 1B COH</button>
+    <button id="verifyToken" disabled>Verify Supply & Wallet</button>
     <button id="revokeFreeze" class="danger" disabled>Revoke Freeze Authority</button>
     <button id="revokeMint" class="danger" disabled>Revoke Mint Authority</button>
   </div>
-  <p class="fineprint">Signing authority remains inside Phantom. COHIBA never asks for or stores your recovery phrase or private key. Irreversible release actions stay locked until the on-chain transaction module is verified.</p>
+  <p class="fineprint">Signing authority remains inside Phantom. COHIBA never asks for or stores your recovery phrase or private key. Mainnet requires explicit arming, sufficient real SOL, successful preflight, wallet-side signatures, and on-chain verification before authority revocation is enabled.</p>
 </section>
 </main>
 <footer class="wrap">COHIBA · $COH · Fear the Machine. Defend the Human.</footer>
