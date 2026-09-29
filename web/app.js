@@ -32,6 +32,7 @@ const mintAddress = document.getElementById("mintAddress");
 const tokenBalance = document.getElementById("tokenBalance");
 const tokenState = document.getElementById("tokenState");
 const mainnetConfirm = document.getElementById("mainnetConfirm");
+const mainnetLaunchKey = document.getElementById("mainnetLaunchKey");
 
 let connection = makeConnection();
 
@@ -84,8 +85,8 @@ function setAlert(kind, message) {
 function lockAll() {
   launchToken.disabled = true;
   verifyToken.disabled = true;
-  revokeFreeze.disabled = true;
-  revokeMint.disabled = true;
+  if (revokeFreeze) revokeFreeze.disabled = true;
+  if (revokeMint) revokeMint.disabled = true;
   if (sweepAll) sweepAll.disabled = true;
 }
 
@@ -146,12 +147,9 @@ async function refreshControls() {
     return;
   }
 
-  if (!connected || connected !== AUTHORIZED_WALLET) return;
-
-  verifyToken.disabled = false;
+  verifyToken.disabled = !currentMint();
   if (resetMintState) resetMintState.disabled = false;
-  if (sweepAll) sweepAll.disabled = false;
-  launchToken.disabled = !mainnetArmed();
+  launchToken.disabled = !(mainnetArmed() && mainnetLaunchKey?.value.trim());
 
   if (currentMint()) {
     const valid = await validateStoredMintState();
@@ -338,6 +336,13 @@ async function launch() {
 
       const result = await response.json();
       if (!response.ok || !result.ok) {
+        if(result.error==="TOKEN_ALREADY_LAUNCHED" && result.mint){
+          setMint(result.mint);
+          tokenState.textContent = "DEVNET LOCKED";
+          tokenBalance.textContent = "1,000,000,000 COH";
+          setAlert("ok", `COH already exists on Devnet. Mint: ${result.mint}`);
+          return;
+        }
         if(result.error==="DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"){
         const need=((Number(result.requiredLamports||0)-Number(result.balanceLamports||0))/1e9).toFixed(4);
         throw new Error(`Devnet system wallet needs test SOL. Send about ${need} Devnet SOL to: ${result.systemWallet}`);
@@ -346,7 +351,7 @@ async function launch() {
       }
 
       setMint(result.mint);
-      tokenState.textContent = "DEVNET MINTED";
+      tokenState.textContent = result.locked ? "DEVNET LOCKED" : "DEVNET MINTED";
       tokenBalance.textContent = "1,000,000,000 COH";
       setAlert(
         "ok",
@@ -360,18 +365,15 @@ async function launch() {
     return;
   }
 
-  // Mainnet remains deliberately gated.
-  const p = provider();
-  if (!p?.publicKey) {
-    setAlert("warn", "Mainnet still requires the authorized wallet context and server signer configuration.");
-    return;
-  }
-
-  const owner = p.publicKey.toString();
-  if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
-
+  // Mainnet is server-side but deliberately protected by two gates:
+  // the visible arming phrase and a Railway-only launch key.
   if (!mainnetArmed()) {
     setAlert("warn", "Type MAINNET COHIBA before creating the Mainnet token.");
+    return;
+  }
+  const launchKey = mainnetLaunchKey?.value.trim();
+  if (!launchKey) {
+    setAlert("warn", "Enter the Mainnet launch key configured in Railway.");
     return;
   }
 
@@ -381,12 +383,22 @@ async function launch() {
 
     const response = await fetch("/api/create-coh", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-cohiba-launch-key": launchKey
+      },
       body: JSON.stringify({ network: "mainnet-beta" })
     });
 
     const result = await response.json();
     if (!response.ok || !result.ok) {
+      if (result.error === "TOKEN_ALREADY_LAUNCHED" && result.mint) {
+        setMint(result.mint);
+        tokenState.textContent = "MAINNET LOCKED";
+        tokenBalance.textContent = "1,000,000,000 COH";
+        setAlert("ok", `COH already exists on Mainnet. Mint: ${result.mint}`);
+        return;
+      }
       if (result.error === "MAINNET_LOCKED") {
         throw new Error("Mainnet server signer is locked.");
       }
@@ -397,7 +409,7 @@ async function launch() {
     }
 
     setMint(result.mint);
-    tokenState.textContent = "MAINNET MINTED";
+    tokenState.textContent = result.locked ? "MAINNET LOCKED" : "MAINNET MINTED";
     tokenBalance.textContent = "1,000,000,000 COH";
     setAlert(
       "ok",
@@ -411,10 +423,9 @@ async function launch() {
 }
 
 async function verifyOnChain(showMessage=true) {
-  const p = provider();
   const mint = currentMint();
 
-  if (!p?.publicKey || !mint) {
+  if (!mint) {
     if (showMessage) setAlert("warn", "No COH mint is stored for the selected network.");
     return false;
   }
@@ -424,7 +435,7 @@ async function verifyOnChain(showMessage=true) {
     const info = await getMint(connection, mintPk, "confirmed", TOKEN_PROGRAM_ID);
     const ata = await getAssociatedTokenAddress(
       mintPk,
-      p.publicKey,
+      new PublicKey(AUTHORIZED_WALLET),
       false,
       TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
@@ -453,8 +464,8 @@ async function verifyOnChain(showMessage=true) {
           ? `${isMainnet() ? "MAINNET" : "DEVNET"} LOCKED`
           : `${isMainnet() ? "MAINNET" : "DEVNET"} VERIFIED`;
 
-      revokeFreeze.disabled = freezeAuth !== AUTHORIZED_WALLET;
-      revokeMint.disabled = mintAuth !== AUTHORIZED_WALLET;
+      if (revokeFreeze) revokeFreeze.disabled = true;
+      if (revokeMint) revokeMint.disabled = true;
 
       if (showMessage) {
         setAlert(
@@ -466,8 +477,8 @@ async function verifyOnChain(showMessage=true) {
     }
 
     tokenState.textContent = "VERIFY FAILED";
-    revokeFreeze.disabled = true;
-    revokeMint.disabled = true;
+    if (revokeFreeze) revokeFreeze.disabled = true;
+    if (revokeMint) revokeMint.disabled = true;
 
     if (showMessage) {
       setAlert(
@@ -638,10 +649,11 @@ launchToken.addEventListener("click", launch);
 verifyToken.addEventListener("click", () => verifyOnChain(true));
 if (resetMintState) resetMintState.addEventListener("click", resetFailedMintState);
 if (sweepAll) sweepAll.addEventListener("click", sweepAllCoh);
-revokeFreeze.addEventListener("click", () => revokeAuthority(AuthorityType.FreezeAccount));
-revokeMint.addEventListener("click", () => revokeAuthority(AuthorityType.MintTokens));
+if (revokeFreeze) revokeFreeze.addEventListener("click", () => revokeAuthority(AuthorityType.FreezeAccount));
+if (revokeMint) revokeMint.addEventListener("click", () => revokeAuthority(AuthorityType.MintTokens));
 networkSelect.addEventListener("change", switchNetwork);
 mainnetConfirm.addEventListener("input", refreshControls);
+if (mainnetLaunchKey) mainnetLaunchKey.addEventListener("input", refreshControls);
 
 lockAll();
 setMint(currentMint());
