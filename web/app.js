@@ -1,154 +1,152 @@
 import { Buffer } from "buffer";
 window.Buffer = Buffer;
+
 import {
-  Connection, PublicKey, Keypair, SystemProgram, Transaction,
-  clusterApiUrl
+  Connection, PublicKey, Keypair, SystemProgram, Transaction, clusterApiUrl
 } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
-  MINT_SIZE, getMinimumBalanceForRentExemptMint,
+  TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, MINT_SIZE,
   createInitializeMint2Instruction, getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction, createMintToInstruction,
   getMint, createSetAuthorityInstruction, AuthorityType
 } from "@solana/spl-token";
 
 const AUTHORIZED_WALLET = "pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t";
-const DEVNET_RPC = clusterApiUrl("devnet");
 const DECIMALS = 9;
-const SUPPLY_BASE = 1_000_000_000n * 10n ** 9n;
+const TOTAL_SUPPLY_UI = 1_000_000_000n;
+const SUPPLY_BASE = TOTAL_SUPPLY_UI * 10n ** BigInt(DECIMALS);
 
-const connection = new Connection(DEVNET_RPC, "confirmed");
 const connectBtn = document.getElementById("connectWallet");
 const walletAlert = document.getElementById("walletAlert");
 const connectedWallet = document.getElementById("connectedWallet");
-const prepareDevnet = document.getElementById("prepareDevnet");
+const launchToken = document.getElementById("launchToken");
 const verifyToken = document.getElementById("verifyToken");
 const revokeFreeze = document.getElementById("revokeFreeze");
 const revokeMint = document.getElementById("revokeMint");
-const devnetBalance = document.getElementById("devnetBalance");
-const devnetMint = document.getElementById("devnetMint");
+const networkSelect = document.getElementById("networkSelect");
+const solBalance = document.getElementById("solBalance");
+const mintAddress = document.getElementById("mintAddress");
+const tokenBalance = document.getElementById("tokenBalance");
 const tokenState = document.getElementById("tokenState");
+const mainnetConfirm = document.getElementById("mainnetConfirm");
+
+let connection = makeConnection();
 
 function provider() {
   return window.phantom?.solana?.isPhantom ? window.phantom.solana : null;
 }
+
+function network() {
+  return networkSelect.value;
+}
+
+function isMainnet() {
+  return network() === "mainnet-beta";
+}
+
+function rpcUrl() {
+  return clusterApiUrl(network());
+}
+
+function makeConnection() {
+  return new Connection(clusterApiUrl(networkSelect?.value || "devnet"), "confirmed");
+}
+
+function mintStorageKey() {
+  return `cohiba.${network()}.mint`;
+}
+
+function currentMint() {
+  return localStorage.getItem(mintStorageKey()) || "";
+}
+
+function setMint(address) {
+  if (address) localStorage.setItem(mintStorageKey(), address);
+  mintAddress.textContent = address || "—";
+}
+
 function short(address) {
   return address ? `${address.slice(0,6)}…${address.slice(-6)}` : "—";
 }
-function currentMint() {
-  return localStorage.getItem("cohiba.devnetMint") || "";
+
+function mainnetArmed() {
+  return !isMainnet() || mainnetConfirm.value.trim() === "MAINNET COHIBA";
 }
-function setMint(address) {
-  if (address) localStorage.setItem("cohiba.devnetMint", address);
-  devnetMint.textContent = address || "—";
+
+function setAlert(kind, message) {
+  walletAlert.className = `wallet-alert ${kind || ""}`.trim();
+  walletAlert.textContent = message;
 }
-function lockReleaseControls() {
-  prepareDevnet.disabled = true;
+
+function lockAll() {
+  launchToken.disabled = true;
   verifyToken.disabled = true;
   revokeFreeze.disabled = true;
   revokeMint.disabled = true;
 }
+
 async function refreshBalance(address) {
   try {
     const lamports = await connection.getBalance(new PublicKey(address), "confirmed");
-    devnetBalance.textContent = `${(lamports / 1e9).toFixed(4)} SOL`;
+    solBalance.textContent = `${(lamports / 1e9).toFixed(6)} SOL`;
     return lamports;
   } catch {
-    devnetBalance.textContent = "RPC ERROR";
+    solBalance.textContent = "RPC ERROR";
     return 0;
   }
 }
-async function setConnected(address) {
-  connectedWallet.textContent = address;
-  if (address !== AUTHORIZED_WALLET) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = `Unauthorized wallet: ${short(address)}. Switch Phantom to the COHIBA developer wallet.`;
-    lockReleaseControls();
-    return;
-  }
-  walletAlert.className = "wallet-alert ok";
-  walletAlert.textContent = "Authorized COHIBA developer wallet connected.";
-  prepareDevnet.disabled = false;
+
+async function refreshControls() {
+  const p = provider();
+  const connected = p?.publicKey?.toString();
+  lockAll();
+  if (!connected || connected !== AUTHORIZED_WALLET) return;
+
   verifyToken.disabled = false;
-  const bal = await refreshBalance(address);
-  if (bal < 5_000_000) {
-    walletAlert.className = "wallet-alert warn";
-    walletAlert.textContent = "Wallet connected, but Devnet SOL is low. Fund this wallet on Solana Devnet before creating the token.";
-  }
+  launchToken.disabled = !mainnetArmed();
+
   if (currentMint()) {
     setMint(currentMint());
     await verifyOnChain(false);
+  } else {
+    setMint("");
+    tokenBalance.textContent = "—";
+    tokenState.textContent = "NOT LAUNCHED";
   }
 }
+
+async function setConnected(address) {
+  connectedWallet.textContent = address;
+
+  if (address !== AUTHORIZED_WALLET) {
+    setAlert("error", `Unauthorized wallet: ${short(address)}. Switch Phantom to the COHIBA developer wallet.`);
+    lockAll();
+    return;
+  }
+
+  await refreshBalance(address);
+
+  if (isMainnet()) {
+    setAlert("warn", "MAINNET selected. Real SOL will be spent. Type MAINNET COHIBA to arm token creation.");
+  } else {
+    setAlert("ok", "Authorized COHIBA developer wallet connected on Devnet.");
+  }
+
+  await refreshControls();
+}
+
 async function connectPhantom() {
   const p = provider();
   if (!p) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = "Phantom extension not detected. Install/unlock Phantom and reload.";
-    window.open("https://phantom.com/download", "_blank", "noopener,noreferrer");
+    setAlert("error", "Phantom extension not detected. Install or unlock Phantom and reload.");
     return;
   }
   try {
     const response = await p.connect();
     await setConnected(response.publicKey.toString());
   } catch (error) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = error?.message || "Wallet connection cancelled.";
+    setAlert("error", error?.message || "Wallet connection cancelled.");
   }
-}
-async function sendWithPhantom(tx, extraSigner) {
-  const p = provider();
-  if (!p?.publicKey) throw new Error("Connect Phantom first.");
-  tx.feePayer = p.publicKey;
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-  tx.recentBlockhash = blockhash;
-  if (extraSigner) tx.partialSign(extraSigner);
-  const signed = await p.signTransaction(tx);
-  const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight:false, maxRetries:3 });
-  await connection.confirmTransaction({ signature:sig, blockhash, lastValidBlockHeight }, "confirmed");
-  return sig;
-}
-
-async function buildLaunchTransaction(p, mint) {
-  const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
-  const ata = await getAssociatedTokenAddress(
-    mint.publicKey, p.publicKey, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-  );
-  const tx = new Transaction().add(
-    SystemProgram.createAccount({
-      fromPubkey: p.publicKey,
-      newAccountPubkey: mint.publicKey,
-      space: MINT_SIZE,
-      lamports: mintRent,
-      programId: TOKEN_PROGRAM_ID
-    }),
-    createInitializeMint2Instruction(
-      mint.publicKey, DECIMALS, p.publicKey, p.publicKey, TOKEN_PROGRAM_ID
-    ),
-    createAssociatedTokenAccountInstruction(
-      p.publicKey, ata, p.publicKey, mint.publicKey,
-      TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-    ),
-    createMintToInstruction(
-      mint.publicKey, ata, p.publicKey, SUPPLY_BASE, [], TOKEN_PROGRAM_ID
-    )
-  );
-  return { tx, mintRent, ata };
-}
-
-async function estimateLaunchCost(tx, owner) {
-  const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  tx.feePayer = owner;
-  tx.recentBlockhash = blockhash;
-  const feeResp = await connection.getFeeForMessage(tx.compileMessage(), "confirmed");
-  const fee = feeResp?.value ?? 10_000;
-  const accountRents = tx.instructions
-    .filter(ix => ix.programId.equals(SystemProgram.programId))
-    .reduce((sum, ix) => sum, 0);
-  const ataRentEstimate = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
-  const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
-  const safetyBuffer = 500_000;
-  return mintRent + ataRentEstimate + fee + safetyBuffer;
 }
 
 function bytesToBase64(bytes) {
@@ -168,33 +166,30 @@ async function simulateBeforePhantom(tx, extraSigner) {
   if (extraSigner) tx.partialSign(extraSigner);
 
   const raw = tx.serialize({ requireAllSignatures:false, verifySignatures:false });
-  const response = await fetch(DEVNET_RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "simulateTransaction",
-      params: [
+  const response = await fetch(rpcUrl(), {
+    method:"POST",
+    headers:{ "content-type":"application/json" },
+    body:JSON.stringify({
+      jsonrpc:"2.0",
+      id:1,
+      method:"simulateTransaction",
+      params:[
         bytesToBase64(raw),
         {
-          encoding: "base64",
-          sigVerify: false,
-          replaceRecentBlockhash: true,
-          commitment: "confirmed"
+          encoding:"base64",
+          sigVerify:false,
+          replaceRecentBlockhash:true,
+          commitment:"confirmed"
         }
       ]
     })
   });
+
   const json = await response.json();
-  if (json.error) throw new Error(json.error.message || "Devnet simulation RPC failed.");
+  if (json.error) throw new Error(json.error.message || "RPC simulation failed.");
   if (json.result?.value?.err) {
     const logs = (json.result.value.logs || []).slice(-6).join(" | ");
-    throw new Error(
-      "Simulation failed before Phantom opens: " +
-      JSON.stringify(json.result.value.err) +
-      (logs ? " · " + logs : "")
-    );
+    throw new Error("Simulation failed: " + JSON.stringify(json.result.value.err) + (logs ? " · " + logs : ""));
   }
 }
 
@@ -207,111 +202,78 @@ async function sendSimpleTransaction(tx, extraSigner, label) {
   tx.recentBlockhash = blockhash;
   if (extraSigner) tx.partialSign(extraSigner);
 
-  walletAlert.className = "wallet-alert warn";
-  walletAlert.textContent = `Preflight ${label}…`;
+  setAlert("warn", `Preflight ${label}…`);
   await simulateBeforePhantom(tx, extraSigner);
 
-  walletAlert.className = "wallet-alert ok";
-  walletAlert.textContent = `Preflight PASS: ${label}. Opening Phantom…`;
-
+  setAlert("ok", `Preflight PASS: ${label}. Confirm in Phantom.`);
   const signed = await p.signTransaction(tx);
   const sig = await connection.sendRawTransaction(signed.serialize(), {
-    skipPreflight: false,
-    maxRetries: 3
+    skipPreflight:false,
+    maxRetries:3
   });
-  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+
+  await connection.confirmTransaction(
+    { signature:sig, blockhash, lastValidBlockHeight },
+    "confirmed"
+  );
   return sig;
 }
 
-async function completeDevnetLaunch(mintAddress) {
-  const p = provider();
-  const mintPubkey = new PublicKey(mintAddress);
-  const ata = await getAssociatedTokenAddress(
-    mintPubkey, p.publicKey, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-  );
-
-  const ataInfo = await connection.getAccountInfo(ata, "confirmed");
-  if (!ataInfo) {
-    const ataTx = new Transaction().add(
-      createAssociatedTokenAccountInstruction(
-        p.publicKey,
-        ata,
-        p.publicKey,
-        mintPubkey,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
-    );
-    await sendSimpleTransaction(ataTx, null, "Create COH token account");
-  }
-
-  const mintInfo = await getMint(connection, mintPubkey, "confirmed", TOKEN_PROGRAM_ID);
-  if (mintInfo.supply === 0n) {
-    const mintTx = new Transaction().add(
-      createMintToInstruction(
-        mintPubkey,
-        ata,
-        p.publicKey,
-        SUPPLY_BASE,
-        [],
-        TOKEN_PROGRAM_ID
-      )
-    );
-    await sendSimpleTransaction(mintTx, null, "Mint 1B COH");
-  }
-
-  const finalInfo = await getMint(connection, mintPubkey, "confirmed", TOKEN_PROGRAM_ID);
-  if (finalInfo.supply !== SUPPLY_BASE) {
-    throw new Error(`Unexpected supply after mint: ${finalInfo.supply.toString()}`);
-  }
-
-  tokenState.textContent = "DEVNET MINTED";
-  walletAlert.className = "wallet-alert ok";
-  walletAlert.textContent = "COHIBA Devnet launch complete: 1,000,000,000 COH minted.";
-  await verifyOnChain(false);
+async function requiredLamports() {
+  const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
+  const ataRent = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
+  const buffer = isMainnet() ? 2_000_000 : 1_000_000;
+  return { mintRent, total: mintRent + ataRent + buffer };
 }
 
-async function createDevnetToken() {
+async function launch() {
   const p = provider();
   if (!p?.publicKey) return connectPhantom();
 
   const owner = p.publicKey.toString();
   if (owner !== AUTHORIZED_WALLET) return setConnected(owner);
 
-  prepareDevnet.disabled = true;
+  if (!mainnetArmed()) {
+    setAlert("warn", "Type MAINNET COHIBA before creating the Mainnet token.");
+    return;
+  }
+
+  if (isMainnet()) {
+    const ok = confirm(
+      "MAINNET: this spends real SOL and creates the real COH token. Continue to Phantom signing?"
+    );
+    if (!ok) return;
+  }
+
+  launchToken.disabled = true;
 
   try {
     const balance = await refreshBalance(owner);
+    const { mintRent, total } = await requiredLamports();
 
-    // Conservative balance check for three small Devnet transactions + account rent.
-    const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE, "confirmed");
-    const ataRent = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
-    const required = mintRent + ataRent + 1_000_000;
-
-    if (balance < required) {
-      const have = (balance / 1e9).toFixed(6);
-      const need = (required / 1e9).toFixed(6);
-      walletAlert.className = "wallet-alert warn";
-      walletAlert.textContent =
-        `Chưa mở Phantom: có ${have} Devnet SOL, cần khoảng ${need} SOL cho toàn bộ 3 bước.`;
-      prepareDevnet.disabled = false;
+    if (balance < total) {
+      setAlert(
+        "warn",
+        `Insufficient ${isMainnet() ? "Mainnet" : "Devnet"} SOL. Have ${(balance/1e9).toFixed(6)} SOL; need about ${(total/1e9).toFixed(6)} SOL.`
+      );
       return;
     }
 
-    let mintAddress = currentMint();
+    let mint = currentMint();
 
-    if (!mintAddress) {
-      const mint = Keypair.generate();
+    if (!mint) {
+      const mintKeypair = Keypair.generate();
+
       const createMintTx = new Transaction().add(
         SystemProgram.createAccount({
-          fromPubkey: p.publicKey,
-          newAccountPubkey: mint.publicKey,
-          space: MINT_SIZE,
-          lamports: mintRent,
-          programId: TOKEN_PROGRAM_ID
+          fromPubkey:p.publicKey,
+          newAccountPubkey:mintKeypair.publicKey,
+          space:MINT_SIZE,
+          lamports:mintRent,
+          programId:TOKEN_PROGRAM_ID
         }),
         createInitializeMint2Instruction(
-          mint.publicKey,
+          mintKeypair.publicKey,
           DECIMALS,
           p.publicKey,
           p.publicKey,
@@ -319,60 +281,169 @@ async function createDevnetToken() {
         )
       );
 
-      await sendSimpleTransaction(createMintTx, mint, "Create COH mint account");
-      mintAddress = mint.publicKey.toBase58();
-      setMint(mintAddress);
-      walletAlert.className = "wallet-alert ok";
-      walletAlert.textContent = `Mint account created: ${mintAddress}. Continue signing the next steps in Phantom.`;
+      await sendSimpleTransaction(
+        createMintTx,
+        mintKeypair,
+        `Create COH mint on ${isMainnet() ? "Mainnet" : "Devnet"}`
+      );
+
+      mint = mintKeypair.publicKey.toBase58();
+      setMint(mint);
     }
 
-    await completeDevnetLaunch(mintAddress);
+    const mintPk = new PublicKey(mint);
+    const ata = await getAssociatedTokenAddress(
+      mintPk,
+      p.publicKey,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    const ataInfo = await connection.getAccountInfo(ata, "confirmed");
+    if (!ataInfo) {
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          p.publicKey,
+          ata,
+          p.publicKey,
+          mintPk,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+      await sendSimpleTransaction(createAtaTx, null, "Create your COH token account");
+    }
+
+    const infoBefore = await getMint(connection, mintPk, "confirmed", TOKEN_PROGRAM_ID);
+
+    if (infoBefore.supply === 0n) {
+      const mintTx = new Transaction().add(
+        createMintToInstruction(
+          mintPk,
+          ata,
+          p.publicKey,
+          SUPPLY_BASE,
+          [],
+          TOKEN_PROGRAM_ID
+        )
+      );
+      await sendSimpleTransaction(mintTx, null, "Mint 1,000,000,000 COH directly to your Phantom wallet");
+    }
+
+    await verifyOnChain(true);
+
   } catch (error) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = error?.message || "Devnet launch failed.";
+    setAlert("error", error?.message || "COH launch failed.");
   } finally {
-    prepareDevnet.disabled = false;
+    await refreshControls();
   }
 }
 
 async function verifyOnChain(showMessage=true) {
-  const address = currentMint();
-  if (!address) {
-    if (showMessage) {
-      walletAlert.className = "wallet-alert warn";
-      walletAlert.textContent = "No Devnet mint has been created in this browser yet.";
-    }
-    return;
+  const p = provider();
+  const mint = currentMint();
+
+  if (!p?.publicKey || !mint) {
+    if (showMessage) setAlert("warn", "No COH mint is stored for the selected network.");
+    return false;
   }
+
   try {
-    const info = await getMint(connection, new PublicKey(address), "confirmed", TOKEN_PROGRAM_ID);
-    const mintAuth = info.mintAuthority?.toBase58() || null;
-    const freezeAuth = info.freezeAuthority?.toBase58() || null;
-    const supplyOK = info.supply === SUPPLY_BASE && info.decimals === DECIMALS;
-    const ownerOK = [mintAuth, freezeAuth].filter(Boolean).every(x => x === AUTHORIZED_WALLET);
-    tokenState.textContent = info.mintAuthority === null && info.freezeAuthority === null ? "DEVNET LOCKED" : "DEVNET VERIFIED";
-    revokeFreeze.disabled = freezeAuth === null || !supplyOK || !ownerOK;
-    revokeMint.disabled = mintAuth === null || !supplyOK || !ownerOK;
-    if (showMessage) {
-      walletAlert.className = supplyOK && ownerOK ? "wallet-alert ok" : "wallet-alert error";
-      walletAlert.textContent = `Supply: ${info.supply.toString()} base units · Mint authority: ${mintAuth ?? "REVOKED"} · Freeze authority: ${freezeAuth ?? "REVOKED"}`;
+    const mintPk = new PublicKey(mint);
+    const info = await getMint(connection, mintPk, "confirmed", TOKEN_PROGRAM_ID);
+    const ata = await getAssociatedTokenAddress(
+      mintPk,
+      p.publicKey,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    let walletAmount = 0n;
+    try {
+      const bal = await connection.getTokenAccountBalance(ata, "confirmed");
+      walletAmount = BigInt(bal.value.amount);
+      tokenBalance.textContent = `${bal.value.uiAmountString || "0"} COH`;
+    } catch {
+      tokenBalance.textContent = "0 COH";
     }
+
+    const supplyOK = info.decimals === DECIMALS && info.supply === SUPPLY_BASE;
+    const walletOK = walletAmount === SUPPLY_BASE;
+    const mintAuth = info.mintAuthority?.toBase58() ?? null;
+    const freezeAuth = info.freezeAuthority?.toBase58() ?? null;
+    const authorityOK =
+      (mintAuth === AUTHORIZED_WALLET || mintAuth === null) &&
+      (freezeAuth === AUTHORIZED_WALLET || freezeAuth === null);
+
+    if (supplyOK && walletOK && authorityOK) {
+      tokenState.textContent =
+        mintAuth === null && freezeAuth === null
+          ? `${isMainnet() ? "MAINNET" : "DEVNET"} LOCKED`
+          : `${isMainnet() ? "MAINNET" : "DEVNET"} VERIFIED`;
+
+      revokeFreeze.disabled = freezeAuth !== AUTHORIZED_WALLET;
+      revokeMint.disabled = mintAuth !== AUTHORIZED_WALLET;
+
+      if (showMessage) {
+        setAlert(
+          "ok",
+          `Verified: 1,000,000,000 COH is in your Phantom token account. Mint authority: ${mintAuth ?? "REVOKED"} · Freeze authority: ${freezeAuth ?? "REVOKED"}.`
+        );
+      }
+      return true;
+    }
+
+    tokenState.textContent = "VERIFY FAILED";
+    revokeFreeze.disabled = true;
+    revokeMint.disabled = true;
+
+    if (showMessage) {
+      setAlert(
+        "error",
+        `Verification mismatch. Supply base units: ${info.supply.toString()} · wallet base units: ${walletAmount.toString()}.`
+      );
+    }
+    return false;
+
   } catch (error) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = error?.message || "On-chain verification failed.";
+    tokenState.textContent = "VERIFY ERROR";
+    if (showMessage) setAlert("error", error?.message || "On-chain verification failed.");
+    return false;
   }
 }
+
 async function revokeAuthority(type) {
   const p = provider();
-  const address = currentMint();
-  if (!p?.publicKey || !address) return;
-  if (p.publicKey.toString() !== AUTHORIZED_WALLET) return setConnected(p.publicKey.toString());
+  const mint = currentMint();
+  if (!p?.publicKey || !mint) return;
+
+  if (p.publicKey.toString() !== AUTHORIZED_WALLET) {
+    return setConnected(p.publicKey.toString());
+  }
+
+  if (isMainnet() && !mainnetArmed()) {
+    setAlert("warn", "Type MAINNET COHIBA before an irreversible Mainnet revoke.");
+    return;
+  }
+
+  const verified = await verifyOnChain(false);
+  if (!verified) {
+    setAlert("error", "Authority revoke remains locked until supply and wallet ownership verify on-chain.");
+    return;
+  }
+
   const label = type === AuthorityType.FreezeAccount ? "Freeze" : "Mint";
-  if (!confirm(`${label} Authority revocation is irreversible. Continue on Devnet?`)) return;
+
+  if (!confirm(
+    `${label} Authority revocation is irreversible on ${isMainnet() ? "MAINNET" : "DEVNET"}. Continue?`
+  )) return;
+
   try {
     const tx = new Transaction().add(
       createSetAuthorityInstruction(
-        new PublicKey(address),
+        new PublicKey(mint),
         p.publicKey,
         type,
         null,
@@ -380,23 +451,41 @@ async function revokeAuthority(type) {
         TOKEN_PROGRAM_ID
       )
     );
-    const sig = await sendWithPhantom(tx);
-    walletAlert.className = "wallet-alert ok";
-    walletAlert.textContent = `${label} Authority revoked on Devnet. Transaction: ${sig}`;
-    await verifyOnChain(false);
+
+    await sendSimpleTransaction(tx, null, `Revoke ${label} Authority`);
+    await verifyOnChain(true);
   } catch (error) {
-    walletAlert.className = "wallet-alert error";
-    walletAlert.textContent = error?.message || `${label} Authority revocation failed.`;
+    setAlert("error", error?.message || `${label} Authority revocation failed.`);
+  }
+}
+
+async function switchNetwork() {
+  connection = makeConnection();
+  setMint(currentMint());
+  tokenBalance.textContent = "—";
+  tokenState.textContent = "NOT LAUNCHED";
+  revokeFreeze.disabled = true;
+  revokeMint.disabled = true;
+
+  const p = provider();
+  if (p?.publicKey) await setConnected(p.publicKey.toString());
+
+  if (isMainnet()) {
+    setAlert("warn", "MAINNET selected. Type MAINNET COHIBA to arm token creation. Real SOL will be spent.");
+  } else {
+    setAlert("ok", "Devnet selected.");
   }
 }
 
 connectBtn.addEventListener("click", connectPhantom);
-prepareDevnet.addEventListener("click", createDevnetToken);
+launchToken.addEventListener("click", launch);
 verifyToken.addEventListener("click", () => verifyOnChain(true));
 revokeFreeze.addEventListener("click", () => revokeAuthority(AuthorityType.FreezeAccount));
 revokeMint.addEventListener("click", () => revokeAuthority(AuthorityType.MintTokens));
+networkSelect.addEventListener("change", switchNetwork);
+mainnetConfirm.addEventListener("input", refreshControls);
 
-lockReleaseControls();
+lockAll();
 setMint(currentMint());
 
 const p = provider();
@@ -406,11 +495,10 @@ if (p) {
     if (publicKey) setConnected(publicKey.toString());
     else {
       connectedWallet.textContent = "—";
-      devnetBalance.textContent = "—";
-      walletAlert.className = "wallet-alert";
-      walletAlert.textContent = "Wallet disconnected.";
-      lockReleaseControls();
+      solBalance.textContent = "—";
+      tokenBalance.textContent = "—";
+      lockAll();
+      setAlert("", "Wallet disconnected.");
     }
   });
-  
 }
