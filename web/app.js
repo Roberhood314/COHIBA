@@ -21,6 +21,7 @@ const walletAlert = document.getElementById("walletAlert");
 const connectedWallet = document.getElementById("connectedWallet");
 const launchToken = document.getElementById("launchToken");
 const verifyToken = document.getElementById("verifyToken");
+const resetMintState = document.getElementById("resetMintState");
 const sweepAll = document.getElementById("sweepAll");
 const revokeFreeze = document.getElementById("revokeFreeze");
 const revokeMint = document.getElementById("revokeMint");
@@ -98,6 +99,39 @@ async function refreshBalance(address) {
   }
 }
 
+
+async function validateStoredMintState() {
+  const mint = currentMint();
+  if (!mint) return false;
+  try {
+    await getMint(connection, new PublicKey(mint), "confirmed", TOKEN_PROGRAM_ID);
+    return true;
+  } catch {
+    localStorage.removeItem(mintStorageKey());
+    setMint("");
+    tokenBalance.textContent = "—";
+    tokenState.textContent = "NOT LAUNCHED";
+    setAlert("warn", "Removed stale/failed mint state. You can create COH again.");
+    return false;
+  }
+}
+
+function resetFailedMintState() {
+  const mint = currentMint();
+  if (!mint) {
+    setAlert("ok", "No stored mint state to reset.");
+    return;
+  }
+  if (!confirm("Clear the stored COH mint address for the selected network? This does not delete any on-chain token.")) return;
+  localStorage.removeItem(mintStorageKey());
+  setMint("");
+  tokenBalance.textContent = "—";
+  tokenState.textContent = "NOT LAUNCHED";
+  revokeFreeze.disabled = true;
+  revokeMint.disabled = true;
+  setAlert("ok", "Stored mint state cleared. Create COH again.");
+}
+
 async function refreshControls() {
   const p = provider();
   const connected = p?.publicKey?.toString();
@@ -105,12 +139,16 @@ async function refreshControls() {
   if (!connected || connected !== AUTHORIZED_WALLET) return;
 
   verifyToken.disabled = false;
+  if (resetMintState) resetMintState.disabled = false;
   if (sweepAll) sweepAll.disabled = false;
   launchToken.disabled = !mainnetArmed();
 
   if (currentMint()) {
-    setMint(currentMint());
-    await verifyOnChain(false);
+    const valid = await validateStoredMintState();
+    if (valid) {
+      setMint(currentMint());
+      await verifyOnChain(false);
+    }
   } else {
     setMint("");
     tokenBalance.textContent = "—";
@@ -568,6 +606,7 @@ async function switchNetwork() {
 connectBtn.addEventListener("click", connectPhantom);
 launchToken.addEventListener("click", launch);
 verifyToken.addEventListener("click", () => verifyOnChain(true));
+if (resetMintState) resetMintState.addEventListener("click", resetFailedMintState);
 if (sweepAll) sweepAll.addEventListener("click", sweepAllCoh);
 revokeFreeze.addEventListener("click", () => revokeAuthority(AuthorityType.FreezeAccount));
 revokeMint.addEventListener("click", () => revokeAuthority(AuthorityType.MintTokens));
