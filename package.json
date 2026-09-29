@@ -1,14 +1,27 @@
 {
-  "name":"cohiba-meme-coin",
-  "version":"0.1.0",
-  "private":true,
-  "type":"module",
-  "scripts":{
-    "serve":"python3 -m http.server 8080 --directory web",
-    "typecheck":"tsc --noEmit",
-    "token:create:devnet":"tsx scripts/create-token.ts --network devnet",
-    "token:check:devnet":"tsx scripts/check-token.ts --network devnet"
+  "name": "cohiba-meme-coin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory web",
+    "typecheck": "tsc --noEmit",
+    "token:create:devnet": "tsx scripts/create-token.ts --network devnet",
+    "token:check:devnet": "tsx scripts/check-token.ts --network devnet",
+    "token:create:local": "tsx scripts/create-token.ts --network localnet",
+    "token:create:staged:devnet": "tsx scripts/create-token-staged.ts --network devnet",
+    "token:revoke:devnet": "tsx scripts/revoke-authorities.ts --network devnet",
+    "token:create:staged:mainnet": "tsx scripts/create-token-staged.ts --network mainnet-beta",
+    "token:revoke:mainnet": "tsx scripts/revoke-authorities.ts --network mainnet-beta",
+    "start": "node web-server.mjs"
   },
-  "dependencies":{"@solana/spl-token":"^0.4.14","@solana/web3.js":"^1.98.4"},
-  "devDependencies":{"tsx":"^4.20.6","typescript":"^5.9.2"}
+  "dependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.10.0"
+  }
 }
