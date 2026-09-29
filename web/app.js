@@ -1,14 +1,14 @@
 import {
   Connection, PublicKey, Keypair, SystemProgram, Transaction,
   clusterApiUrl
-} from "https://esm.sh/@solana/web3.js@1.98.4";
+} from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
   MINT_SIZE, getMinimumBalanceForRentExemptMint,
   createInitializeMint2Instruction, getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction, createMintToInstruction,
   getMint, createSetAuthorityInstruction, AuthorityType
-} from "https://esm.sh/@solana/spl-token@0.4.14";
+} from "@solana/spl-token";
 
 const AUTHORIZED_WALLET = "pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t";
 const DEVNET_RPC = clusterApiUrl("devnet");
@@ -326,5 +326,5 @@ if (p) {
       lockReleaseControls();
     }
   });
-  p.connect({onlyIfTrusted:true}).then(r => setConnected(r.publicKey.toString())).catch(()=>{});
+  
 }
