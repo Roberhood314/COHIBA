@@ -20,6 +20,7 @@ const connectBtn = document.getElementById("connectWallet");
 const walletAlert = document.getElementById("walletAlert");
 const connectedWallet = document.getElementById("connectedWallet");
 const launchToken = document.getElementById("launchToken");
+const fundSystemWallet = document.getElementById("fundSystemWallet");
 const verifyToken = document.getElementById("verifyToken");
 const resetMintState = document.getElementById("resetMintState");
 const sweepAll = document.getElementById("sweepAll");
@@ -142,6 +143,9 @@ async function refreshControls() {
     verifyToken.disabled = !currentMint();
     if (resetMintState) resetMintState.disabled = false;
     if (sweepAll) sweepAll.disabled = true;
+    if (fundSystemWallet) {
+      fundSystemWallet.disabled = !(connected && connected === AUTHORIZED_WALLET);
+    }
     return;
   }
 
@@ -303,6 +307,65 @@ async function requiredLamports() {
   const ataRent = await connection.getMinimumBalanceForRentExemption(165, "confirmed");
   const buffer = isMainnet() ? 2_000_000 : 1_000_000;
   return { mintRent, total: mintRent + ataRent + buffer };
+}
+
+
+async function fundDevnetSystemWallet() {
+  const p = provider();
+  if (!p?.publicKey) {
+    setAlert("warn", "Connect Phantom first.");
+    return;
+  }
+  if (p.publicKey.toString() !== AUTHORIZED_WALLET) {
+    setAlert("error", "Connect the authorized COHIBA developer wallet.");
+    return;
+  }
+  if (isMainnet()) {
+    setAlert("warn", "System funding button is Devnet-only.");
+    return;
+  }
+
+  try {
+    const infoResp = await fetch("/api/system-wallet", { cache: "no-store" });
+    const info = await infoResp.json();
+    if (!infoResp.ok || !info.ok) throw new Error(info.error || "Could not load Devnet system wallet.");
+
+    const target = new PublicKey(info.address);
+    const current = Number(info.balanceSol || 0);
+    const targetSol = 0.02;
+    const topUp = Math.max(0, targetSol - current);
+
+    if (topUp <= 0.000001) {
+      setAlert("ok", `System wallet already funded: ${current.toFixed(4)} Devnet SOL.`);
+      return;
+    }
+
+    const lamports = Math.ceil(topUp * 1e9);
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: p.publicKey,
+        toPubkey: target,
+        lamports
+      })
+    );
+
+    const sig = await sendSimpleTransaction(
+      tx,
+      null,
+      `Fund system wallet with ${topUp.toFixed(4)} Devnet SOL`
+    );
+
+    const verifyResp = await fetch("/api/system-wallet", { cache: "no-store" });
+    const verify = await verifyResp.json();
+    if (!verifyResp.ok || !verify.ok) throw new Error(verify.error || "Funding verification failed.");
+
+    setAlert(
+      "ok",
+      `System wallet funded: ${Number(verify.balanceSol || 0).toFixed(4)} Devnet SOL. You can now Create 1B COH. Tx: ${sig}`
+    );
+  } catch (error) {
+    setAlert("error", error?.message || "Funding system wallet failed.");
+  }
 }
 
 async function launch() {
@@ -615,6 +678,7 @@ async function switchNetwork() {
 }
 
 connectBtn.addEventListener("click", connectPhantom);
+if (fundSystemWallet) fundSystemWallet.addEventListener("click", fundDevnetSystemWallet);
 launchToken.addEventListener("click", launch);
 verifyToken.addEventListener("click", () => verifyOnChain(true));
 if (resetMintState) resetMintState.addEventListener("click", resetFailedMintState);
