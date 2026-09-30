@@ -27,3 +27,7 @@ p{overflow-wrap:break-word}.wrap{width:min(1180px,calc(100% - 48px))}
 .hero-copy{min-width:0}.hero h1{max-width:720px;text-wrap:balance}.section h2{text-wrap:balance}.lead,.prose,.section-title p{max-width:68ch}
 .brand img,.manifesto-logo{object-fit:contain;background:#000}
 @media(max-width:680px){.hero h1{font-size:clamp(42px,12.2vw,56px);max-width:100%}.vn-subtitle{font-size:.42em;line-height:1.4}.section h2{font-size:clamp(32px,9.4vw,41px)}}
+
+/* COHIBA emblem accents */
+.section-kicker{display:flex;align-items:center;gap:11px}.section-icon{position:relative;display:inline-grid;place-items:center;flex:0 0 27px;width:27px;height:27px;border:1px solid rgba(241,210,122,.28);border-radius:50%;background:radial-gradient(circle,rgba(200,155,49,.14),rgba(5,4,3,.9));box-shadow:0 0 22px rgba(200,155,49,.08)}.section-icon img{width:21px;height:21px;object-fit:contain;border-radius:50%;filter:drop-shadow(0 0 5px rgba(241,210,122,.15))}.section-kicker:after{content:"";width:42px;height:1px;margin-left:3px;background:linear-gradient(90deg,rgba(200,155,49,.65),transparent)}.manifesto .section-kicker{justify-content:center}.manifesto .section-kicker:after{display:none}
+@media(max-width:680px){.section-kicker{gap:9px}.section-icon{width:24px;height:24px;flex-basis:24px}.section-icon img{width:18px;height:18px}.section-kicker:after{width:24px}}
