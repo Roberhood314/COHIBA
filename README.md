@@ -56,3 +56,17 @@ The current website domain is deployment infrastructure. A dedicated project dom
 - Railway web service: production deployment.
 - Devnet public launch: requires a small amount of Devnet SOL in the persistent system payer.
 - Mainnet token: intentionally not launched until explicit owner approval and Mainnet secrets/funding are configured.
+
+
+## Listing Pack
+
+Pre-Mainnet listing preparation for CoinMarketCap, CoinGecko and market-data submissions is maintained in:
+
+- [COHIBA Listing Pack](listing-pack/README.md)
+- [Project Profile](listing-pack/PROJECT_PROFILE.md)
+- [Token Profile](listing-pack/TOKEN_PROFILE.md)
+- [CoinMarketCap Checklist](listing-pack/CMC_CHECKLIST.md)
+- [CoinGecko Checklist](listing-pack/COINGECKO_CHECKLIST.md)
+- [Submission Data Sheet](listing-pack/SUBMISSION_DATA_TEMPLATE.md)
+
+Mainnet contract, market URLs, liquidity figures and trading metrics remain intentionally blank until they are live and independently verifiable.
