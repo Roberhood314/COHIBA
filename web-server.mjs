@@ -520,4 +520,51 @@ const server=http.createServer(async (req,res)=>{
   });
 });
 
-server.listen(port,"0.0.0.0",()=>console.log(`COHIBA web listening on :${port}`));
+async function maybeAutoLaunchMainnet(){
+  if(process.env.AUTO_MAINNET_LAUNCH!=="I_UNDERSTAND_MAINNET_COHIBA") return;
+  try{
+    if(process.env.ALLOW_MAINNET!=="true") throw new Error("MAINNET_LOCKED");
+    const existing=loadLaunchRecord("mainnet-beta");
+    if(existing?.locked && existing?.mint){
+      console.log("COHIBA_MAINNET_ALREADY_LAUNCHED", JSON.stringify({mint:existing.mint,status:existing.status}));
+      return;
+    }
+
+    const signer=loadMainnetSigner();
+    const connection=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),"confirmed");
+    const version=await connection.getVersion();
+    if(!version?.["solana-core"]) throw new Error("MAINNET_RPC_UNAVAILABLE");
+
+    const lamports=await connection.getBalance(signer.publicKey,"confirmed");
+    const signerBalanceSol=lamports/1e9;
+    if(signerBalanceSol<MAINNET_MIN_SOL){
+      throw new Error(`MAINNET_SIGNER_NEEDS_FUNDING:${signer.publicKey.toBase58()}:${signerBalanceSol}`);
+    }
+
+    const mr=await fetch(METADATA_URI,{headers:{accept:"application/json"}});
+    const meta=mr.ok?await mr.json():null;
+    if(!(mr.ok && meta?.name==="COHIBA" && meta?.symbol==="COH" && String(meta?.image||"").startsWith("https://cohibameme.site/"))){
+      throw new Error("MAINNET_METADATA_NOT_READY");
+    }
+
+    console.log("COHIBA_MAINNET_AUTO_LAUNCH_START", JSON.stringify({signer:signer.publicKey.toBase58(),balanceSol:signerBalanceSol}));
+    const record=await createCoh("mainnet-beta");
+    console.log("COHIBA_MAINNET_AUTO_LAUNCH_SUCCESS", JSON.stringify({
+      mint:record.mint,
+      destinationWallet:record.destinationWallet,
+      destinationAta:record.destinationAta,
+      metadataAddress:record.metadataAddress,
+      status:record.status,
+      mintAuthority:record.mintAuthority,
+      freezeAuthority:record.freezeAuthority,
+      launchedAt:record.launchedAt
+    }));
+  }catch(error){
+    console.error("COHIBA_MAINNET_AUTO_LAUNCH_BLOCKED", String(error?.message||error));
+  }
+}
+
+server.listen(port,"0.0.0.0",()=>{
+  console.log(`COHIBA web listening on :${port}`);
+  setTimeout(()=>{ void maybeAutoLaunchMainnet(); },1500);
+});
