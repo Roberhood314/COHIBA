@@ -16,6 +16,29 @@ const DECIMALS = 9;
 const SUPPLY = 1_000_000_000n * 10n ** 9n;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://cohiba-web-live-production.up.railway.app";
 const METADATA_URI = `${PUBLIC_BASE_URL.replace(/\/$/,"")}/token-metadata.json`;
+const MAINNET_MIN_SOL = 0.03;
+const launchAttempts = new Map();
+
+function requestIp(req){
+  return String(req.headers["x-forwarded-for"]||req.socket.remoteAddress||"unknown").split(",")[0].trim();
+}
+
+function enforceLaunchRateLimit(req){
+  const key=requestIp(req);
+  const now=Date.now();
+  const windowMs=10*60*1000;
+  const max=5;
+  const recent=(launchAttempts.get(key)||[]).filter(ts=>now-ts<windowMs);
+  if(recent.length>=max) throw new Error("LAUNCH_RATE_LIMITED");
+  recent.push(now);
+  launchAttempts.set(key,recent);
+}
+
+function requireMainnetOrigin(req){
+  const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
+  const origin=String(req.headers.origin||"");
+  if(origin!==expected) throw new Error("MAINNET_ORIGIN_INVALID");
+}
 function loadOrCreateDevnetPayer(){
   const dir="/data";
   const file=path.join(dir,"devnet-payer.json");
@@ -76,6 +99,9 @@ const types = {
 const headers = {
   "x-content-type-options":"nosniff",
   "x-frame-options":"DENY",
+  "strict-transport-security":"max-age=31536000; includeSubDomains",
+  "cross-origin-opener-policy":"same-origin",
+  "cross-origin-resource-policy":"same-origin",
   "referrer-policy":"strict-origin-when-cross-origin",
   "permissions-policy":"camera=(), microphone=(), geolocation=()",
   "content-security-policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.devnet.solana.com https://api.mainnet-beta.solana.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
@@ -286,8 +312,12 @@ const server=http.createServer(async (req,res)=>{
 
   if(req.method==="POST" && raw==="/api/create-coh"){
     try{
+      enforceLaunchRateLimit(req);
       let body="";
-      for await (const chunk of req) body+=chunk;
+      for await (const chunk of req) {
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");
+      }
       const parsed=body?JSON.parse(body):{};
       const network=parsed.network||"devnet";
       const existing=loadLaunchRecord(network);
@@ -295,7 +325,10 @@ const server=http.createServer(async (req,res)=>{
         json(res,409,{ok:false,error:"TOKEN_ALREADY_LAUNCHED",...existing});
         return;
       }
-      if(network==="mainnet-beta") requireMainnetLaunchKey(req);
+      if(network==="mainnet-beta"){
+        requireMainnetOrigin(req);
+        requireMainnetLaunchKey(req);
+      }
       const result=await createCoh(network);
       json(res,200,{ok:true,...result});
     }catch(error){
@@ -310,9 +343,74 @@ const server=http.createServer(async (req,res)=>{
         });
         return;
       }
-      const status=["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:(message==="MAINNET_LAUNCH_KEY_INVALID"?403:500);
+      const status=
+        message==="LAUNCH_RATE_LIMITED"?429:
+        message==="REQUEST_TOO_LARGE"?413:
+        ["MAINNET_ORIGIN_INVALID","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
+        ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:
+        500;
       json(res,status,{ok:false,error:message});
     }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/mainnet-readiness"){
+    const checks={
+      publicBaseUrl: PUBLIC_BASE_URL==="https://cohibameme.site",
+      metadataUrl: false,
+      mainnetEnabled: process.env.ALLOW_MAINNET==="true",
+      launchKeyConfigured: Boolean(process.env.COHIBA_MAINNET_LAUNCH_KEY),
+      signerConfigured: Boolean(process.env.SYSTEM_WALLET_SECRET_JSON),
+      signerValid: false,
+      signerFunded: false,
+      mainnetRpc: false,
+      notAlreadyLaunched: !Boolean(loadLaunchRecord("mainnet-beta")?.locked)
+    };
+
+    let signerBalanceSol=null;
+    try{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),5000);
+      const mr=await fetch(METADATA_URI,{headers:{accept:"application/json"},signal:controller.signal});
+      clearTimeout(timer);
+      const meta=mr.ok?await mr.json():null;
+      checks.metadataUrl=Boolean(
+        mr.ok &&
+        meta?.name==="COHIBA" &&
+        meta?.symbol==="COH" &&
+        String(meta?.image||"").startsWith("https://cohibameme.site/")
+      );
+    }catch{}
+
+    if(checks.signerConfigured){
+      try{
+        const signer=loadMainnetSigner();
+        checks.signerValid=true;
+        const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),"confirmed");
+        const version=await conn.getVersion();
+        checks.mainnetRpc=Boolean(version?.["solana-core"]);
+        const lamports=await conn.getBalance(signer.publicKey,"confirmed");
+        signerBalanceSol=lamports/1e9;
+        checks.signerFunded=signerBalanceSol>=MAINNET_MIN_SOL;
+      }catch{}
+    }else{
+      try{
+        const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),"confirmed");
+        const version=await conn.getVersion();
+        checks.mainnetRpc=Boolean(version?.["solana-core"]);
+      }catch{}
+    }
+
+    const openMainnetReady=Object.values(checks).every(Boolean);
+    json(res,200,{
+      ok:true,
+      stage:openMainnetReady?"OPEN_MAINNET_READY":"PRE_MAINNET",
+      openMainnetReady,
+      checks,
+      signerBalanceSol,
+      minimumSignerBalanceSol:MAINNET_MIN_SOL,
+      metadataUri:METADATA_URI
+    });
     return;
   }
 
