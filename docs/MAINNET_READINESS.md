@@ -35,11 +35,11 @@ This document defines the gate that must pass **before** a COH Mainnet launch is
 - [x] Mainnet API origin restriction
 - [x] Launch endpoint rate limiting and request-size limit
 - [x] Railway healthcheck
-- [ ] cohibameme.site DNS + HTTPS fully verified
-- [ ] Devnet public end-to-end launch with current production state machine
-- [ ] Mainnet signer configured and funded
-- [ ] Dedicated Mainnet RPC confirmed
-- [ ] COHIBA_MAINNET_LAUNCH_KEY configured
+- [x] cohibameme.site DNS + HTTPS fully verified
+- [x] Devnet public end-to-end launch with current production state machine
+- [ ] Mainnet signer configured and funded (configured; funding pending)
+- [x] Mainnet RPC connectivity confirmed
+- [x] COHIBA_MAINNET_LAUNCH_KEY configured
 - [ ] ALLOW_MAINNET=true only at final launch window
 - [ ] Final owner approval
 
@@ -52,3 +52,17 @@ If RPC or deployment interruption occurs, the next run resumes the same mint ins
 
 ## Stop condition
 Do not launch Mainnet until `GET /api/mainnet-readiness` reports `OPEN_MAINNET_READY` and the owner explicitly approves the launch.
+
+
+## Latest production Devnet rehearsal
+
+- Mint: `B5ZTGW5c3A8p7oFme3FDxjBrXLC9EeUko4rzcpiQRLnR`
+- Metadata PDA: `3DHuNdZah4M9XCMeYJkupEAMcW1VcTqbEiPKkFihPH1n`
+- Metadata URI: `https://cohibameme.site/token-metadata.json`
+- Supply: `1000000000000000000` base units = 1,000,000,000 COH
+- Decimals: 9
+- Destination amount: exact full supply
+- Mint authority: null
+- Freeze authority: null
+- Metadata immutable: true
+- Final state: `LOCKED_VERIFIED`
