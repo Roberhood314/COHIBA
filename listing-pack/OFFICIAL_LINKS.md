@@ -19,7 +19,7 @@
 - Aggregator URL: **TBD**
 
 ## Social channels — create before submission
-- X / Twitter: **TBD**
+- X / Twitter: https://x.com/hunhkcgy
 - Telegram: **TBD**
 - Discord: **TBD (optional)**
 
