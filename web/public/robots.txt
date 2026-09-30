@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Sitemap: https://cohiba-web-live-production.up.railway.app/sitemap.xml
+Sitemap: https://cohibameme.site/sitemap.xml
