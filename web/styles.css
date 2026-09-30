@@ -33,3 +33,6 @@ p{overflow-wrap:break-word}.wrap{width:min(1180px,calc(100% - 48px))}
 @media(max-width:680px){.section-kicker{gap:9px}.section-icon{width:24px;height:24px;flex-basis:24px}.section-icon img{width:18px;height:18px}.section-kicker:after{width:24px}}
 
 .founder-logo{overflow:hidden;background:radial-gradient(circle,rgba(200,155,49,.12),#050403 70%);padding:14px}.founder-logo img{width:100%;height:100%;object-fit:contain;border-radius:50%;filter:drop-shadow(0 8px 22px rgba(200,155,49,.18))}
+
+/* Header brand emblem — force visible official mark */
+.brand{display:inline-flex;align-items:center;gap:13px}.brand img{display:block!important;width:38px!important;height:38px!important;flex:0 0 38px;border-radius:50%;padding:3px;object-fit:contain;background:#050403!important;border:1px solid rgba(241,210,122,.38);box-shadow:0 0 18px rgba(200,155,49,.13)}@media(max-width:680px){.brand{gap:11px}.brand img{width:34px!important;height:34px!important;flex-basis:34px}.brand span{font-size:13px}}
