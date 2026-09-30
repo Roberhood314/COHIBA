@@ -1,0 +1,29 @@
+{
+  "name": "COHIBA",
+  "symbol": "COH",
+  "description": "COHIBA is a dark satirical meme project exploring humanity's anxiety about AI, automation, identity and control.",
+  "image": "https://cohiba-web-live-production.up.railway.app/logo.svg",
+  "external_url": "https://cohiba-web-live-production.up.railway.app",
+  "attributes": [
+    {
+      "trait_type": "Network",
+      "value": "Solana"
+    },
+    {
+      "trait_type": "Standard",
+      "value": "SPL Token"
+    },
+    {
+      "trait_type": "Supply",
+      "value": "1,000,000,000 COH"
+    },
+    {
+      "trait_type": "Decimals",
+      "value": "9"
+    },
+    {
+      "trait_type": "Tax",
+      "value": "0%"
+    }
+  ]
+}
