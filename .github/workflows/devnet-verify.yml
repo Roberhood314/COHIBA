@@ -2,7 +2,7 @@ name: COHIBA Local Token Verify
 
 on:
   push:
-    branches: [devnet]
+    branches: [devnet, main]
   workflow_dispatch:
 
 permissions:
