@@ -46,7 +46,7 @@ Never commit seed phrases, private keys, wallet JSON files or exchange credentia
 
 Project metadata: `token/metadata.json`
 
-Website: https://cohiba-web-live-production.up.railway.app
+Website: https://cohibameme.site
 
 The current website domain is deployment infrastructure. A dedicated project domain should replace it before public Mainnet marketing/listing.
 
