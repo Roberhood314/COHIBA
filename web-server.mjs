@@ -4,6 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Connection, Keypair, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint, setAuthority, AuthorityType } from "@solana/spl-token";
+import { createV1, findMetadataPda, mplTokenMetadata, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { keypairIdentity, percentAmount, publicKey as umiPublicKey } from "@metaplex-foundation/umi";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -11,6 +14,8 @@ const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
 const SUPPLY = 1_000_000_000n * 10n ** 9n;
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://cohiba-web-live-production.up.railway.app";
+const METADATA_URI = `${PUBLIC_BASE_URL.replace(/\/$/,"")}/token-metadata.json`;
 function loadOrCreateDevnetPayer(){
   const dir="/data";
   const file=path.join(dir,"devnet-payer.json");
@@ -128,6 +133,37 @@ function loadMainnetSigner(){
   return Keypair.fromSecretKey(Uint8Array.from(secret));
 }
 
+async function ensureTokenMetadata(network,payer,mint,connection){
+  const rpc = network==="devnet"
+    ? clusterApiUrl("devnet")
+    : (process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"));
+
+  const umi=createUmi(rpc).use(mplTokenMetadata());
+  const umiKeypair=umi.eddsa.createKeypairFromSecretKey(payer.secretKey);
+  umi.use(keypairIdentity(umiKeypair));
+
+  const umiMint=umiPublicKey(mint.toBase58());
+  const metadataPda=findMetadataPda(umi,{mint:umiMint});
+  const metadataAddress=new PublicKey(metadataPda[0].toString());
+  const existing=await connection.getAccountInfo(metadataAddress,"confirmed");
+  if(existing) return metadataAddress.toBase58();
+
+  await createV1(umi,{
+    mint:umiMint,
+    authority:umi.identity,
+    payer:umi.identity,
+    updateAuthority:umi.identity,
+    name:"COHIBA",
+    symbol:"COH",
+    uri:METADATA_URI,
+    sellerFeeBasisPoints:percentAmount(0),
+    tokenStandard:TokenStandard.Fungible,
+    isMutable:false
+  }).sendAndConfirm(umi);
+
+  return metadataAddress.toBase58();
+}
+
 async function createCoh(network){
   if(network!=="devnet" && network!=="mainnet-beta") throw new Error("UNSUPPORTED_NETWORK");
 
@@ -146,13 +182,29 @@ async function createCoh(network){
   const balance=await connection.getBalance(payer.publicKey,"confirmed");
   if(balance<5_000_000) throw new Error("SYSTEM_SIGNER_SOL_TOO_LOW");
 
-  const mint=await createMint(
-    connection,
-    payer,
-    payer.publicKey,
-    payer.publicKey,
-    DECIMALS
-  );
+  let record=loadLaunchRecord(network)||{
+    network,
+    destinationWallet:DESTINATION.toBase58(),
+    supply:"1000000000",
+    decimals:DECIMALS,
+    status:"NEW",
+    startedAt:new Date().toISOString()
+  };
+
+  let mint;
+  if(record.mint){
+    mint=new PublicKey(record.mint);
+  }else{
+    mint=await createMint(
+      connection,
+      payer,
+      payer.publicKey,
+      payer.publicKey,
+      DECIMALS
+    );
+    record={...record,mint:mint.toBase58(),status:"MINT_CREATED"};
+    saveLaunchRecord(network,record);
+  }
 
   const ata=await getOrCreateAssociatedTokenAccount(
     connection,
@@ -160,57 +212,70 @@ async function createCoh(network){
     mint,
     DESTINATION
   );
-
-  await mintTo(
-    connection,
-    payer,
-    mint,
-    ata.address,
-    payer,
-    SUPPLY
-  );
+  if(record.destinationAta!==ata.address.toBase58()){
+    record={...record,destinationAta:ata.address.toBase58(),status:"ATA_READY"};
+    saveLaunchRecord(network,record);
+  }
 
   let info=await getMint(connection,mint,"confirmed");
+
+  if(info.supply===0n){
+    if(!info.mintAuthority?.equals(payer.publicKey)) throw new Error("UNEXPECTED_MINT_AUTHORITY");
+    await mintTo(connection,payer,mint,ata.address,payer,SUPPLY);
+    record={...record,status:"SUPPLY_MINTED"};
+    saveLaunchRecord(network,record);
+    info=await getMint(connection,mint,"confirmed");
+  }
+
   if(info.supply!==SUPPLY) throw new Error("SUPPLY_VERIFY_FAILED");
 
-  // Fixed-supply policy: after the full 1B supply is minted, permanently
-  // revoke freeze first and mint authority last. The server payer is used
-  // only as the temporary launch authority.
-  await setAuthority(
-    connection,
-    payer,
-    mint,
-    payer,
-    AuthorityType.FreezeAccount,
-    null
-  );
+  const destinationBalance=await connection.getTokenAccountBalance(ata.address,"confirmed");
+  if(BigInt(destinationBalance.value.amount)!==SUPPLY) throw new Error("DESTINATION_BALANCE_VERIFY_FAILED");
 
-  await setAuthority(
-    connection,
-    payer,
-    mint,
-    payer,
-    AuthorityType.MintTokens,
-    null
-  );
+  const metadataAddress=await ensureTokenMetadata(network,payer,mint,connection);
+  record={
+    ...record,
+    metadataAddress,
+    metadataUri:METADATA_URI,
+    metadataImmutable:true,
+    status:"METADATA_READY"
+  };
+  saveLaunchRecord(network,record);
+
+  info=await getMint(connection,mint,"confirmed");
+
+  if(info.freezeAuthority!==null){
+    if(!info.freezeAuthority.equals(payer.publicKey)) throw new Error("UNEXPECTED_FREEZE_AUTHORITY");
+    await setAuthority(connection,payer,mint,payer,AuthorityType.FreezeAccount,null);
+    record={...record,status:"FREEZE_REVOKED"};
+    saveLaunchRecord(network,record);
+  }
+
+  info=await getMint(connection,mint,"confirmed");
+  if(info.mintAuthority!==null){
+    if(!info.mintAuthority.equals(payer.publicKey)) throw new Error("UNEXPECTED_MINT_AUTHORITY");
+    await setAuthority(connection,payer,mint,payer,AuthorityType.MintTokens,null);
+    record={...record,status:"MINT_REVOKED"};
+    saveLaunchRecord(network,record);
+  }
 
   info=await getMint(connection,mint,"confirmed");
   if(info.supply!==SUPPLY) throw new Error("POST_REVOKE_SUPPLY_VERIFY_FAILED");
   if(info.mintAuthority!==null) throw new Error("MINT_AUTHORITY_REVOKE_FAILED");
   if(info.freezeAuthority!==null) throw new Error("FREEZE_AUTHORITY_REVOKE_FAILED");
 
-  const record={
-    network,
-    mint:mint.toBase58(),
-    destinationWallet:DESTINATION.toBase58(),
-    destinationAta:ata.address.toBase58(),
-    supply:"1000000000",
+  const finalBalance=await connection.getTokenAccountBalance(ata.address,"confirmed");
+  if(BigInt(finalBalance.value.amount)!==SUPPLY) throw new Error("POST_REVOKE_DESTINATION_VERIFY_FAILED");
+
+  record={
+    ...record,
     baseUnitSupply:info.supply.toString(),
     decimals:info.decimals,
     mintAuthority:null,
     freezeAuthority:null,
     locked:true,
-    launchedAt:new Date().toISOString()
+    status:"LOCKED_VERIFIED",
+    launchedAt:record.launchedAt||new Date().toISOString()
   };
   saveLaunchRecord(network,record);
   return record;
@@ -226,7 +291,7 @@ const server=http.createServer(async (req,res)=>{
       const parsed=body?JSON.parse(body):{};
       const network=parsed.network||"devnet";
       const existing=loadLaunchRecord(network);
-      if(existing?.mint){
+      if(existing?.locked && existing?.mint){
         json(res,409,{ok:false,error:"TOKEN_ALREADY_LAUNCHED",...existing});
         return;
       }
