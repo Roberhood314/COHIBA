@@ -28,3 +28,7 @@ Become a recognizable internet-native cultural signal for people who believe tec
 
 ## Brand disclaimer
 COHIBA ($COH) is an independent digital community/meme project. It should not claim affiliation with any unrelated company, consumer brand, cigar producer, or trademark owner.
+
+
+## Founder
+**JohnPC** is the founder and creator of COHIBA, responsible for the project's core narrative, brand direction and human-first mission.
