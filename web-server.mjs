@@ -60,18 +60,30 @@ function loadOrCreateDevnetPayer(){
 
 const DEVNET_PAYER = loadOrCreateDevnetPayer();
 
+function isDevnetNetwork(network){
+  return network==="devnet" || network==="devnet-rehearsal";
+}
+
 function launchRecordPath(network){
-  const safe=network==="mainnet-beta"?"mainnet":"devnet";
+  const safe=
+    network==="mainnet-beta"?"mainnet":
+    network==="devnet-rehearsal"?"devnet-rehearsal":
+    "devnet";
   return path.join("/data",`cohiba-${safe}-launch.json`);
 }
 
 function loadLaunchRecord(network){
+  const file=launchRecordPath(network);
+  if(!fs.existsSync(file)) return null;
   try{
-    const file=launchRecordPath(network);
-    if(!fs.existsSync(file)) return null;
-    return JSON.parse(fs.readFileSync(file,"utf8"));
-  }catch{
-    return null;
+    const parsed=JSON.parse(fs.readFileSync(file,"utf8"));
+    if(!parsed || typeof parsed!=="object") throw new Error("INVALID_LAUNCH_RECORD");
+    return parsed;
+  }catch(error){
+    if(network==="mainnet-beta"){
+      throw new Error("MAINNET_LAUNCH_RECORD_CORRUPT");
+    }
+    throw error;
   }
 }
 
@@ -160,7 +172,7 @@ function loadMainnetSigner(){
 }
 
 async function ensureTokenMetadata(network,payer,mint,connection){
-  const rpc = network==="devnet"
+  const rpc = isDevnetNetwork(network)
     ? clusterApiUrl("devnet")
     : (process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"));
 
@@ -190,13 +202,19 @@ async function ensureTokenMetadata(network,payer,mint,connection){
   return metadataAddress.toBase58();
 }
 
+const activeLaunches=new Set();
+
 async function createCoh(network){
-  if(network!=="devnet" && network!=="mainnet-beta") throw new Error("UNSUPPORTED_NETWORK");
+  if(!isDevnetNetwork(network) && network!=="mainnet-beta") throw new Error("UNSUPPORTED_NETWORK");
+  if(activeLaunches.has(network)) throw new Error("LAUNCH_ALREADY_IN_PROGRESS");
+  activeLaunches.add(network);
+
+  try{
 
   let payer;
   let connection;
 
-  if(network==="devnet"){
+  if(isDevnetNetwork(network)){
     payer=DEVNET_PAYER;
     connection=await ensureDevnetFunding(payer);
   }else{
@@ -305,6 +323,9 @@ async function createCoh(network){
   };
   saveLaunchRecord(network,record);
   return record;
+  } finally {
+    activeLaunches.delete(network);
+  }
 }
 
 const server=http.createServer(async (req,res)=>{
@@ -345,6 +366,7 @@ const server=http.createServer(async (req,res)=>{
       }
       const status=
         message==="LAUNCH_RATE_LIMITED"?429:
+        message==="LAUNCH_ALREADY_IN_PROGRESS"?409:
         message==="REQUEST_TOO_LARGE"?413:
         ["MAINNET_ORIGIN_INVALID","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
         ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:
@@ -418,7 +440,7 @@ const server=http.createServer(async (req,res)=>{
     try{
       const url=new URL(req.url||"/","http://localhost");
       const network=url.searchParams.get("network")||"devnet";
-      if(network!=="devnet" && network!=="mainnet-beta"){
+      if(!isDevnetNetwork(network) && network!=="mainnet-beta"){
         json(res,400,{ok:false,error:"UNSUPPORTED_NETWORK"});
         return;
       }
@@ -428,7 +450,7 @@ const server=http.createServer(async (req,res)=>{
         return;
       }
       const connection=new Connection(
-        network==="devnet"
+        isDevnetNetwork(network)
           ? clusterApiUrl("devnet")
           : (process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta")),
         "confirmed"
