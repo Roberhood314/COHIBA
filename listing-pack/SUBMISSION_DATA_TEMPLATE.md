@@ -32,7 +32,7 @@ Logo: https://cohibameme.site/logo.svg
 Metadata: https://cohibameme.site/token-metadata.json  
 Transparency: https://cohibameme.site/transparency.html  
 Terms/risk: https://cohibameme.site/terms.html  
-X: **[TBD]**  
+X: **https://x.com/hunhkcgy**  
 Telegram: **[TBD]**
 
 ## Market — POST-MAINNET
