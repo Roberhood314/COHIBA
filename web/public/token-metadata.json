@@ -2,8 +2,8 @@
   "name": "COHIBA",
   "symbol": "COH",
   "description": "COHIBA is a dark satirical meme project exploring humanity's anxiety about AI, automation, identity and control.",
-  "image": "https://cohiba-web-live-production.up.railway.app/logo.svg",
-  "external_url": "https://cohiba-web-live-production.up.railway.app",
+  "image": "https://cohibameme.site/logo.svg",
+  "external_url": "https://cohibameme.site",
   "attributes": [
     {
       "trait_type": "Network",
