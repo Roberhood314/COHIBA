@@ -68,5 +68,6 @@ Pre-Mainnet listing preparation for CoinMarketCap, CoinGecko and market-data sub
 - [CoinMarketCap Checklist](listing-pack/CMC_CHECKLIST.md)
 - [CoinGecko Checklist](listing-pack/COINGECKO_CHECKLIST.md)
 - [Submission Data Sheet](listing-pack/SUBMISSION_DATA_TEMPLATE.md)
+- [Launch Economics](listing-pack/LAUNCH_ECONOMICS.md)
 
 Mainnet contract, market URLs, liquidity figures and trading metrics remain intentionally blank until they are live and independently verifiable.
