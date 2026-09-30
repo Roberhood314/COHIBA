@@ -1,0 +1,5 @@
+Contact: https://github.com/Roberhood314/COHIBA/security
+Canonical: https://cohiba-web-live-production.up.railway.app/.well-known/security.txt
+Policy: https://github.com/Roberhood314/COHIBA/blob/main/SECURITY.md
+Expires: 2027-09-30T00:00:00Z
+Preferred-Languages: en, vi
