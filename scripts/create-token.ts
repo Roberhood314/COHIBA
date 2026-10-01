@@ -20,7 +20,7 @@ function loadKeypair(walletPath:string){
 
 const network=arg("network","devnet") as Cluster|"mainnet-beta"|"localnet";
 if(!["localnet","devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
-if(network==="mainnet-beta"&&process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet is safety-locked. Set ALLOW_MAINNET=true only after final review.");
+if(network==="mainnet-beta") throw new Error("MAINNET_LEGACY_CLI_DISABLED: Mainnet mint creation is only permitted through the canonical persisted launch path in web-server.mjs.");
 
 const walletPath=process.env.SOLANA_WALLET_PATH;
 if(!walletPath) throw new Error("Set SOLANA_WALLET_PATH to a dedicated Solana JSON keypair file.");
