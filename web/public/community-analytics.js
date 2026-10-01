@@ -7,8 +7,14 @@
     "/whitepaper.html":"whitepaper_view",
     "/security.html":"security_view",
     "/ambassadors.html":"ambassador_view",
-    "/analytics.html":"analytics_view"
+    "/analytics.html":"analytics_view",
+    "/open-review.html":"open_review_view"
   }[path];
+
+  const params=new URLSearchParams(location.search);
+  const rawSource=params.get("utm_source")||"direct";
+  const allowedSources=new Set(["direct","x","solana-discord","reddit","github","security-outreach","creator-outreach","other"]);
+  const source=allowedSources.has(rawSource)?rawSource:"other";
 
   const send=(event)=>{
     if(!event) return;
@@ -20,7 +26,7 @@
     fetch("/api/community-event",{
       method:"POST",
       headers:{"content-type":"application/json"},
-      body:JSON.stringify({event}),
+      body:JSON.stringify({event,source}),
       keepalive:true
     }).catch(()=>{});
   };
