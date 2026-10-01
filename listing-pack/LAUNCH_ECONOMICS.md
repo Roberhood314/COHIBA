@@ -12,15 +12,8 @@ Create a transparent, liquid, community-first launch structure for COHIBA ($COH)
 - Mint authority: revoke permanently after verified initial issuance
 - Freeze authority: revoke permanently after verified initial issuance
 
-## Reference launch model
-This is a planning model, not a promise of market price.
-
-- Reference initial circulating supply: 100,000,000 COH (10%)
-- Reference opening price: $0.001 / COH
-- Reference circulating market capitalization: $100,000
-- Reference fully diluted valuation: $1,000,000
-
-The actual opening price and market capitalization will be determined by the liquidity pool and real market trading.
+## Launch pricing policy
+COHIBA does not publish a reference opening price, target market capitalization or target FDV before a live market exists. Any initial pool ratio will be documented as a liquidity-configuration fact, not as a promised fair value or expected return.
 
 ## Allocation guardrails
 - Public launch & liquidity: 75%
@@ -35,7 +28,7 @@ Team, development and treasury allocations should use disclosed wallets and vest
 ## Liquidity principles
 1. Publish the pool address and trading pair.
 2. Do not fabricate liquidity or trading volume.
-3. Keep a liquidity reserve large enough to avoid extreme slippage for normal retail trades.
+3. Model price impact and slippage at disclosed test sizes before pool creation; publish assumptions and actual reserves after launch.
 4. Publish LP custody / lock / burn policy accurately.
 5. Do not claim a fixed future price or guaranteed return.
 
