@@ -21,8 +21,7 @@ function loadKeypair(walletPath:string){
 const network=arg("network","devnet") as Cluster|"mainnet-beta";
 if(!["devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
 if(network==="mainnet-beta"){
-  if(process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet is safety-locked.");
-  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA") throw new Error("Mainnet owner approval is not present.");
+  throw new Error("MAINNET_STAGED_CLI_DISABLED: Mainnet mint creation is only permitted through the canonical persisted launch path in web-server.mjs. This CLI is Devnet/Testnet only.");
 }
 
 const walletPath=process.env.SOLANA_WALLET_PATH;
