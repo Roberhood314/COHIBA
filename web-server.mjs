@@ -18,6 +18,44 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://cohiba-web-live-
 const METADATA_URI = `${PUBLIC_BASE_URL.replace(/\/$/,"")}/token-metadata.json`;
 const MAINNET_MIN_SOL = 0.03;
 const launchAttempts = new Map();
+const apiRateWindows = new Map();
+
+function rateLimitApi(req){
+  const key=requestIp(req);
+  const now=Date.now();
+  const windowMs=60*1000;
+  const max=60;
+  const recent=(apiRateWindows.get(key)||[]).filter(ts=>now-ts<windowMs);
+  if(recent.length>=max) return false;
+  recent.push(now);
+  apiRateWindows.set(key,recent);
+  if(apiRateWindows.size>5000){
+    for(const [ip,times] of apiRateWindows){
+      if(!times.some(ts=>now-ts<windowMs)) apiRateWindows.delete(ip);
+    }
+  }
+  return true;
+}
+
+function isAllowedMethod(method){
+  return method==="GET" || method==="HEAD" || method==="POST";
+}
+
+function safeRequestPath(urlValue){
+  const raw=String(urlValue||"/").split("?")[0];
+  let decoded;
+  try{
+    decoded=decodeURIComponent(raw);
+  }catch{
+    throw new Error("BAD_PATH_ENCODING");
+  }
+  if(decoded.includes("\0")) throw new Error("BAD_PATH");
+  if(decoded.includes("\\")) throw new Error("BAD_PATH");
+  if(decoded.split("/").some(part=>part===".." || (part.startsWith(".") && part!==".well-known"))){
+    throw new Error("BAD_PATH");
+  }
+  return decoded;
+}
 
 function requestIp(req){
   return String(req.headers["x-forwarded-for"]||req.socket.remoteAddress||"unknown").split(",")[0].trim();
@@ -110,13 +148,14 @@ const types = {
 
 const headers = {
   "x-content-type-options":"nosniff",
+  "x-dns-prefetch-control":"off",
   "x-frame-options":"DENY",
   "strict-transport-security":"max-age=31536000; includeSubDomains",
   "cross-origin-opener-policy":"same-origin",
   "cross-origin-resource-policy":"same-origin",
   "referrer-policy":"strict-origin-when-cross-origin",
-  "permissions-policy":"camera=(), microphone=(), geolocation=()",
-  "content-security-policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.devnet.solana.com https://api.mainnet-beta.solana.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "permissions-policy":"camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+  "content-security-policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.devnet.solana.com https://api.mainnet-beta.solana.com; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
 };
 
 function json(res,status,body){
@@ -329,7 +368,26 @@ async function createCoh(network){
 }
 
 const server=http.createServer(async (req,res)=>{
-  const raw=(req.url||"/").split("?")[0];
+  if(!isAllowedMethod(req.method)){
+    res.writeHead(405,{...headers,"allow":"GET, HEAD, POST","content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  let raw;
+  try{
+    raw=safeRequestPath(req.url);
+  }catch{
+    res.writeHead(400,{...headers,"content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
+    res.end("Bad Request");
+    return;
+  }
+
+  if(raw.startsWith("/api/") && !rateLimitApi(req)){
+    res.writeHead(429,{...headers,"content-type":"application/json; charset=utf-8","cache-control":"no-store","retry-after":"60"});
+    res.end(JSON.stringify({ok:false,error:"RATE_LIMITED"}));
+    return;
+  }
 
   if(req.method==="POST" && raw==="/api/create-coh"){
     try{
@@ -563,6 +621,12 @@ async function maybeAutoLaunchMainnet(){
     console.error("COHIBA_MAINNET_AUTO_LAUNCH_BLOCKED", String(error?.message||error));
   }
 }
+
+server.requestTimeout=15000;
+server.headersTimeout=10000;
+server.keepAliveTimeout=5000;
+server.maxHeadersCount=64;
+server.maxRequestsPerSocket=100;
 
 server.listen(port,"0.0.0.0",()=>{
   console.log(`COHIBA web listening on :${port}`);
