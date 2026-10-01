@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COHIBA Blockchain Data</title>
+<meta name="description" content="Public on-chain verification data for COHIBA ($COH) on Solana.">
+<link rel="canonical" href="https://cohibameme.site/blockchain.html">
+<style>
+:root{--bg:#050403;--panel:#0c0906;--gold:#e4b84f;--text:#f2eee7;--muted:#9e9689;--line:rgba(228,184,79,.25);--ok:#8fd49a;--wait:#f0c65c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 Arial,sans-serif}
+main{width:min(1050px,calc(100% - 32px));margin:auto;padding:48px 0 80px}a{color:var(--gold)}h1{font-size:clamp(36px,7vw,64px);margin:12px 0}h2{margin-top:38px;color:#f2d170}
+.lead{max-width:800px;color:var(--muted);font-size:18px}.tabs{display:flex;gap:10px;margin:24px 0}.tabs button{background:#0b0906;color:var(--text);border:1px solid var(--line);padding:10px 14px;cursor:pointer}.tabs button.active{color:var(--gold);border-color:var(--gold)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{border:1px solid var(--line);background:var(--panel);padding:18px}.card small{display:block;color:var(--muted)}.card b{display:block;margin-top:5px;word-break:break-all}.ok{color:var(--ok)}.wait{color:var(--wait)}
+pre{white-space:pre-wrap;word-break:break-word;background:#080705;border:1px solid var(--line);padding:16px;overflow:auto}.mono{font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style></head><body><main>
+<a href="/">← COHIBA</a><h1>Blockchain Data</h1>
+<p class="lead">Live, read-only blockchain evidence for COHIBA. Devnet data is already verifiable. Mainnet remains pending until the official mint is launched and verified.</p>
+<div class="tabs"><button id="mainBtn" class="active">Mainnet</button><button id="devBtn">Devnet</button></div>
+<div id="summary" class="grid"></div>
+<h2>Verification</h2><div id="verification" class="grid"></div>
+<h2>Largest token accounts</h2><div id="accounts"></div>
+<h2>Recent mint signatures</h2><div id="sigs"></div>
+<h2>Raw API</h2><p><a id="apiLink" href="/api/blockchain-data?network=mainnet-beta">Open JSON endpoint</a></p>
+<script>
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"—").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+function card(k,v,cls=""){return '<div class="card"><small>'+esc(k)+'</small><b class="'+cls+'">'+esc(v)+'</b></div>'}
+async function load(network){
+ $("apiLink").href="/api/blockchain-data?network="+encodeURIComponent(network);
+ $("summary").innerHTML=card("STATUS","LOADING…","wait");
+ $("verification").innerHTML="";$("accounts").innerHTML="";$("sigs").innerHTML="";
+ try{
+  const r=await fetch("/api/blockchain-data?network="+encodeURIComponent(network),{cache:"no-store"}); const x=await r.json();
+  if(!r.ok||!x.ok) throw new Error(x.error||"API error");
+  $("summary").innerHTML=[
+   card("NETWORK",x.network),
+   card("STATUS",x.launched?"LIVE ON-CHAIN":"PENDING MAINNET MINT",x.launched?"ok":"wait"),
+   card("MINT",x.mint||"Not launched"),
+   card("SUPPLY",x.onChain?.supplyUi||x.expectedSupply+" (planned)"),
+   card("SLOT",x.chainState?.slot),
+   card("BLOCK HEIGHT",x.chainState?.blockHeight),
+   card("EPOCH",x.chainState?.epoch),
+   card("MINT AUTHORITY",x.onChain?.mintAuthority??(x.launched?"null":"pending"),x.onChain?.mintAuthority===null?"ok":""),
+   card("FREEZE AUTHORITY",x.onChain?.freezeAuthority??(x.launched?"null":"pending"),x.onChain?.freezeAuthority===null?"ok":"")
+  ].join("");
+  const v=x.verification||{};
+  $("verification").innerHTML=[
+   card("SUPPLY VERIFIED",v.supplyVerified?"YES":"NO",v.supplyVerified?"ok":"wait"),
+   card("MINT AUTHORITY REVOKED",v.mintAuthorityRevoked?"YES":"NO",v.mintAuthorityRevoked?"ok":"wait"),
+   card("FREEZE AUTHORITY REVOKED",v.freezeAuthorityRevoked?"YES":"NO",v.freezeAuthorityRevoked?"ok":"wait"),
+   card("DESTINATION BALANCE VERIFIED",v.destinationBalanceVerified?"YES":"NO",v.destinationBalanceVerified?"ok":"wait")
+  ].join("");
+  if(x.explorer) $("summary").innerHTML+=card("EXPLORER","Solscan + Solana Explorer","ok");
+  const a=x.largestTokenAccounts||[];
+  $("accounts").innerHTML=a.length?'<table><tr><th>Address</th><th>Amount</th></tr>'+a.map(y=>'<tr><td class="mono">'+esc(y.address)+'</td><td>'+esc(y.uiAmount)+'</td></tr>').join("")+'</table>':"<p>No token-account data until mint is live.</p>";
+  const g=x.recentMintSignatures||[];
+  $("sigs").innerHTML=g.length?'<table><tr><th>Signature</th><th>Slot</th><th>Status</th></tr>'+g.map(y=>'<tr><td class="mono">'+esc(y.signature)+'</td><td>'+esc(y.slot)+'</td><td>'+esc(y.confirmationStatus)+'</td></tr>').join("")+'</table>':"<p>No mint signatures yet.</p>";
+ }catch(e){$("summary").innerHTML=card("ERROR",e.message,"wait")}
+}
+$("mainBtn").onclick=()=>{$("mainBtn").classList.add("active");$("devBtn").classList.remove("active");load("mainnet-beta")};
+$("devBtn").onclick=()=>{$("devBtn").classList.add("active");$("mainBtn").classList.remove("active");load("devnet")};
+load("mainnet-beta");
+</script></main></body></html>
