@@ -7,7 +7,7 @@
   "theme_color": "#050403",
   "icons": [
     {
-      "src": "/cohiba-official-icon.svg?v=10",
+      "src": "/cohiba-official-icon.svg?v=11",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
