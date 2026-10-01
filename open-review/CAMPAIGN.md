@@ -135,7 +135,15 @@ Prefix title:
 `[OPEN REVIEW]`
 
 ### Potentially sensitive findings
-Follow the repository SECURITY.md responsible-disclosure process. Do not publish a working exploit that could endanger production before remediation.
+Do not publish exploit details publicly.
+
+Use the repository **Sensitive Security Intake** issue template and include only minimal non-sensitive metadata. The maintainer must establish a private channel before requesting exploit details, credentials, secrets, or sensitive reproduction steps.
+
+Never:
+- test Mainnet launch paths;
+- attack production availability;
+- attempt credential/secret extraction;
+- probe third-party infrastructure outside its own rules.
 
 ## Review handling
 For substantive reports COHIBA should:
