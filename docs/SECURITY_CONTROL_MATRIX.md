@@ -20,8 +20,9 @@
 | Cryptographic build manifest | evidence tampering | SHA-256 evidence generator | security-evidence.json | IMPLEMENTED |
 | Invariant mutation tests | logic regression | deterministic mutation corpus | node:test | IMPLEMENTED |
 | CI verification gate | regression | GitHub Actions | workflow result | IMPLEMENTED |
-| Independent audit | unknown vulnerabilities | external reviewer | published report | REQUIRED PRE-MAINNET |
+| Independent audit | unknown vulnerabilities | external reviewer | public scope/report + remediation evidence | READY FOR EXTERNAL REVIEW / REQUIRED PRE-MAINNET |
 | Dependency risk review | supply-chain | npm audit + review | CI/report | REQUIRED PRE-MAINNET |
 | Restore drill | state loss | Railway volume recovery exercise | signed drill record | REQUIRED PRE-MAINNET |
+| Legal/compliance release review | regulatory/fundraising risk | external counsel review | written counsel memo/opinion | REQUIRED PRE-FUNDRAISING / PRE-MAINNET |
 
 Status words are deliberately specific. IMPLEMENTED does not mean independently audited.
