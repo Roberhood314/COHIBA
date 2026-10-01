@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "1.0",
+  "policy": "A relationship is not publicly called a partnership before PILOT unless the counterparty explicitly approves that claim.",
+  "statuses": ["IDENTIFIED","CONTACTED","DISCOVERY","TECHNICAL_EVALUATION","PILOT","LIVE_VERIFIED","INACTIVE"],
+  "targets": []
+}
