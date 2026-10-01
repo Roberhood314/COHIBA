@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" role="img" aria-labelledby="t d">
+<title id="t">COHIBA</title><desc id="d">COHIBA gold cyber-human emblem with Fear the Machine. Defend the Human.</desc>
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a8"/><stop offset=".22" stop-color="#f5c451"/><stop offset=".52" stop-color="#b97712"/><stop offset=".78" stop-color="#f0c65a"/><stop offset="1" stop-color="#80500b"/></linearGradient>
+<filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="1200" height="1200" fill="#020202"/>
+<circle cx="600" cy="380" r="290" fill="none" stroke="url(#g)" stroke-width="18"/>
+<path d="M415 525c-43-71-56-154-26-226 37-90 127-151 235-160 68-6 133 10 184 42l-62 18c-58-22-128-15-183 17-78 45-116 127-103 206 8 48 29 89 63 123l-108-20z" fill="url(#g)"/>
+<path d="M470 243l81-60 121 17 69 48-77 8-52 48-24 111-48 73-83-62 41-47-47-28 38-24-45-18 55-31z" fill="url(#g)"/>
+<circle cx="655" cy="340" r="74" fill="#050505" stroke="url(#g)" stroke-width="20"/>
+<circle cx="655" cy="340" r="22" fill="#fff7d1" filter="url(#glow)"/>
+<path d="M734 328h148M730 359h108M717 393h64l35 34h77M699 427h55l38 38h73" fill="none" stroke="url(#g)" stroke-width="11" stroke-linecap="round"/>
+<circle cx="891" cy="328" r="10" fill="#f4c14e"/><circle cx="850" cy="359" r="10" fill="#f4c14e"/><circle cx="905" cy="427" r="10" fill="#f4c14e"/><circle cx="880" cy="465" r="10" fill="#f4c14e"/>
+<path d="M560 517l51 107 90-129 85 86c-52 55-118 84-194 87-79 3-152-26-207-80l91-80 84 9z" fill="url(#g)"/>
+<path d="M600 68l13 43 42 14-42 14-13 43-14-43-42-14 42-14zM600 650l10 34 34 10-34 11-10 34-11-34-34-11 34-10z" fill="url(#g)"/>
+<text x="600" y="895" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="190" font-weight="900" letter-spacing="6" fill="url(#g)">COHIBA</text>
+<line x1="95" y1="952" x2="1105" y2="952" stroke="url(#g)" stroke-width="5"/>
+<text x="600" y="1035" text-anchor="middle" font-family="Georgia,serif" font-size="48" letter-spacing="8" fill="#f5f0e5">FEAR THE MACHINE. DEFEND THE HUMAN.</text>
+</svg>
