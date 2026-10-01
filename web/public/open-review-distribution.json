@@ -1,0 +1,18 @@
+{
+  "campaign": "COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET",
+  "status": "READY_TO_DISTRIBUTE",
+  "links": {
+    "x": "https://cohibameme.site/open-review.html?utm_source=x",
+    "solanaDiscord": "https://cohibameme.site/open-review.html?utm_source=solana-discord",
+    "reddit": "https://cohibameme.site/open-review.html?utm_source=reddit",
+    "github": "https://cohibameme.site/open-review.html?utm_source=github",
+    "securityOutreach": "https://cohibameme.site/open-review.html?utm_source=security-outreach",
+    "creatorOutreach": "https://cohibameme.site/open-review.html?utm_source=creator-outreach"
+  },
+  "distribution": {
+    "x": "BLOCKED_UNTIL_SOCIAL_ACCOUNT_CONNECTED",
+    "solanaDiscord": "MANUAL_COMMUNITY_POST_REQUIRED",
+    "reddit": "MANUAL_COMMUNITY_POST_REQUIRED",
+    "securityOutreach": "TARGETED_CONTACT_REQUIRED"
+  }
+}
