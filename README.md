@@ -84,3 +84,13 @@ Mainnet contract, market URLs, liquidity figures and trading metrics remain inte
 - Public security evidence: https://cohibameme.site/security.html
 
 COHIBA distinguishes implemented controls from independent audit evidence. No independent-audit claim is made until an external review is completed and verifiably documented.
+
+
+## Culture & distribution
+
+- [Culture System](docs/CULTURE_SYSTEM.md)
+- [Distribution Playbook](docs/DISTRIBUTION_PLAYBOOK.md)
+- [Community & Distribution Scorecard](docs/COMMUNITY_SCORECARD.md)
+- Public community hub: https://cohibameme.site/community.html
+
+The community north-star metric is **Monthly Active Contributors**, not raw follower count. Participation is open before Mainnet and does not require token ownership.
