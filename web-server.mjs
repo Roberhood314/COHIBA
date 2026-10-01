@@ -294,14 +294,68 @@ async function ensureTokenMetadata(network,payer,mint,connection){
   return metadataAddress.toBase58();
 }
 
+
 const activeLaunches=new Set();
+const LAUNCH_LOCK_TTL_MS=15*60*1000;
+
+function launchLockPath(network){
+  const safe=
+    network==="mainnet-beta"?"mainnet":
+    network==="devnet-rehearsal"?"devnet-rehearsal":
+    "devnet";
+  return path.join("/data",`cohiba-${safe}-launch.lock`);
+}
+
+function acquirePersistentLaunchLock(network){
+  fs.mkdirSync("/data",{recursive:true});
+  const file=launchLockPath(network);
+  const payload={
+    network,
+    pid:process.pid,
+    createdAt:new Date().toISOString(),
+    createdAtMs:Date.now()
+  };
+
+  try{
+    const fd=fs.openSync(file,"wx",0o600);
+    fs.writeFileSync(fd,JSON.stringify(payload,null,2));
+    fs.closeSync(fd);
+    return {file,payload};
+  }catch(error){
+    if(error?.code!=="EEXIST") throw error;
+    let existing=null;
+    try{
+      existing=JSON.parse(fs.readFileSync(file,"utf8"));
+    }catch{}
+    const age=existing?.createdAtMs?Date.now()-Number(existing.createdAtMs):Number.POSITIVE_INFINITY;
+    if(age>LAUNCH_LOCK_TTL_MS){
+      try{fs.unlinkSync(file);}catch{}
+      const fd=fs.openSync(file,"wx",0o600);
+      fs.writeFileSync(fd,JSON.stringify(payload,null,2));
+      fs.closeSync(fd);
+      return {file,payload,recoveredStale:true};
+    }
+    throw new Error("PERSISTENT_LAUNCH_LOCKED");
+  }
+}
+
+function releasePersistentLaunchLock(lock){
+  if(!lock?.file) return;
+  try{
+    const existing=JSON.parse(fs.readFileSync(lock.file,"utf8"));
+    if(existing?.pid===process.pid) fs.unlinkSync(lock.file);
+  }catch{}
+}
+
 
 async function createCoh(network){
   if(!isDevnetNetwork(network) && network!=="mainnet-beta") throw new Error("UNSUPPORTED_NETWORK");
   if(activeLaunches.has(network)) throw new Error("LAUNCH_ALREADY_IN_PROGRESS");
   activeLaunches.add(network);
+  let persistentLock=null;
 
   try{
+  persistentLock=acquirePersistentLaunchLock(network);
 
   let payer;
   let connection;
@@ -416,6 +470,7 @@ async function createCoh(network){
   saveLaunchRecord(network,record);
   return record;
   } finally {
+    releasePersistentLaunchLock(persistentLock);
     activeLaunches.delete(network);
   }
 }
@@ -520,7 +575,7 @@ const server=http.createServer(async (req,res)=>{
       }
       const status=
         message==="LAUNCH_RATE_LIMITED"?429:
-        message==="LAUNCH_ALREADY_IN_PROGRESS"?409:
+        ["LAUNCH_ALREADY_IN_PROGRESS","PERSISTENT_LAUNCH_LOCKED"].includes(message)?409:
         message==="REQUEST_TOO_LARGE"?413:
         ["MAINNET_ORIGIN_INVALID","MAINNET_PUBLIC_ORIGIN_NOT_CANONICAL","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
         ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED","DEVNET_MINT_API_LOCKED"].includes(message)?409:
