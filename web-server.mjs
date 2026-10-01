@@ -57,8 +57,15 @@ function safeRequestPath(urlValue){
   return decoded;
 }
 
+function isPrivateProxyAddress(value){
+  const v=String(value||"").replace(/^::ffff:/,"");
+  return v==="127.0.0.1" || v==="::1" || v.startsWith("10.") || v.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[0-1])\./.test(v);
+}
 function requestIp(req){
-  return String(req.headers["x-forwarded-for"]||req.socket.remoteAddress||"unknown").split(",")[0].trim();
+  const remote=String(req.socket.remoteAddress||"unknown");
+  const forwarded=String(req.headers["x-forwarded-for"]||"").split(",").map(x=>x.trim()).filter(Boolean);
+  if(isPrivateProxyAddress(remote) && forwarded.length) return forwarded[forwarded.length-1];
+  return remote;
 }
 
 function enforceLaunchRateLimit(req){
@@ -125,13 +132,15 @@ function loadLaunchRecord(network){
   }
 }
 
+function atomicWriteJson(file,value){
+  const tmp=file+".tmp-"+process.pid+"-"+Date.now();
+  fs.writeFileSync(tmp,JSON.stringify(value,null,2),{mode:0o600});
+  fs.renameSync(tmp,file);
+}
+
 function saveLaunchRecord(network,record){
   fs.mkdirSync("/data",{recursive:true});
-  fs.writeFileSync(
-    launchRecordPath(network),
-    JSON.stringify(record,null,2),
-    {mode:0o600}
-  );
+  atomicWriteJson(launchRecordPath(network),record);
 }
 
 
@@ -166,7 +175,7 @@ function saveCommunityEvent(event,source="direct"){
   metrics.sources[source]=Number(metrics.sources[source]||0)+1;
   metrics.days[day][event]=Number(metrics.days[day][event]||0)+1;
   metrics.updatedAt=new Date().toISOString();
-  fs.writeFileSync(COMMUNITY_METRICS_FILE,JSON.stringify(metrics,null,2),{mode:0o600});
+  atomicWriteJson(COMMUNITY_METRICS_FILE,metrics);
   return metrics;
 }
 
@@ -229,6 +238,12 @@ async function ensureDevnetFunding(payer){
   }
 
   return conn;
+}
+
+function requireOwnerMainnetApproval(){
+  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA"){
+    throw new Error("MAINNET_OWNER_APPROVAL_NOT_PRESENT");
+  }
 }
 
 function requireMainnetLaunchKey(req){
@@ -430,7 +445,7 @@ const server=http.createServer(async (req,res)=>{
     try{
       const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
       const origin=String(req.headers.origin||"");
-      if(origin && origin!==expected){
+      if(origin!==expected){
         json(res,403,{ok:false,error:"COMMUNITY_EVENT_ORIGIN_INVALID"});
         return;
       }
@@ -481,6 +496,7 @@ const server=http.createServer(async (req,res)=>{
         return;
       }
       if(network==="mainnet-beta"){
+        requireOwnerMainnetApproval();
         requireMainnetOrigin(req);
         requireMainnetLaunchKey(req);
       }
@@ -848,6 +864,7 @@ async function maybeAutoLaunchMainnet(){
   if(process.env.AUTO_MAINNET_LAUNCH!=="I_UNDERSTAND_MAINNET_COHIBA") return;
   try{
     if(process.env.ALLOW_MAINNET!=="true") throw new Error("MAINNET_LOCKED");
+    requireOwnerMainnetApproval();
     const existing=loadLaunchRecord("mainnet-beta");
     if(existing?.locked && existing?.mint){
       console.log("COHIBA_MAINNET_ALREADY_LAUNCHED", JSON.stringify({mint:existing.mint,status:existing.status}));
