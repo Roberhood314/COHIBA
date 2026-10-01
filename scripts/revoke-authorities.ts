@@ -17,8 +17,7 @@ function loadKeypair(walletPath:string){
 const network=arg("network","devnet") as Cluster|"mainnet-beta";
 if(!["devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
 if(network==="mainnet-beta"){
-  if(process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet is safety-locked.");
-  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA") throw new Error("Mainnet owner approval is not present.");
+  throw new Error("MAINNET_REVOKE_CLI_DISABLED: Mainnet authority revocation is handled atomically by the canonical persisted launch path.");
 }
 if(process.env.CONFIRM_IRREVERSIBLE_REVOKE!=="I_UNDERSTAND"){
   throw new Error("Authority revocation is irreversible. Set CONFIRM_IRREVERSIBLE_REVOKE=I_UNDERSTAND.");
