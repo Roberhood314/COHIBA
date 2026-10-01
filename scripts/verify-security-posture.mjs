@@ -23,9 +23,12 @@ const checks=[
   ["freeze authority null verified",server.includes("FREEZE_AUTHORITY_REVOKE_FAILED")],
   ["corrupt Mainnet record fails closed",server.includes("MAINNET_LAUNCH_RECORD_CORRUPT")],
   ["auto-launch exact arming phrase",server.includes('AUTO_MAINNET_LAUNCH!=="I_UNDERSTAND_MAINNET_COHIBA"')],
-  ["staged CLI Mainnet gate",staged.includes('ALLOW_MAINNET!=="true"')],
-  ["revoke CLI Mainnet gate",revoke.includes('ALLOW_MAINNET!=="true"')],
-  ["irreversible revoke confirmation",revoke.includes('CONFIRM_IRREVERSIBLE_REVOKE!=="I_UNDERSTAND"')]
+  ["staged CLI Mainnet disabled",staged.includes("MAINNET_STAGED_CLI_DISABLED")],
+  ["revoke CLI Mainnet disabled",revoke.includes("MAINNET_REVOKE_CLI_DISABLED")],
+  ["irreversible revoke confirmation",revoke.includes('CONFIRM_IRREVERSIBLE_REVOKE!=="I_UNDERSTAND"')],
+  ["legacy create CLI Mainnet disabled",read("scripts/create-token.ts").includes("MAINNET_LEGACY_CLI_DISABLED")],
+  ["auto-sweep Mainnet disabled",read("scripts/auto-sweep.ts").includes("MAINNET_AUTO_SWEEP_DISABLED")],
+  ["devnet mint API explicit gate",server.includes('ALLOW_DEVNET_MINT_API!=="true"')]
 ];
 
 const sensitivePatterns=[
