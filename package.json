@@ -14,9 +14,13 @@
     "token:create:staged:mainnet": "tsx scripts/create-token-staged.ts --network mainnet-beta",
     "token:revoke:mainnet": "tsx scripts/revoke-authorities.ts --network mainnet-beta",
     "start": "node web-server.mjs",
-    "build": "vite build",
+    "build": "npm run evidence:generate && vite build",
     "token:auto-sweep:devnet": "tsx scripts/auto-sweep.ts --network devnet",
-    "token:auto-sweep:mainnet": "tsx scripts/auto-sweep.ts --network mainnet-beta"
+    "token:auto-sweep:mainnet": "tsx scripts/auto-sweep.ts --network mainnet-beta",
+    "test": "node --test test/*.test.mjs",
+    "verify:security": "node scripts/verify-security-posture.mjs",
+    "evidence:generate": "node scripts/generate-security-evidence.mjs",
+    "verify:all": "npm run test && npm run verify:security && npm run typecheck"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
