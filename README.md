@@ -2,7 +2,7 @@
 
 **Tagline:** Fear the Machine. Defend the Human.
 
-COHIBA is a dark satirical meme project about human anxiety around AI, automation, synthetic identity and algorithmic control.
+COHIBA is a human-first Solana cultural crypto project exploring identity, agency and resilience in the age of artificial intelligence. It combines meme-native storytelling with a verification-first token architecture and public technical evidence.
 
 ## Token specification
 
@@ -48,7 +48,7 @@ Project metadata: `token/metadata.json`
 
 Website: https://cohibameme.site
 
-The current website domain is deployment infrastructure. A dedicated project domain should replace it before public Mainnet marketing/listing.
+Canonical public domain: https://cohibameme.site
 
 ## Verification status
 
@@ -71,3 +71,16 @@ Pre-Mainnet listing preparation for CoinMarketCap, CoinGecko and market-data sub
 - [Launch Economics](listing-pack/LAUNCH_ECONOMICS.md)
 
 Mainnet contract, market URLs, liquidity figures and trading metrics remain intentionally blank until they are live and independently verifiable.
+
+
+## Verification & security evidence
+
+- [Technical Whitepaper](docs/WHITEPAPER.md)
+- [Verification Specification](docs/VERIFICATION_SPEC.md)
+- [Threat Model](docs/THREAT_MODEL.md)
+- [Security Control Matrix](docs/SECURITY_CONTROL_MATRIX.md)
+- [Security Policy](SECURITY.md)
+- Public verification: https://cohibameme.site/verification.html
+- Public security evidence: https://cohibameme.site/security.html
+
+COHIBA distinguishes implemented controls from independent audit evidence. No independent-audit claim is made until an external review is completed and verifiably documented.
