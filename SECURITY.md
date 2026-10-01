@@ -16,7 +16,41 @@ The supported security surface is the production branch `main`, the canonical si
 - Public market data may not be represented as verified until independently observable.
 
 ## Reporting
-Do not publish secrets, private keys, exploit payloads against production, or stolen credentials in a public issue. Report suspected vulnerabilities privately through an official project communication channel. A dedicated security email should be added before Mainnet.
+
+### Sensitive vulnerability reporting
+Do **not** publish secrets, private keys, working exploit payloads, credential material, or production-impacting reproduction steps in a public issue.
+
+Until a dedicated private security inbox or GitHub Private Vulnerability Reporting channel is confirmed as active for this repository, use this two-step intake:
+
+1. Open a minimal public issue using the **Sensitive Security Intake** template.
+2. Include only:
+   - affected component;
+   - proposed severity;
+   - a one-line impact summary;
+   - a request for a private disclosure channel.
+
+Do **not** include exploit code, secrets, private URLs, credentials, signing material, or step-by-step instructions in that public intake.
+
+The maintainer must move the discussion to a private channel before requesting sensitive technical details.
+
+### Safe testing boundary
+Allowed:
+- static analysis;
+- local reproduction;
+- unit/integration tests;
+- Devnet testing;
+- non-destructive review of public endpoints.
+
+Not allowed without explicit written authorization:
+- Mainnet launch attempts;
+- credential testing;
+- secret extraction;
+- denial-of-service;
+- destructive production testing;
+- testing third-party infrastructure outside its own rules.
+
+### Public disclosure
+Confirmed findings may be documented publicly only after remediation or when disclosure is otherwise safe. Public evidence should distinguish SUBMITTED, CONFIRMED, FIXED and RETESTED states.
 
 ## Severity
 - **Critical:** signer/private-key compromise, unauthorized Mainnet launch, arbitrary minting, authority-control bypass.
