@@ -37,8 +37,9 @@ if(process.env.AUTO_SWEEP_ENABLED!=="true"){
   console.log(JSON.stringify({status:"DISABLED",message:"Auto-sweep is safely disabled."}));
   process.exit(0);
 }
-if(network==="mainnet-beta"&&process.env.ALLOW_MAINNET!=="true"){
-  throw new Error("Mainnet auto-sweep is safety-locked. Set ALLOW_MAINNET=true only after release approval.");
+if(network==="mainnet-beta"){
+  if(process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet auto-sweep is safety-locked.");
+  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA") throw new Error("Mainnet owner approval is not present.");
 }
 
 const mintAddress=arg("mint")||process.env.COH_MINT;
