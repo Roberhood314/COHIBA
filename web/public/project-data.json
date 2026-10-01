@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -11,7 +11,16 @@
     ],
     "website": "https://cohibameme.site",
     "source": "https://github.com/Roberhood314/COHIBA",
-    "x": "https://x.com/hunhkcgy"
+    "x": "https://x.com/hunhkcgy",
+    "description": "COHIBA is a human-first Solana cultural crypto project exploring identity, agency and resilience in the age of artificial intelligence.",
+    "mission": "Turn fear into awareness, and awareness into community.",
+    "classification": [
+      "Community",
+      "Meme",
+      "Internet Culture",
+      "Solana ecosystem"
+    ],
+    "founder": "JohnPC"
   },
   "token": {
     "network": "Solana",
@@ -29,13 +38,26 @@
   "status": {
     "stage": "PRE_MAINNET",
     "mainnetLaunched": false,
-    "publicMarketLive": false
+    "publicMarketLive": false,
+    "verificationRigor": "IMPLEMENTED",
+    "securityEvidence": "IMPLEMENTED",
+    "independentAudit": "REQUIRED_PRE_MAINNET"
   },
   "verification": {
     "page": "https://cohibameme.site/verification.html",
     "blockchain": "https://cohibameme.site/blockchain.html",
     "marketReadiness": "https://cohibameme.site/market-readiness.html",
     "blockchainApi": "https://cohibameme.site/api/blockchain-data?network=mainnet-beta",
-    "infraApi": "https://cohibameme.site/api/infra-readiness"
+    "infraApi": "https://cohibameme.site/api/infra-readiness",
+    "whitepaper": "https://cohibameme.site/whitepaper.html",
+    "securityEvidence": "https://cohibameme.site/security.html",
+    "projectProfile": "https://github.com/Roberhood314/COHIBA/blob/main/listing-pack/PROJECT_PROFILE.md"
+  },
+  "integrityPolicy": {
+    "verifiedClaimsOnly": true,
+    "washTrading": false,
+    "fabricatedLiquidity": false,
+    "fakeHolders": false,
+    "independentAuditClaimed": false
   }
 }
