@@ -499,6 +499,8 @@ const server=http.createServer(async (req,res)=>{
         requireOwnerMainnetApproval();
         requireMainnetOrigin(req);
         requireMainnetLaunchKey(req);
+      }else if(isDevnetNetwork(network) && process.env.ALLOW_DEVNET_MINT_API!=="true"){
+        throw new Error("DEVNET_MINT_API_LOCKED");
       }
       const result=await createCoh(network);
       json(res,200,{ok:true,...result});
@@ -519,7 +521,7 @@ const server=http.createServer(async (req,res)=>{
         message==="LAUNCH_ALREADY_IN_PROGRESS"?409:
         message==="REQUEST_TOO_LARGE"?413:
         ["MAINNET_ORIGIN_INVALID","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
-        ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED"].includes(message)?409:
+        ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED","DEVNET_MINT_API_LOCKED"].includes(message)?409:
         500;
       json(res,status,{ok:false,error:message});
     }
@@ -576,8 +578,7 @@ const server=http.createServer(async (req,res)=>{
       infrastructureReady,
       mainnetLaunchAuthorized:false,
       gates,
-      signerPublicKey,
-      signerBalanceSol,
+      signerDetailsPublic:false,
       minimumSignerBalanceSol:MAINNET_MIN_SOL,
       finalLaunchSequence:[
         "fund signer",
@@ -599,9 +600,9 @@ const server=http.createServer(async (req,res)=>{
     const checks={
       publicBaseUrl: PUBLIC_BASE_URL==="https://cohibameme.site",
       metadataUrl: false,
-      mainnetEnabled: process.env.ALLOW_MAINNET==="true",
-      launchKeyConfigured: Boolean(process.env.COHIBA_MAINNET_LAUNCH_KEY),
-      signerConfigured: Boolean(process.env.SYSTEM_WALLET_SECRET_JSON),
+      mainnetEnabled: false,
+      launchKeyConfigured: false,
+      signerConfigured: false,
       signerValid: false,
       signerFunded: false,
       mainnetRpc: false,
@@ -650,8 +651,7 @@ const server=http.createServer(async (req,res)=>{
       stage:openMainnetReady?"OPEN_MAINNET_READY":"PRE_MAINNET",
       openMainnetReady,
       checks,
-      signerPublicKey,
-      signerBalanceSol,
+      signerDetailsPublic:false,
       minimumSignerBalanceSol:MAINNET_MIN_SOL,
       metadataUri:METADATA_URI
     });
