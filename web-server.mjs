@@ -15,6 +15,7 @@ const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t")
 const DECIMALS = 9;
 const SUPPLY = 1_000_000_000n * 10n ** 9n;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://cohiba-web-live-production.up.railway.app";
+const CANONICAL_PUBLIC_ORIGIN = "https://cohibameme.site";
 const METADATA_URI = `${PUBLIC_BASE_URL.replace(/\/$/,"")}/token-metadata.json`;
 const MAINNET_MIN_SOL = 0.03;
 const launchAttempts = new Map();
@@ -80,9 +81,10 @@ function enforceLaunchRateLimit(req){
 }
 
 function requireMainnetOrigin(req){
-  const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
+  const configured=PUBLIC_BASE_URL.replace(/\/$/,"");
+  if(configured!==CANONICAL_PUBLIC_ORIGIN) throw new Error("MAINNET_PUBLIC_ORIGIN_NOT_CANONICAL");
   const origin=String(req.headers.origin||"");
-  if(origin!==expected) throw new Error("MAINNET_ORIGIN_INVALID");
+  if(origin!==CANONICAL_PUBLIC_ORIGIN) throw new Error("MAINNET_ORIGIN_INVALID");
 }
 function loadOrCreateDevnetPayer(){
   const dir="/data";
@@ -520,7 +522,7 @@ const server=http.createServer(async (req,res)=>{
         message==="LAUNCH_RATE_LIMITED"?429:
         message==="LAUNCH_ALREADY_IN_PROGRESS"?409:
         message==="REQUEST_TOO_LARGE"?413:
-        ["MAINNET_ORIGIN_INVALID","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
+        ["MAINNET_ORIGIN_INVALID","MAINNET_PUBLIC_ORIGIN_NOT_CANONICAL","MAINNET_LAUNCH_KEY_INVALID"].includes(message)?403:
         ["MAINNET_LOCKED","MAINNET_SIGNER_NOT_CONFIGURED","MAINNET_LAUNCH_KEY_NOT_CONFIGURED","DEVNET_MINT_API_LOCKED"].includes(message)?409:
         500;
       json(res,status,{ok:false,error:message});
@@ -600,9 +602,10 @@ const server=http.createServer(async (req,res)=>{
     const checks={
       publicBaseUrl: PUBLIC_BASE_URL==="https://cohibameme.site",
       metadataUrl: false,
-      mainnetEnabled: false,
-      launchKeyConfigured: false,
-      signerConfigured: false,
+      mainnetEnabled: process.env.ALLOW_MAINNET==="true",
+      ownerApprovalPresent: process.env.COHIBA_MAINNET_OWNER_APPROVAL==="APPROVE MAINNET COHIBA",
+      launchKeyConfigured: Boolean(process.env.COHIBA_MAINNET_LAUNCH_KEY),
+      signerConfigured: Boolean(process.env.SYSTEM_WALLET_SECRET_JSON),
       signerValid: false,
       signerFunded: false,
       mainnetRpc: false,
