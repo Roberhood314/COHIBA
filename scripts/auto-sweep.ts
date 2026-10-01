@@ -38,8 +38,7 @@ if(process.env.AUTO_SWEEP_ENABLED!=="true"){
   process.exit(0);
 }
 if(network==="mainnet-beta"){
-  if(process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet auto-sweep is safety-locked.");
-  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA") throw new Error("Mainnet owner approval is not present.");
+  throw new Error("MAINNET_AUTO_SWEEP_DISABLED: COHIBA Mainnet supply is minted directly to the canonical destination; automatic Mainnet sweeping is not permitted.");
 }
 
 const mintAddress=arg("mint")||process.env.COH_MINT;
