@@ -1,0 +1,37 @@
+name: Verification and Security
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Invariant and mutation tests
+        run: npm test
+      - name: Security posture
+        run: npm run verify:security
+      - name: TypeScript verification
+        run: npm run typecheck
+      - name: Build and evidence manifest
+        run: npm run build
+      - name: Dependency audit evidence
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cohiba-verification-evidence
+          path: |
+            web/public/security-evidence.json
+            docs/VERIFICATION_SPEC.md
+            docs/THREAT_MODEL.md
+            docs/SECURITY_CONTROL_MATRIX.md
