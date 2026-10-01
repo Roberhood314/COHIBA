@@ -36,8 +36,8 @@ main{width:min(980px,calc(100% - 32px));margin:0 auto;padding:48px 0 72px}a{colo
 <h2>Production verification status</h2>
 <div class="grid">
 <div class="card"><small>WEBSITE</small><b class="ok">LIVE</b><span>HTTPS production website is public.</span></div>
-<div class="card"><small>MAINNET TOKEN</small><b class="pending">PENDING</b><span>No official Mainnet mint is published yet.</span></div>
-<div class="card"><small>BLOCK EXPLORER</small><b class="pending">PENDING MAINNET MINT</b><span>Solscan/Solana Explorer links will appear only after on-chain verification.</span></div>
+<div class="card"><small>MAINNET TOKEN</small><b id="mainnetStatus" class="pending">PENDING</b><span id="mainnetMint">No official Mainnet mint is published yet.</span></div>
+<div class="card"><small>BLOCK EXPLORER</small><b id="explorerStatus" class="pending">PENDING MAINNET MINT</b><span id="explorerLinks">Solscan/Solana Explorer links will appear only after on-chain verification.</span></div>
 <div class="card"><small>PUBLIC MARKET</small><b class="pending">PENDING</b><span>No official COH market pair or liquidity pool is claimed here yet.</span></div>
 </div>
 
@@ -49,4 +49,18 @@ main{width:min(980px,calc(100% - 32px));margin:0 auto;padding:48px 0 72px}a{colo
 
 <h2>Official references</h2>
 <p><a href="/token.html">Token specification</a> · <a href="/transparency.html">Transparency</a> · <a href="/token-metadata.json">Metadata</a> · <a href="https://github.com/Roberhood314/COHIBA" rel="noopener noreferrer">GitHub</a></p>
-</main></body></html>
+<script>
+(async()=>{try{
+ const r=await fetch("/api/token-status?network=mainnet-beta",{cache:"no-store"});
+ const x=await r.json();
+ if(r.ok&&x.ok&&x.launched&&x.mint&&x.onChain?.mintAuthority===null&&x.onChain?.freezeAuthority===null){
+   document.getElementById("mainnetStatus").textContent="LIVE · VERIFIED";
+   document.getElementById("mainnetStatus").className="ok";
+   document.getElementById("mainnetMint").innerHTML='<span class="mono">'+x.mint+'</span>';
+   document.getElementById("explorerStatus").textContent="LIVE";
+   document.getElementById("explorerStatus").className="ok";
+   document.getElementById("explorerLinks").innerHTML='<a href="https://solscan.io/token/'+x.mint+'" rel="noopener noreferrer">Solscan</a> · <a href="https://explorer.solana.com/address/'+x.mint+'" rel="noopener noreferrer">Solana Explorer</a>';
+ }
+}catch{}
+})();
+</script></main></body></html>
