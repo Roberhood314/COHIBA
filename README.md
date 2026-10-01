@@ -94,3 +94,15 @@ COHIBA distinguishes implemented controls from independent audit evidence. No in
 - Public community hub: https://cohibameme.site/community.html
 
 The community north-star metric is **Monthly Active Contributors**, not raw follower count. Participation is open before Mainnet and does not require token ownership.
+
+
+## Growth execution
+
+- [30-Day Content Execution Calendar](content/CONTENT_CALENDAR_30D.md)
+- [Community Activation Playbook](docs/COMMUNITY_ACTIVATION.md)
+- [Ambassador Program](docs/AMBASSADOR_PROGRAM.md)
+- [Analytics Framework](docs/ANALYTICS_FRAMEWORK.md)
+- Ambassador page: https://cohibameme.site/ambassadors.html
+- Public aggregate analytics: https://cohibameme.site/analytics.html
+
+Website community analytics are aggregate first-party events only. They do not claim unique users, holders or investors and do not write IP/wallet/email/user identifiers into the metrics record.
