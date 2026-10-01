@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.2",
+  "schemaVersion": "1.3",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -82,7 +82,9 @@
       "fakeEngagement": false,
       "paidReachDisclosed": true,
       "tokenOwnershipRequiredToContribute": false
-    }
+    },
+    "ambassadorProgram": "https://cohibameme.site/ambassadors.html",
+    "activationModel": "Contributor ladder with non-financial pre-Mainnet recognition"
   },
   "distribution": {
     "funnel": [
@@ -103,6 +105,18 @@
       "buildInPublicPercent": 15,
       "communityWorkPercent": 10,
       "tokenMarketFactsPercent": 5
+    },
+    "analytics": {
+      "publicDashboard": "https://cohibameme.site/analytics.html",
+      "api": "https://cohibameme.site/api/community-metrics",
+      "eventClass": "FIRST_PARTY_AGGREGATE_INTERACTION",
+      "uniqueHumansClaimed": false,
+      "piiStoredInMetricsRecord": false
+    },
+    "execution": {
+      "contentCalendar": "https://github.com/Roberhood314/COHIBA/blob/main/content/CONTENT_CALENDAR_30D.md",
+      "activationPlaybook": "https://github.com/Roberhood314/COHIBA/blob/main/docs/COMMUNITY_ACTIVATION.md",
+      "ambassadorProgram": "https://github.com/Roberhood314/COHIBA/blob/main/docs/AMBASSADOR_PROGRAM.md"
     }
   }
 }
