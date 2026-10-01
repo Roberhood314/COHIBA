@@ -106,3 +106,16 @@ The community north-star metric is **Monthly Active Contributors**, not raw foll
 - Public aggregate analytics: https://cohibameme.site/analytics.html
 
 Website community analytics are aggregate first-party events only. They do not claim unique users, holders or investors and do not write IP/wallet/email/user identifiers into the metrics record.
+
+
+## Remaining external gates
+
+The internal preparation for the following areas is complete, but completion depends on independent external evidence:
+
+- **Independent security review:** review package prepared at [audit/INDEPENDENT_REVIEW_PACKAGE.md](audit/INDEPENDENT_REVIEW_PACKAGE.md); an external report is still required.
+- **Community traction:** evidence methodology is defined at [docs/TRACTION_EVIDENCE_STANDARD.md](docs/TRACTION_EVIDENCE_STANDARD.md); real observed traction must accumulate over time.
+- **Partnerships/integrations:** evidence framework is defined at [docs/PARTNERSHIPS_INTEGRATIONS.md](docs/PARTNERSHIPS_INTEGRATIONS.md); no partner is claimed without counterparty/evidence.
+- **Legal/compliance:** internal readiness framework is at [legal/LEGAL_COMPLIANCE_READINESS.md](legal/LEGAL_COMPLIANCE_READINESS.md); external counsel clearance is required before fundraising/token offering.
+- **Mainnet/liquidity/market evidence:** irreversible execution remains blocked; evidence standard is at [launch/MAINNET_MARKET_EVIDENCE_STANDARD.md](launch/MAINNET_MARKET_EVIDENCE_STANDARD.md).
+
+No document in this repository authorizes Mainnet launch by itself.
