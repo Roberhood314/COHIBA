@@ -497,6 +497,124 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+
+  if(req.method==="GET" && raw==="/api/blockchain-data"){
+    try{
+      const url=new URL(req.url||"/","http://localhost");
+      const requested=url.searchParams.get("network")||"mainnet-beta";
+      const network=requested==="mainnet"?"mainnet-beta":requested;
+      if(!isDevnetNetwork(network) && network!=="mainnet-beta"){
+        json(res,400,{ok:false,error:"UNSUPPORTED_NETWORK"});
+        return;
+      }
+
+      const rpc=isDevnetNetwork(network)
+        ? clusterApiUrl("devnet")
+        : (process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"));
+      const connection=new Connection(rpc,"confirmed");
+      const [slot,blockHeight,epochInfo,version]=await Promise.all([
+        connection.getSlot("confirmed"),
+        connection.getBlockHeight("confirmed"),
+        connection.getEpochInfo("confirmed"),
+        connection.getVersion()
+      ]);
+
+      const record=loadLaunchRecord(network);
+      const base={
+        ok:true,
+        project:"COHIBA",
+        symbol:"COH",
+        network,
+        chain:"Solana",
+        standard:"SPL Token",
+        expectedSupply:"1000000000",
+        decimals:DECIMALS,
+        tokenTax:"0%",
+        destinationWallet:DESTINATION.toBase58(),
+        generatedAt:new Date().toISOString(),
+        chainState:{
+          slot,
+          blockHeight,
+          epoch:epochInfo.epoch,
+          absoluteSlot:epochInfo.absoluteSlot,
+          solanaCore:version["solana-core"]||null
+        },
+        status:record?.mint?"LIVE_ON_CHAIN":"PENDING_MAINNET_MINT"
+      };
+
+      if(!record?.mint){
+        json(res,200,{
+          ...base,
+          launched:false,
+          mint:null,
+          explorer:null,
+          verification:{
+            supplyVerified:false,
+            mintAuthorityRevoked:false,
+            freezeAuthorityRevoked:false,
+            destinationBalanceVerified:false
+          }
+        });
+        return;
+      }
+
+      const mintPk=new PublicKey(record.mint);
+      const info=await getMint(connection,mintPk,"confirmed");
+      const destinationAta=record.destinationAta?new PublicKey(record.destinationAta):null;
+      const [destinationBalance,largestAccounts,recentSignatures]=await Promise.all([
+        destinationAta?connection.getTokenAccountBalance(destinationAta,"confirmed"):Promise.resolve(null),
+        connection.getTokenLargestAccounts(mintPk,"confirmed"),
+        connection.getSignaturesForAddress(mintPk,{limit:12},"confirmed")
+      ]);
+
+      const expected=SUPPLY.toString();
+      const destinationAmount=destinationBalance?.value?.amount||null;
+      json(res,200,{
+        ...base,
+        launched:true,
+        mint:record.mint,
+        metadataAddress:record.metadataAddress||null,
+        metadataUri:record.metadataUri||METADATA_URI,
+        metadataImmutable:Boolean(record.metadataImmutable),
+        destinationAta:record.destinationAta||null,
+        onChain:{
+          supplyBaseUnits:info.supply.toString(),
+          supplyUi:(Number(info.supply)/10**info.decimals).toString(),
+          decimals:info.decimals,
+          mintAuthority:info.mintAuthority?.toBase58()||null,
+          freezeAuthority:info.freezeAuthority?.toBase58()||null,
+          destinationAmount,
+          destinationUiAmount:destinationBalance?.value?.uiAmountString||null
+        },
+        verification:{
+          supplyVerified:info.supply.toString()===expected,
+          mintAuthorityRevoked:info.mintAuthority===null,
+          freezeAuthorityRevoked:info.freezeAuthority===null,
+          destinationBalanceVerified:destinationAmount===expected
+        },
+        largestTokenAccounts:largestAccounts.value.map(a=>({
+          address:a.address.toBase58(),
+          amountBaseUnits:a.amount,
+          uiAmount:a.uiAmountString
+        })),
+        recentMintSignatures:recentSignatures.map(x=>({
+          signature:x.signature,
+          slot:x.slot,
+          blockTime:x.blockTime,
+          confirmationStatus:x.confirmationStatus,
+          err:x.err
+        })),
+        explorer:{
+          solscan:`https://solscan.io/token/${record.mint}${isDevnetNetwork(network)?"?cluster=devnet":""}`,
+          solanaExplorer:`https://explorer.solana.com/address/${record.mint}${isDevnetNetwork(network)?"?cluster=devnet":""}`
+        }
+      });
+    }catch(error){
+      json(res,500,{ok:false,error:String(error?.message||error)});
+    }
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/token-status"){
     try{
       const url=new URL(req.url||"/","http://localhost");
