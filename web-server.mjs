@@ -136,10 +136,11 @@ function saveLaunchRecord(network,record){
 
 
 const COMMUNITY_METRICS_FILE=path.join("/data","cohiba-community-metrics.json");
+const COMMUNITY_SOURCES=new Set(["direct","x","solana-discord","reddit","github","security-outreach","creator-outreach","other"]);
 const COMMUNITY_EVENTS=new Set([
   "home_view","community_view","community_x_click","community_github_click",
   "community_profile_click","profile_view","whitepaper_view","security_view",
-  "ambassador_view","ambassador_x_click","analytics_view"
+  "ambassador_view","ambassador_x_click","analytics_view","open_review_view"
 ]);
 
 function loadCommunityMetrics(){
@@ -151,15 +152,18 @@ function loadCommunityMetrics(){
     return {schemaVersion:"1.0",totals:{},days:{},updatedAt:null,storageRecovered:true};
   }
 }
-function saveCommunityEvent(event){
+function saveCommunityEvent(event,source="direct"){
   if(!COMMUNITY_EVENTS.has(event)) throw new Error("UNSUPPORTED_COMMUNITY_EVENT");
+  if(!COMMUNITY_SOURCES.has(source)) source="other";
   fs.mkdirSync("/data",{recursive:true});
   const metrics=loadCommunityMetrics();
   const day=new Date().toISOString().slice(0,10);
   metrics.totals=metrics.totals||{};
   metrics.days=metrics.days||{};
+  metrics.sources=metrics.sources||{};
   metrics.days[day]=metrics.days[day]||{};
   metrics.totals[event]=Number(metrics.totals[event]||0)+1;
+  metrics.sources[source]=Number(metrics.sources[source]||0)+1;
   metrics.days[day][event]=Number(metrics.days[day][event]||0)+1;
   metrics.updatedAt=new Date().toISOString();
   fs.writeFileSync(COMMUNITY_METRICS_FILE,JSON.stringify(metrics,null,2),{mode:0o600});
@@ -437,7 +441,8 @@ const server=http.createServer(async (req,res)=>{
       }
       const parsed=body?JSON.parse(body):{};
       const event=String(parsed.event||"");
-      saveCommunityEvent(event);
+      const source=String(parsed.source||"direct").slice(0,32);
+      saveCommunityEvent(event,source);
       json(res,200,{ok:true,event});
     }catch(error){
       const message=String(error?.message||error);
