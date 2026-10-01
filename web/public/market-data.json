@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "project": "COHIBA",
+  "symbol": "COH",
+  "network": "Solana",
+  "status": "PENDING_MAINNET_AND_PUBLIC_MARKET",
+  "venue": null,
+  "pair": null,
+  "poolAddress": null,
+  "directMarketUrl": null,
+  "liquidityUsd": null,
+  "volume24hUsd": null,
+  "priceUsd": null,
+  "holders": null,
+  "circulatingSupply": null,
+  "policy": "Only independently verifiable live market data is published. No wash trading, fake volume, fake holders or fabricated liquidity.",
+  "candidateVenue": "Raydium",
+  "updatedAt": null
+}
