@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.4",
+  "schemaVersion": "1.5",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -148,5 +148,22 @@
     "liquidityPool": null,
     "organicMarketEvidence": false,
     "evidenceStandard": "https://github.com/Roberhood314/COHIBA/blob/main/launch/MAINNET_MARKET_EVIDENCE_STANDARD.md"
+  },
+  "openReview": {
+    "name": "COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET",
+    "status": "OPEN",
+    "publicPage": "https://cohibameme.site/open-review.html",
+    "campaignSpec": "https://github.com/Roberhood314/COHIBA/blob/main/open-review/CAMPAIGN.md",
+    "evidenceLog": "https://github.com/Roberhood314/COHIBA/blob/main/open-review/EVIDENCE_LOG.md",
+    "githubIssues": "https://github.com/Roberhood314/COHIBA/issues",
+    "mainnetAuthorized": false,
+    "fundedBounty": false,
+    "successEvidence": [
+      "verified external finding",
+      "independent reviewer engagement",
+      "merged external PR",
+      "improved adversarial test",
+      "credible third-party review"
+    ]
   }
 }
