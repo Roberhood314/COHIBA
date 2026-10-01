@@ -119,3 +119,16 @@ The internal preparation for the following areas is complete, but completion dep
 - **Mainnet/liquidity/market evidence:** irreversible execution remains blocked; evidence standard is at [launch/MAINNET_MARKET_EVIDENCE_STANDARD.md](launch/MAINNET_MARKET_EVIDENCE_STANDARD.md).
 
 No document in this repository authorizes Mainnet launch by itself.
+
+
+## Open Review campaign
+
+**COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET** is open.
+
+- Campaign: [open-review/CAMPAIGN.md](open-review/CAMPAIGN.md)
+- Evidence log: [open-review/EVIDENCE_LOG.md](open-review/EVIDENCE_LOG.md)
+- Independent review package: [audit/INDEPENDENT_REVIEW_PACKAGE.md](audit/INDEPENDENT_REVIEW_PACKAGE.md)
+- Public campaign page: https://cohibameme.site/open-review.html
+- Open review targets: https://github.com/Roberhood314/COHIBA/issues
+
+The campaign invites external security/reliability/evidence review before Mainnet. It does not authorize Mainnet and does not advertise an unfunded financial bounty.
