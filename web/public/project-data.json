@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "project": {
+    "name": "COHIBA",
+    "symbol": "COH",
+    "tagline": "Fear the Machine. Defend the Human.",
+    "category": [
+      "Meme",
+      "Community",
+      "Solana"
+    ],
+    "website": "https://cohibameme.site",
+    "source": "https://github.com/Roberhood314/COHIBA",
+    "x": "https://x.com/hunhkcgy"
+  },
+  "token": {
+    "network": "Solana",
+    "standard": "SPL Token",
+    "totalSupply": "1000000000",
+    "maxSupply": "1000000000",
+    "decimals": 9,
+    "tokenTaxPercent": 0,
+    "destinationWallet": "pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t",
+    "mainnetMint": null,
+    "mintAuthorityPostLaunch": null,
+    "freezeAuthorityPostLaunch": null,
+    "metadataImmutablePostLaunch": true
+  },
+  "status": {
+    "stage": "PRE_MAINNET",
+    "mainnetLaunched": false,
+    "publicMarketLive": false
+  },
+  "verification": {
+    "page": "https://cohibameme.site/verification.html",
+    "blockchain": "https://cohibameme.site/blockchain.html",
+    "marketReadiness": "https://cohibameme.site/market-readiness.html",
+    "blockchainApi": "https://cohibameme.site/api/blockchain-data?network=mainnet-beta",
+    "infraApi": "https://cohibameme.site/api/infra-readiness"
+  }
+}
