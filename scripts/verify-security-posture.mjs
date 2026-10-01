@@ -11,6 +11,8 @@ const checks=[
   ["mainnet disabled unless explicit env gate",server.includes('process.env.ALLOW_MAINNET!=="true"')||server.includes('process.env.ALLOW_MAINNET!=="true"')],
   ["mainnet create path checks ALLOW_MAINNET",server.includes('process.env.ALLOW_MAINNET!=="true"')||server.includes('process.env.ALLOW_MAINNET!=="true"')],
   ["launch API requires separate key",server.includes("requireMainnetLaunchKey(req)")],
+  ["owner approval gate present",server.includes('COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA"')],
+  ["mainnet API checks owner approval",server.includes("requireOwnerMainnetApproval();")],
   ["launch API requires exact origin",server.includes("requireMainnetOrigin(req)")],
   ["launch path rate limited",server.includes("enforceLaunchRateLimit(req)")],
   ["API globally rate limited",server.includes("rateLimitApi(req)")],
