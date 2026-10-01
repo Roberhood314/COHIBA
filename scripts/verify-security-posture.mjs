@@ -5,6 +5,7 @@ const root=process.cwd();
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const server=read("web-server.mjs");
 const staged=read("scripts/create-token-staged.ts");
+const direct=read("scripts/create-token.ts");
 const revoke=read("scripts/revoke-authorities.ts");
 
 const checks=[
