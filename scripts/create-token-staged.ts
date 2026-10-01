@@ -20,8 +20,9 @@ function loadKeypair(walletPath:string){
 
 const network=arg("network","devnet") as Cluster|"mainnet-beta";
 if(!["devnet","testnet","mainnet-beta"].includes(network)) throw new Error(`Unsupported network: ${network}`);
-if(network==="mainnet-beta"&&process.env.ALLOW_MAINNET!=="true"){
-  throw new Error("Mainnet is safety-locked. Set ALLOW_MAINNET=true only during an approved release.");
+if(network==="mainnet-beta"){
+  if(process.env.ALLOW_MAINNET!=="true") throw new Error("Mainnet is safety-locked.");
+  if(process.env.COHIBA_MAINNET_OWNER_APPROVAL!=="APPROVE MAINNET COHIBA") throw new Error("Mainnet owner approval is not present.");
 }
 
 const walletPath=process.env.SOLANA_WALLET_PATH;
