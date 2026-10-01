@@ -134,6 +134,38 @@ function saveLaunchRecord(network,record){
   );
 }
 
+
+const COMMUNITY_METRICS_FILE=path.join("/data","cohiba-community-metrics.json");
+const COMMUNITY_EVENTS=new Set([
+  "home_view","community_view","community_x_click","community_github_click",
+  "community_profile_click","profile_view","whitepaper_view","security_view",
+  "ambassador_view","ambassador_x_click","analytics_view"
+]);
+
+function loadCommunityMetrics(){
+  try{
+    if(!fs.existsSync(COMMUNITY_METRICS_FILE)) return {schemaVersion:"1.0",totals:{},days:{},updatedAt:null};
+    const parsed=JSON.parse(fs.readFileSync(COMMUNITY_METRICS_FILE,"utf8"));
+    return parsed&&typeof parsed==="object"?parsed:{schemaVersion:"1.0",totals:{},days:{},updatedAt:null};
+  }catch{
+    return {schemaVersion:"1.0",totals:{},days:{},updatedAt:null,storageRecovered:true};
+  }
+}
+function saveCommunityEvent(event){
+  if(!COMMUNITY_EVENTS.has(event)) throw new Error("UNSUPPORTED_COMMUNITY_EVENT");
+  fs.mkdirSync("/data",{recursive:true});
+  const metrics=loadCommunityMetrics();
+  const day=new Date().toISOString().slice(0,10);
+  metrics.totals=metrics.totals||{};
+  metrics.days=metrics.days||{};
+  metrics.days[day]=metrics.days[day]||{};
+  metrics.totals[event]=Number(metrics.totals[event]||0)+1;
+  metrics.days[day][event]=Number(metrics.days[day][event]||0)+1;
+  metrics.updatedAt=new Date().toISOString();
+  fs.writeFileSync(COMMUNITY_METRICS_FILE,JSON.stringify(metrics,null,2),{mode:0o600});
+  return metrics;
+}
+
 const types = {
   ".html":"text/html; charset=utf-8",
   ".css":"text/css; charset=utf-8",
@@ -386,6 +418,45 @@ const server=http.createServer(async (req,res)=>{
   if(raw.startsWith("/api/") && !rateLimitApi(req)){
     res.writeHead(429,{...headers,"content-type":"application/json; charset=utf-8","cache-control":"no-store","retry-after":"60"});
     res.end(JSON.stringify({ok:false,error:"RATE_LIMITED"}));
+    return;
+  }
+
+
+  if(req.method==="POST" && raw==="/api/community-event"){
+    try{
+      const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
+      const origin=String(req.headers.origin||"");
+      if(origin && origin!==expected){
+        json(res,403,{ok:false,error:"COMMUNITY_EVENT_ORIGIN_INVALID"});
+        return;
+      }
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>1024) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const event=String(parsed.event||"");
+      saveCommunityEvent(event);
+      json(res,200,{ok:true,event});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="UNSUPPORTED_COMMUNITY_EVENT"?400:message==="REQUEST_TOO_LARGE"?413:500;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/community-metrics"){
+    const metrics=loadCommunityMetrics();
+    json(res,200,{
+      ok:true,
+      project:"COHIBA",
+      metricClass:"FIRST_PARTY_AGGREGATE_INTERACTION",
+      uniqueHumansClaimed:false,
+      piiStoredInMetricsRecord:false,
+      ...metrics
+    });
     return;
   }
 
