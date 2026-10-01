@@ -434,6 +434,75 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+
+  if(req.method==="GET" && raw==="/api/infra-readiness"){
+    const mainnetRecord=loadLaunchRecord("mainnet-beta");
+    const devnetRecord=loadLaunchRecord("devnet");
+    let signerPublicKey=null;
+    let signerBalanceSol=null;
+    let signerValid=false;
+    let mainnetRpc=false;
+    try{
+      const signer=loadMainnetSigner();
+      signerPublicKey=signer.publicKey.toBase58();
+      signerValid=true;
+      const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),"confirmed");
+      const version=await conn.getVersion();
+      mainnetRpc=Boolean(version?.["solana-core"]);
+      const lamports=await conn.getBalance(signer.publicKey,"confirmed");
+      signerBalanceSol=lamports/1e9;
+    }catch{}
+
+    const files={
+      verification:fs.existsSync(path.join(root,"verification.html")),
+      marketReadiness:fs.existsSync(path.join(root,"market-readiness.html")),
+      blockchainDashboard:fs.existsSync(path.join(root,"blockchain.html")),
+      tokenMetadata:fs.existsSync(path.join(root,"token-metadata.json")),
+      projectData:fs.existsSync(path.join(root,"project-data.json")),
+      marketData:fs.existsSync(path.join(root,"market-data.json"))
+    };
+    const gates={
+      websiteReady:PUBLIC_BASE_URL==="https://cohibameme.site",
+      publicVerificationReady:files.verification,
+      blockchainDataLayerReady:files.blockchainDashboard,
+      machineReadableProjectDataReady:files.projectData,
+      machineReadableMarketDataReady:files.marketData,
+      tokenMetadataReady:files.tokenMetadata,
+      devnetLaunchVerified:Boolean(devnetRecord?.locked&&devnetRecord?.mint),
+      signerConfigured:Boolean(process.env.SYSTEM_WALLET_SECRET_JSON),
+      signerValid,
+      mainnetRpc,
+      mainnetSafetyLocked:process.env.ALLOW_MAINNET!=="true",
+      mainnetNotLaunched:!Boolean(mainnetRecord?.locked),
+      marketLaunchDeferred:true
+    };
+    const infrastructureReady=Object.values(gates).every(Boolean);
+    json(res,200,{
+      ok:true,
+      project:"COHIBA",
+      stage:infrastructureReady?"PRE_MAINNET_INFRA_READY":"PRE_MAINNET_BUILDING",
+      infrastructureReady,
+      mainnetLaunchAuthorized:false,
+      gates,
+      signerPublicKey,
+      signerBalanceSol,
+      minimumSignerBalanceSol:MAINNET_MIN_SOL,
+      finalLaunchSequence:[
+        "fund signer",
+        "explicit owner approval",
+        "enable mainnet gate",
+        "mint fixed supply",
+        "verify supply and destination balance",
+        "revoke mint and freeze authorities",
+        "publish explorer evidence",
+        "create owner-approved real liquidity pool",
+        "publish real market data"
+      ],
+      generatedAt:new Date().toISOString()
+    });
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/mainnet-readiness"){
     const checks={
       publicBaseUrl: PUBLIC_BASE_URL==="https://cohibameme.site",
