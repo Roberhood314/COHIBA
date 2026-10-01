@@ -447,6 +447,7 @@ const server=http.createServer(async (req,res)=>{
       notAlreadyLaunched: !Boolean(loadLaunchRecord("mainnet-beta")?.locked)
     };
 
+    let signerPublicKey=null;
     let signerBalanceSol=null;
     try{
       const controller=new AbortController();
@@ -465,6 +466,7 @@ const server=http.createServer(async (req,res)=>{
     if(checks.signerConfigured){
       try{
         const signer=loadMainnetSigner();
+        signerPublicKey=signer.publicKey.toBase58();
         checks.signerValid=true;
         const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),"confirmed");
         const version=await conn.getVersion();
@@ -487,6 +489,7 @@ const server=http.createServer(async (req,res)=>{
       stage:openMainnetReady?"OPEN_MAINNET_READY":"PRE_MAINNET",
       openMainnetReady,
       checks,
+      signerPublicKey,
       signerBalanceSol,
       minimumSignerBalanceSol:MAINNET_MIN_SOL,
       metadataUri:METADATA_URI
