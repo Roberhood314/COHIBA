@@ -24,9 +24,8 @@ jobs:
         run: npm run typecheck
       - name: Build and evidence manifest
         run: npm run build
-      - name: Dependency audit evidence
+      - name: Dependency audit gate
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: cohiba-verification-evidence
