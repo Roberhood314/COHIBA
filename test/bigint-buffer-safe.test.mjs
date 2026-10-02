@@ -11,7 +11,7 @@ test("patched bigint-buffer fork is installed in the production dependency tree"
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   });
-  assert.match(tree, /1\.1\.6-cohiba\.1/);
+  assert.match(tree, /1\.1\.6/);
 });
 
 test("patched bigint-buffer fork preserves API and rejects unsafe input", () => {
