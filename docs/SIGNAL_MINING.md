@@ -12,7 +12,7 @@ COHIBA adapts the useful incentive-design idea, not Pi's blockchain or token eco
 
 ## Rate formula
 
-`R = B(N) × [1 + P + T + S + C + U]`
+`R = B(N) × [1 + P + T + S + C + U + G] × E`
 
 Where:
 - `R` = Signal Points per hour;
@@ -21,7 +21,9 @@ Where:
 - `T` = trust-graph boost;
 - `S` = streak boost;
 - `C` = verified-contribution boost;
-- `U` = meaningful application-utility boost.
+- `U` = meaningful application-utility boost;
+- `G` = verified referral-growth boost;
+- `E` = Human Proof eligibility factor.
 
 ### Dynamic base rate
 
@@ -100,3 +102,33 @@ Future:
 - referral graph sybil controls;
 - reviewer attestations;
 - Devnet proof anchoring.
+
+
+### Verified referral growth
+`G` is derived only from referred profiles that later reach the required Human Proof tier.
+
+It is logarithmic and capped at +25%. Self-referral and repeated attribution are rejected.
+
+### Human Proof eligibility
+`E` is a deployment-policy factor.
+
+- Grace mode: wallet-verified users can mine while phone/social verification infrastructure is still being activated.
+- Enforced mode: HUMAN_VERIFIED = 1.0; STRONG_SIGNAL = 0.8; lower valid tiers = 0.5.
+
+COHIBA should only switch production to enforced mode after Human Proof providers are demonstrably operational and the policy change has been announced.
+
+## Pioneer UX requirements
+The public mining UI should show:
+- current SP balance;
+- current SP/hour;
+- base rate;
+- every boost component;
+- eligibility factor;
+- session end time;
+- claimable points;
+- onboarding checklist;
+- Pioneer missions;
+- referral status;
+- infrastructure readiness.
+
+Mining must remain explainable rather than an opaque reward engine.
