@@ -27,9 +27,9 @@ main{width:min(1180px,calc(100% - 28px));margin:auto;padding:24px 0 80px}.top{di
 </div>
 
 <section class="hero">
-<div class="eyebrow">PRE-MAINNET · HUMAN SIGNAL MINING</div>
+<div class="eyebrow">PRE-MAINNET · HYBRID HUMAN + RESOURCE MINING</div>
 <h1>Khai thác COH.</h1>
-<p>Phiên khai thác tối đa 24 giờ. Pending COH được ghi nhận theo thời gian thực trong hồ sơ và chưa phải COH SPL on-chain.</p>
+<p>Phiên khai thác tối đa 24 giờ. Tốc độ kết hợp 60% Human Signal + 40% Resource Contribution đã xác minh. Pending COH vẫn là provisional off-chain trước Mainnet.</p>
 <div id="heroStatus" class="hero-status"><span class="pill muted">Đang kiểm tra tài khoản…</span></div>
 </section>
 
@@ -66,6 +66,17 @@ main{width:min(1180px,calc(100% - 28px));margin:auto;padding:24px 0 80px}.top{di
 <h2>Boost khai thác của bạn</h2>
 <div id="boosts" class="boosts"></div>
 <details class="tech"><summary>Xem thuật toán kỹ thuật</summary><pre id="techState">Đang tải…</pre></details>
+</section>
+
+
+<section class="card" style="margin-top:14px">
+<h2>Resource Contribution</h2>
+<p class="notice">COHIBA không thưởng cho việc đốt CPU/GPU hoặc chia sẻ băng thông thụ động. Resource score chỉ tăng bằng bằng chứng tài nguyên hữu ích mà server ghi nhận.</p>
+<div class="boosts" id="resourceComponents"></div>
+<div class="reserve-line"><span>Resource score</span><b id="resourceScore">—</b></div>
+<div class="reserve-line"><span>Heartbeat buckets 24h</span><b id="resourceHeartbeats">—</b></div>
+<div class="reserve-line"><span>Verified useful jobs 7d</span><b id="resourceJobs">—</b></div>
+<p class="notice">Trọng số Resource: Uptime 30% · Useful Work 25% · Reliability 20% · Storage 15% · Network 10%. Compute/Storage/Network chỉ được cộng khi có job/proof thật được server xác minh.</p>
 </section>
 
 <section class="card" style="margin-top:14px">
