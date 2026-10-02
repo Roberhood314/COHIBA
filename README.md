@@ -195,3 +195,26 @@ Human Signal v0.2 adapts useful network-design ideas seen in Pi Network without 
 - trust graph is for reputation/community discovery only and is not part of Solana consensus.
 
 See [docs/HUMAN_SIGNAL_NETWORK.md](docs/HUMAN_SIGNAL_NETWORK.md).
+
+
+### Signal Mining v0.1 — browser contribution mining
+
+Human Signal now includes a browser-activated mining model for non-transferable Signal Points.
+
+Formula:
+
+`R = B(N) × [1 + P + T + S + C + U]`
+
+where the modifiers represent Pioneer participation, trust graph, streak, verified contribution and meaningful app utility.
+
+- no CPU/GPU Proof-of-Work;
+- no COH minting;
+- no guaranteed future conversion to COH;
+- one active session per verified profile;
+- maximum 24-hour session;
+- server-side elapsed-time accounting;
+- first 10,000 verified profiles form the Pioneer cohort;
+- Pioneer boost decays to zero over 180 active days;
+- trust/streak/contribution/utility boosts are capped or logarithmic.
+
+See [docs/SIGNAL_MINING.md](docs/SIGNAL_MINING.md).
