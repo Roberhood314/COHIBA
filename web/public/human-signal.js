@@ -30,6 +30,24 @@ async function loadPioneer(){
     $("#applyReferral").disabled=false;
   }catch(err){$("#pioneerState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 }
+async function loadProviderReadiness(){
+  try{
+    const r=await fetch("/api/human-proof/readiness"),x=await r.json();
+    if(!r.ok) return;
+    const p=x.providers||{};
+    $("#sendOtp").disabled=!authToken||!p.phone;
+    $("#checkOtp").disabled=!authToken||!p.phone;
+    $("#verifyGoogle").disabled=!authToken||!p.google;
+    $("#verifyFacebook").disabled=!authToken||!p.facebook;
+    const missing=[];
+    if(!p.phone) missing.push("Phone OTP");
+    if(!p.google) missing.push("Google");
+    if(!p.facebook) missing.push("Facebook");
+    if(missing.length){
+      $("#humanProofState").innerHTML+='<p class="note">Provider pending: '+esc(missing.join(" · "))+'</p>';
+    }
+  }catch{}
+}
 async function loadHumanProof(){
   if(!authToken){
     $("#sendOtp").disabled=true; $("#checkOtp").disabled=true; $("#verifyGoogle").disabled=true; $("#verifyFacebook").disabled=true;
@@ -40,7 +58,7 @@ async function loadHumanProof(){
     if(!r.ok) throw new Error(x.error||"HUMAN_PROOF_STATUS_FAILED");
     const p=x.proof||{},c=p.confidence||{};
     $("#humanProofState").innerHTML='<strong>'+esc(c.tier||"UNVERIFIED")+'</strong><p>Confidence: '+esc(c.score||0)+'/100</p><p class="note">Phone '+(p.phone?.verified?"✓":"—")+' · Google '+(p.google?.verified?"✓":"—")+' · Facebook '+(p.facebook?.verified?"✓":"—")+' · Anti-bot '+(p.antiBot?"✓":"—")+'</p>';
-    $("#sendOtp").disabled=false; $("#checkOtp").disabled=false; $("#verifyGoogle").disabled=false; $("#verifyFacebook").disabled=false;
+    await loadProviderReadiness();
   }catch(err){$("#humanProofState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 }
 async function loadMining(){
@@ -170,5 +188,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadMining(); loadHumanProof(); loadPioneer();
+load(); loadIdentity(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();
