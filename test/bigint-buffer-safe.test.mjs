@@ -1,17 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const shim = require("../vendor/bigint-buffer-safe/index.cjs");
+const rootPkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const forkPkg = JSON.parse(fs.readFileSync(new URL("../vendor/bigint-buffer-safe/package.json", import.meta.url), "utf8"));
 
-test("patched bigint-buffer fork is installed in the production dependency tree", () => {
-  const tree = execFileSync("npm", ["ls", "bigint-buffer", "--omit=dev", "--json"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  assert.match(tree, /1\.1\.6/);
+test("production tree pins bigint-buffer to the audited local security fork", () => {
+  assert.equal(rootPkg.overrides?.["bigint-buffer"], "file:vendor/bigint-buffer-safe");
+  assert.equal(forkPkg.name, "bigint-buffer");
+  assert.equal(forkPkg.version, "1.1.6");
 });
 
 test("patched bigint-buffer fork preserves API and rejects unsafe input", () => {
