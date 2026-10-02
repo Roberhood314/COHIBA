@@ -1,8 +1,8 @@
 {
-  "name": "bigint-buffer-safe",
-  "version": "1.0.0-cohiba.1",
+  "name": "bigint-buffer",
+  "version": "1.1.6-cohiba.1",
   "private": true,
-  "description": "Vendored pure-JS compatibility replacement for bigint-buffer to mitigate CVE-2025-3194.",
+  "description": "COHIBA local security fork of bigint-buffer 1.x. Pure-JS compatibility implementation mitigating CVE-2025-3194.",
   "main": "index.cjs",
   "license": "MIT"
 }
