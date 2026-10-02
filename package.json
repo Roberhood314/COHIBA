@@ -41,7 +41,7 @@
   },
   "packageManager": "npm@11.6.0",
   "engines": {
-    "node": ">=20 <25"
+    "node": ">=24.15.0 <25"
   },
   "overrides": {
     "bigint-buffer": "file:vendor/bigint-buffer-safe",
