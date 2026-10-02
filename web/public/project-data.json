@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.6",
+  "schemaVersion": "1.7",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -168,7 +168,7 @@
   },
   "humanSignal": {
     "name": "COHIBA Human Signal Protocol",
-    "version": "0.1",
+    "version": "0.2",
     "status": "MVP_IMPLEMENTED",
     "publicPage": "https://cohibameme.site/human-signal.html",
     "registryApi": "https://cohibameme.site/api/human-signal/contributions",
@@ -186,6 +186,23 @@
       "DOCUMENTATION",
       "COMMUNITY"
     ],
-    "architecture": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_PROTOCOL.md"
+    "architecture": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_PROTOCOL.md",
+    "identityModel": "SOLANA_WALLET_SIGNATURE",
+    "dailySignal": true,
+    "trustGraph": {
+      "enabled": true,
+      "maxOutgoingConnections": 5,
+      "consensusRole": false
+    },
+    "roles": [
+      "SIGNALER",
+      "CONTRIBUTOR",
+      "BUILDER",
+      "CONNECTOR",
+      "VERIFIER"
+    ],
+    "tokenEmission": false,
+    "networkApi": "https://cohibameme.site/api/human-signal/network",
+    "architectureV2": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_NETWORK.md"
   }
 }
