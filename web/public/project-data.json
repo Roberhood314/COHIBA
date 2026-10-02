@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.9",
+  "schemaVersion": "2.0",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -239,5 +239,35 @@
       "identityStorage": "HMAC_SHA256_HASHED_PROVIDER_IDENTIFIERS",
       "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_PROOF.md"
     }
+  },
+  "humanSignalCore": {
+    "name": "COHIBA Human Signal Core",
+    "version": "0.1",
+    "type": "APPLICATION_COORDINATION_LAYER",
+    "settlementLayer": "Solana",
+    "ownBlockchain": false,
+    "domains": [
+      "Human Proof",
+      "Trust Graph",
+      "Contribution Proof",
+      "Signal Mining",
+      "Reputation",
+      "Developer App Registry",
+      "Utility Index",
+      "Core Event Ledger",
+      "State Roots"
+    ],
+    "publicDashboard": "https://cohibameme.site/core.html",
+    "statusApi": "https://cohibameme.site/api/hsc/status",
+    "stateRootApi": "https://cohibameme.site/api/hsc/state-root",
+    "appRegistryApi": "https://cohibameme.site/api/hsc/apps",
+    "anchorsApi": "https://cohibameme.site/api/hsc/anchors",
+    "devnetAnchoring": {
+      "implemented": true,
+      "automatic": false,
+      "gated": true,
+      "mainnet": false
+    },
+    "architecture": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_CORE.md"
   }
 }
