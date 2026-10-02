@@ -2551,7 +2551,7 @@ const server=http.createServer(async (req,res)=>{
     res.writeHead(200,{
       ...headers,
       "content-type":types[path.extname(target)]||"application/octet-stream",
-      "cache-control":path.extname(target)===".html"?"no-cache":"public, max-age=300"
+      "cache-control":[".html",".js"].includes(path.extname(target))?"no-cache, no-store, must-revalidate":"public, max-age=300"
     });
     res.end(data);
   });
