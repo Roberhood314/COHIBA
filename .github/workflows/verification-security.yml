@@ -34,3 +34,4 @@ jobs:
             docs/VERIFICATION_SPEC.md
             docs/THREAT_MODEL.md
             docs/SECURITY_CONTROL_MATRIX.md
+            package-lock.json
