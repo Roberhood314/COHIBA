@@ -517,7 +517,12 @@ async function infobipVerifyStart(phone){
     if(r.status===429 || /LIMIT|RATE|TOO_MANY/i.test(providerCode)) throw new Error("OTP_PROVIDER_DAILY_LIMIT");
     throw new Error("PHONE_VERIFY_SEND_FAILED");
   }
-  return {status:"pending",provider:"infobip",pinId:String(x.pinId)};
+  return {
+    status:"accepted",
+    provider:"infobip",
+    pinId:String(x.pinId),
+    acceptedAt:new Date().toISOString()
+  };
 }
 
 async function infobipVerifyCheck(pinId,code){
@@ -1629,6 +1634,8 @@ const server=http.createServer(async (req,res)=>{
         phoneHash,
         provider:verification.provider||"twilio",
         pinId:verification.pinId||null,
+        providerStatus:verification.status||"accepted",
+        acceptedAt:verification.acceptedAt||new Date().toISOString(),
         status:"OTP_SENT",
         createdAt:new Date().toISOString(),
         expiresAt:new Date(Date.now()+20*60*1000).toISOString(),
@@ -1639,7 +1646,15 @@ const server=http.createServer(async (req,res)=>{
         usedAt:null
       };
       store.records.push(record); saveAccountOnboarding(store);
-      json(res,200,{ok:true,onboardingId:record.id,status:"OTP_SENT",expiresAt:record.expiresAt});
+      json(res,200,{
+        ok:true,
+        onboardingId:record.id,
+        status:"OTP_ACCEPTED_BY_PROVIDER",
+        provider:record.provider,
+        delivery:"PENDING_OR_UNKNOWN",
+        expiresAt:record.expiresAt,
+        note:"Provider accepted the OTP request. SMS handset delivery is asynchronous and may still fail or be delayed."
+      });
     }catch(error){
       const m=String(error?.message||error);
       const status=["OTP_RATE_LIMITED","OTP_PROVIDER_DAILY_LIMIT"].includes(m)?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
@@ -1647,6 +1662,32 @@ const server=http.createServer(async (req,res)=>{
         m==="PHONE_ALREADY_REGISTERED"?409:
         m==="PHONE_VERIFY_NOT_CONFIGURED"?409:500;
       json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/onboarding/otp/status"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>1024) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const store=loadAccountOnboarding();
+      const record=store.records.find(x=>x.id===String(parsed.onboardingId||""));
+      if(!record) throw new Error("ONBOARDING_NOT_FOUND");
+      json(res,200,{
+        ok:true,
+        onboardingId:record.id,
+        provider:record.provider||null,
+        providerAccepted:Boolean(record.pinId),
+        providerStatus:record.providerStatus||null,
+        accountStage:record.status||null,
+        expiresAt:record.expiresAt||null,
+        delivery:"UNKNOWN_WITHOUT_DLR",
+        trialNotice:"If Infobip is still in free trial, OTP SMS can be delivered only to recipient numbers verified in the Infobip account."
+      });
+    }catch(error){
+      const m=String(error?.message||error);
+      json(res,m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:400,{ok:false,error:m});
     }
     return;
   }
