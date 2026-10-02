@@ -9,6 +9,7 @@ import { keypairIdentity, percentAmount, publicKey as umiPublicKey } from "@meta
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
+import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -180,6 +181,22 @@ function authHumanSignalProfile(req,store){
   const profile=store.profiles.find(x=>x.id===session.profileId);
   if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
   return profile;
+}
+
+function verifiedReputationForProfile(profileId,records){
+  return records.filter(r=>r.profileId===profileId && r.status==="VERIFIED").reduce((sum,r)=>{
+    const weights={SECURITY:30,CODE:25,RESEARCH:20,DOCUMENTATION:15,TRANSLATION:12,CREATIVE:10,COMMUNITY:8};
+    return sum+(weights[r.type]||0);
+  },0);
+}
+
+function miningRateForProfile(profile,networkStore,contributionStore){
+  return calculateMiningRate({
+    profile,
+    profileCount:networkStore.profiles.length,
+    verifiedReputation30d:verifiedReputationForProfile(profile.id,contributionStore.records),
+    meaningfulActions7d:Number(profile.meaningfulActions7d||0)
+  });
 }
 
 function publicHumanProfile(profile,contributions=[]){
@@ -718,6 +735,103 @@ const server=http.createServer(async (req,res)=>{
       activeToday:profiles.filter(x=>x.lastActiveDay===utcDay()).length,
       trustEdges:store.profiles.reduce((n,p)=>n+(p.trustConnections||[]).length,0),
       profiles:profiles.slice(0,100)
+    });
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/mining/start"){
+    try{
+      requireHumanSignalOrigin(req);
+      const networkStore=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,networkStore);
+      const contributionStore=loadHumanSignal();
+      networkStore.miningSessions=Array.isArray(networkStore.miningSessions)?networkStore.miningSessions:[];
+      const active=networkStore.miningSessions.find(x=>x.profileId===profile.id && x.status==="ACTIVE" && Date.parse(x.endsAt)>Date.now());
+      if(active){
+        json(res,409,{ok:false,error:"MINING_SESSION_ALREADY_ACTIVE",session:publicMiningSession(active)});
+        return;
+      }
+      const stale=networkStore.miningSessions.find(x=>x.profileId===profile.id && x.status==="ACTIVE" && Date.parse(x.endsAt)<=Date.now());
+      if(stale) applyClaim(stale,profile,Date.now());
+      if(profile.pioneer===undefined){
+        profile.pioneer=networkStore.profiles.findIndex(x=>x.id===profile.id)<PIONEER_COHORT_SIZE;
+      }
+      const rate=miningRateForProfile(profile,networkStore,contributionStore);
+      const session=newMiningSession(profile.id,rate);
+      networkStore.miningSessions.push(session);
+      saveHumanSignalNetwork(networkStore);
+      json(res,201,{ok:true,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:500;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/mining/claim"){
+    try{
+      requireHumanSignalOrigin(req);
+      const networkStore=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,networkStore);
+      networkStore.miningSessions=Array.isArray(networkStore.miningSessions)?networkStore.miningSessions:[];
+      const session=networkStore.miningSessions.slice().reverse().find(x=>x.profileId===profile.id && x.status==="ACTIVE");
+      if(!session) throw new Error("NO_ACTIVE_MINING_SESSION");
+      const claim=applyClaim(session,profile,Date.now());
+      saveHumanSignalNetwork(networkStore);
+      json(res,200,{ok:true,claim,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:message==="NO_ACTIVE_MINING_SESSION"?409:500;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/mining/status"){
+    try{
+      const networkStore=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,networkStore);
+      networkStore.miningSessions=Array.isArray(networkStore.miningSessions)?networkStore.miningSessions:[];
+      const contributionStore=loadHumanSignal();
+      const active=networkStore.miningSessions.slice().reverse().find(x=>x.profileId===profile.id && x.status==="ACTIVE");
+      const rate=miningRateForProfile(profile,networkStore,contributionStore);
+      json(res,200,{
+        ok:true,
+        unit:"SIGNAL_POINTS",
+        transferable:false,
+        token:false,
+        conversionPromised:false,
+        profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)},
+        currentRate:rate,
+        session:active?publicMiningSession(active):null
+      });
+    }catch(error){
+      json(res,401,{ok:false,error:String(error?.message||error)});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/mining/network"){
+    const networkStore=loadHumanSignalNetwork();
+    const contributionStore=loadHumanSignal();
+    const profiles=networkStore.profiles||[];
+    const pioneerCount=profiles.filter(x=>x.pioneer).length;
+    const activeSessions=(networkStore.miningSessions||[]).filter(x=>x.status==="ACTIVE" && Date.parse(x.endsAt)>Date.now()).length;
+    json(res,200,{
+      ok:true,
+      model:"COHIBA_SIGNAL_MINING_V0_1",
+      browserActivated:true,
+      proofOfWork:false,
+      cpuGpuMining:false,
+      coEmission:false,
+      signalPointsTransferable:false,
+      profileCount:profiles.length,
+      pioneerCohortLimit:PIONEER_COHORT_SIZE,
+      pioneerCount,
+      activeMiningSessions:activeSessions,
+      baseRate:calculateMiningRate({profile:{},profileCount:profiles.length}).baseRate,
+      generatedAt:new Date().toISOString()
     });
     return;
   }
