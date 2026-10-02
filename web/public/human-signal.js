@@ -56,6 +56,7 @@ async function loadMining(){
       '<strong>'+esc(p.pioneer?"PIONEER COHORT":"COMMUNITY MINER")+'</strong>'+
       '<p>Balance: <span class="verified">'+esc(p.signalPoints||0)+' SP</span></p>'+
       '<p>Current rate: '+esc(rate.rate||0)+' SP/hour · base '+esc(rate.baseRate||0)+'</p>'+
+      '<p class="note">Rate breakdown: Pioneer +'+esc(Math.round((rate.multipliers?.pioneer||0)*100))+'% · Trust +'+esc(Math.round((rate.multipliers?.trust||0)*100))+'% · Streak +'+esc(Math.round((rate.multipliers?.streak||0)*100))+'% · Contribution +'+esc(Math.round((rate.multipliers?.contribution||0)*100))+'% · Utility +'+esc(Math.round((rate.multipliers?.utility||0)*100))+'% · Growth +'+esc(Math.round((rate.multipliers?.growth||0)*100))+'% · Eligibility ×'+esc(rate.eligibilityFactor??1)+'</p>'+
       (s?'<p>Session: '+esc(s.status)+' · claimable '+esc(s.claimablePoints||0)+' SP<br><span class="note">Ends '+esc(s.endsAt)+'</span></p>':'<p class="note">No active mining session.</p>');
     $("#startMining").disabled=Boolean(s);
     $("#claimMining").disabled=!s;
