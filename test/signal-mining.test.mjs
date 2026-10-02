@@ -26,11 +26,25 @@ test("pioneer bonus decays and disappears after 180 active days",()=>{
 
 test("session accrues server-side by elapsed time and caps at 24h",()=>{
   const now=Date.parse("2026-10-02T00:00:00Z");
-  const profile={signalPoints:0};
+  const profile={signalPoints:0,pendingCoh:0};
   const s=newMiningSession("HUMAN-X",{rate:2},now);
   assert.equal(claimablePoints(s,now+3600000),2);
   const r=applyClaim(s,profile,now+25*3600000);
   assert.equal(r.amount,48);
   assert.equal(profile.signalPoints,48);
+  assert.equal(profile.pendingCoh,48);
+  assert.equal(r.pendingCohAdded,48);
   assert.equal(s.status,"COMPLETED");
+});
+
+
+test("pending COH ledger is additive and independent from on-chain token state",()=>{
+  const now=Date.parse("2026-10-02T00:00:00Z");
+  const profile={signalPoints:10,pendingCoh:7.5};
+  const s=newMiningSession("HUMAN-Y",{rate:1},now);
+  const r=applyClaim(s,profile,now+2*3600000);
+  assert.equal(r.amount,2);
+  assert.equal(profile.signalPoints,12);
+  assert.equal(profile.pendingCoh,9.5);
+  assert.equal(r.pendingCohAdded,2);
 });
