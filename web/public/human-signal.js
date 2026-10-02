@@ -1,6 +1,28 @@
 (()=>{"use strict";
 const $=s=>document.querySelector(s);
+let authToken=localStorage.getItem("cohiba_human_signal_token")||"";
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path,opts={}){
+  const headers={...(opts.headers||{})};
+  if(authToken) headers.authorization="Bearer "+authToken;
+  return fetch(path,{...opts,headers});
+}
+async function loadIdentity(){
+  try{
+    if(authToken){
+      const r=await api("/api/human-signal/me");
+      if(r.ok){
+        const x=await r.json(),p=x.profile;
+        $("#identityState").innerHTML='<strong>'+esc(p.id)+'</strong><p class="note">Roles: '+esc((p.roles||[]).join(" · "))+'</p><p>Active days: '+esc(p.activeDays)+' · streak: '+esc(p.streak)+' · trust: '+esc(p.trustConnections)+'/5 · trust score: '+esc(p.trustScore)+'</p>';
+        $("#dailySignal").disabled=false; $("#addTrust").disabled=false;
+      }else{authToken="";localStorage.removeItem("cohiba_human_signal_token");}
+    }
+  }catch{}
+  try{
+    const r=await fetch("/api/human-signal/network"),x=await r.json();
+    $("#networkState").innerHTML='<div class="stat">'+esc(x.profileCount||0)+'</div><span class="note">verified-wallet profiles</span><p>Active today: '+esc(x.activeToday||0)+'<br>Trust edges: '+esc(x.trustEdges||0)+'</p><p class="note">No token emission. Trust graph does not participate in Solana consensus.</p>';
+  }catch{}
+}
 async function load(){
   try{
     const [a,b]=await Promise.all([fetch("/api/human-signal/contributions"),fetch("/api/human-signal/reputation")]);
@@ -23,5 +45,35 @@ $("#signalForm").addEventListener("submit",async e=>{
     e.currentTarget.reset(); load();
   }catch(err){box.innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
-load();
+$("#connectWallet").addEventListener("click",async()=>{
+  try{
+    const provider=window.solana;
+    if(!provider?.isPhantom) throw new Error("PHANTOM_WALLET_NOT_FOUND");
+    const conn=await provider.connect();
+    const wallet=conn.publicKey.toString();
+    let r=await fetch("/api/human-signal/auth/challenge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({wallet})});
+    let x=await r.json(); if(!r.ok) throw new Error(x.error||"CHALLENGE_FAILED");
+    const encoded=new TextEncoder().encode(x.challenge.message);
+    const signed=await provider.signMessage(encoded,"utf8");
+    const bytes=signed.signature;
+    let binary=""; for(const b of bytes) binary+=String.fromCharCode(b);
+    const signature=btoa(binary);
+    r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature})});
+    x=await r.json(); if(!r.ok) throw new Error(x.error||"VERIFY_FAILED");
+    authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
+    await loadIdentity();
+  }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
+});
+$("#dailySignal").addEventListener("click",async()=>{
+  const r=await api("/api/human-signal/session",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#identityState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  await loadIdentity();
+});
+$("#addTrust").addEventListener("click",async()=>{
+  const targetProfileId=$("#targetProfileId").value.trim();
+  const r=await api("/api/human-signal/trust",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({targetProfileId})}); const x=await r.json();
+  if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
+  $("#targetProfileId").value=""; await loadIdentity();
+});
+load(); loadIdentity();
 })();
