@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "name": "COHIBA",
+    "symbol": "COH",
+    "chain": "Solana",
+    "token_standard": "SPL Token",
+    "total_supply": "1000000000",
+    "decimals": 9,
+    "tax_percent": 0
+  },
+  "canonical": {
+    "website": "https://cohibameme.site",
+    "github": "https://github.com/Roberhood314/COHIBA",
+    "x": "https://x.com/hunhkcgy",
+    "whitepaper": "https://github.com/Roberhood314/COHIBA/blob/main/docs/WHITEPAPER.md",
+    "security_policy": "https://github.com/Roberhood314/COHIBA/blob/main/SECURITY.md"
+  },
+  "mainnet": {
+    "status": "NOT_LAUNCHED",
+    "mint": null,
+    "explorer_url": null,
+    "metadata_address": null,
+    "metadata_uri": null,
+    "mint_authority": null,
+    "freeze_authority": null,
+    "launch_transaction": null
+  },
+  "treasury": {
+    "status": "NOT_ACTIVATED",
+    "multisig_provider": null,
+    "vault_address": null,
+    "threshold": null,
+    "member_count": null
+  },
+  "liquidity": {
+    "status": "NOT_CREATED",
+    "venue": null,
+    "pair": null,
+    "pool_address": null,
+    "pool_url": null,
+    "lp_custody": null,
+    "lock_or_burn_policy": null
+  },
+  "evidence": {
+    "independent_security_audit": "NOT_COMPLETED",
+    "legal_release_clearance": "NOT_COMPLETED",
+    "mainnet_market_evidence": "NOT_AVAILABLE",
+    "canonical_rule": "Null means the identifier does not yet exist or has not been independently verified."
+  },
+  "last_verified_utc": null
+}
