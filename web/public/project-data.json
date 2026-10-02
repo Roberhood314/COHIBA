@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.7",
+  "schemaVersion": "1.8",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -168,7 +168,7 @@
   },
   "humanSignal": {
     "name": "COHIBA Human Signal Protocol",
-    "version": "0.2",
+    "version": "0.3",
     "status": "MVP_IMPLEMENTED",
     "publicPage": "https://cohibameme.site/human-signal.html",
     "registryApi": "https://cohibameme.site/api/human-signal/contributions",
@@ -203,6 +203,21 @@
     ],
     "tokenEmission": false,
     "networkApi": "https://cohibameme.site/api/human-signal/network",
-    "architectureV2": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_NETWORK.md"
+    "architectureV2": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_NETWORK.md",
+    "signalMining": {
+      "version": "0.1",
+      "browserActivated": true,
+      "proofOfWork": false,
+      "cpuGpuMining": false,
+      "rewardUnit": "Signal Points",
+      "transferable": false,
+      "coEmission": false,
+      "conversionPromised": false,
+      "pioneerCohortLimit": 10000,
+      "maxSessionHours": 24,
+      "algorithm": "R = B(N) × [1 + P + T + S + C + U]",
+      "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/SIGNAL_MINING.md",
+      "networkApi": "https://cohibameme.site/api/human-signal/mining/network"
+    }
   }
 }
