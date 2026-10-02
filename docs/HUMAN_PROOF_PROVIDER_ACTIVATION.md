@@ -9,18 +9,29 @@ Configured on production:
 
 Do not expose either value in logs, client JavaScript, screenshots or documentation.
 
-## Twilio Verify
-Required:
-- TWILIO_ACCOUNT_SID
-- TWILIO_AUTH_TOKEN
-- TWILIO_VERIFY_SERVICE_SID
+## Infobip 2FA SMS
+Production phone verification uses Infobip first.
 
-Flow:
-1. Create/choose a Twilio Verify Service.
-2. Enable SMS channel for the target countries.
-3. Set the three variables above in Railway.
-4. Verify /api/human-proof/readiness reports providers.phone=true.
-5. Test send/check using a real consenting phone number.
+Required:
+- INFOBIP_API_KEY
+- INFOBIP_BASE_URL
+
+Optional overrides:
+- INFOBIP_2FA_APPLICATION_ID
+- INFOBIP_2FA_MESSAGE_ID
+- INFOBIP_SENDER_ID
+
+Current production behavior:
+1. On startup, if INFOBIP_API_KEY and INFOBIP_BASE_URL are configured, the backend bootstraps a dedicated 2FA application and message template when IDs are not already persisted.
+2. The generated application/message identifiers are stored on the persistent Railway volume under /data and are not exposed through public APIs.
+3. OTP send stores only the pending provider context and Infobip pinId needed for verification.
+4. OTP check verifies the submitted PIN against Infobip and then records phone proof status.
+5. Twilio remains a legacy fallback only when Infobip is not configured.
+
+Acceptance for phone verification requires the production log marker:
+COHIBA_INFOBIP_BOOTSTRAP_READY
+
+and a real consenting end-to-end OTP send/check test before enforcement is enabled.
 
 ## Google OAuth
 Required:
