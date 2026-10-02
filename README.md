@@ -167,3 +167,16 @@ Internal CI/security readiness is green, but Mainnet remains **NO-GO** until all
 - Open review targets: https://github.com/Roberhood314/COHIBA/issues
 
 The campaign invites external security/reliability/evidence review before Mainnet. It does not authorize Mainnet and does not advertise an unfunded financial bounty.
+
+
+## Human Signal Protocol
+
+COHIBA now includes a working Human Signal MVP: a contribution registry and reputation layer for public, verifiable community work.
+
+- dApp: https://cohibameme.site/human-signal.html
+- Architecture: [docs/HUMAN_SIGNAL_PROTOCOL.md](docs/HUMAN_SIGNAL_PROTOCOL.md)
+- Public registry API: `/api/human-signal/contributions`
+- Proof lookup API: `/api/human-signal/proof?id=HSP-...`
+- Reputation API: `/api/human-signal/reputation`
+
+Each submission is canonicalized and receives a deterministic SHA-256 proof ID. The current proof class is explicitly off-chain; COHIBA does not claim Solana anchoring until a later version actually writes proof evidence on-chain. Reputation is derived only from verified contributions and creates no token entitlement.
