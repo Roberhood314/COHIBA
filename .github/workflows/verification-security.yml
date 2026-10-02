@@ -48,6 +48,8 @@ jobs:
           done
           cat /tmp/cohiba-runtime.log
           exit 1
+      - name: Backup restore and incident tabletop drill
+        run: npm run verify:ops
       - uses: actions/upload-artifact@v4
         with:
           name: cohiba-verification-evidence
@@ -57,3 +59,7 @@ jobs:
             docs/THREAT_MODEL.md
             docs/SECURITY_CONTROL_MATRIX.md
             package-lock.json
+            operations/evidence/operational-drill.json
+            operations/evidence/operational-drill.md
+            release/PRE_MAINNET_EVIDENCE_BUNDLE.md
+            launch/PRE_MAINNET_GO_NO_GO.md
