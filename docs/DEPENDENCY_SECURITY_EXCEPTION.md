@@ -13,7 +13,7 @@
 COHIBA replaces the vulnerable transitive package through npm `overrides` with a repository-vendored, pure-JavaScript compatibility fork:
 
 - path: `vendor/bigint-buffer-safe`
-- package identity: `bigint-buffer@1.1.6-cohiba.1`
+- package identity: `bigint-buffer@1.1.6` (**COHIBA-local fork; not an upstream npm release**)
 - native N-API path: removed
 - API retained: `toBigIntBE`, `toBigIntLE`, `toBufferBE`, `toBufferLE`
 - hostile/invalid input: rejected with `TypeError` rather than entering the vulnerable native conversion path
@@ -22,7 +22,7 @@ The implementation is based on the public MIT-licensed `bigint-buffer-safe` comp
 
 ## Verification gates
 CI must prove all of the following:
-1. the installed production tree resolves `bigint-buffer` to `1.1.6-cohiba.1`;
+1. the installed production tree resolves `bigint-buffer` to `1.1.6`;
 2. conversion compatibility tests pass;
 3. invalid-input regression tests pass;
 4. invariant/mutation tests pass;
