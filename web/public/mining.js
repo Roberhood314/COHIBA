@@ -3,7 +3,7 @@ const $=s=>document.querySelector(s);
 const token=localStorage.getItem("cohiba_human_signal_token")||"";
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=(v,d=8)=>Number(v||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:d});
-let state=null,timer=null,serverLoadedAt=Date.now();
+let state=null,timer=null,heartbeatTimer=null,serverLoadedAt=Date.now();
 const referralParam=new URLSearchParams(location.search).get("ref");
 if(referralParam && /^HS-[A-F0-9]{10}$/i.test(referralParam)){
   localStorage.setItem("cohiba_pending_referral",referralParam.toUpperCase());
@@ -14,11 +14,14 @@ function renderBoosts(rate={}){
  const rows=[["Pioneer",m.pioneer],["Trust",m.trust],["Streak",m.streak],["Contribution",m.contribution],["Utility",m.utility],["Referral",m.growth]];
  $("#boosts").innerHTML=rows.map(([n,v])=>'<div class="boost"><b>'+esc(n)+'</b><small>+'+esc(Math.round(Number(v||0)*100))+'%</small></div>').join("");
  $("#techState").textContent=
+  "Model = Hybrid Human 60% + Resource 40%\n"+
   "Rate = Base(N) × TotalMultiplier × Eligibility\n"+
   "Base(N) = 1 / √(1 + N/10,000)\n"+
   "Multiplier cap = "+String(rate.multiplierCap??2.5)+"×\n"+
   "Base rate = "+String(rate.baseRate||0)+"\n"+
   "Total multiplier = "+String(rate.totalMultiplier||0)+"\n"+
+  "Human score = "+String(rate.humanScore??0)+"\n"+
+  "Resource score = "+String(rate.resourceScore??0)+"\n"+
   "Eligibility = "+String(rate.eligibilityFactor??0)+"\n"+
   "Final rate = "+String(rate.rate||0)+" Pending COH/hour";
 }
@@ -34,6 +37,13 @@ function render(){
  $("#reserveRemaining").textContent=fmt(reserve.miningReserveRemaining,2)+" COH";
  $("#reserveRemaining2").textContent=fmt(reserve.miningReserveRemaining,8);
  renderBoosts(currentRate);
+ const resource=state.resource||{},rc=resource.components||{},ev=resource.evidence||{};
+ if($("#resourceScore"))$("#resourceScore").textContent=fmt((resource.score||0)*100,2)+"%";
+ if($("#resourceHeartbeats"))$("#resourceHeartbeats").textContent=String(ev.heartbeatBuckets24h||0);
+ if($("#resourceJobs"))$("#resourceJobs").textContent=String(ev.verifiedJobs7d||0);
+ if($("#resourceComponents"))$("#resourceComponents").innerHTML=[
+   ["Uptime",rc.uptime],["Useful Work",rc.usefulWork],["Reliability",rc.reliability],["Storage",rc.storage],["Network",rc.network]
+ ].map(([n,v])=>'<div class="boost"><b>'+esc(n)+'</b><small>'+fmt(Number(v||0)*100,1)+'%</small></div>').join("");
  $("#heroStatus").innerHTML='<span class="pill ok">'+(session?"MINING ACTIVE":"READY")+'</span><span class="pill">Pending COH: '+fmt(profile.pendingCoh,8)+'</span><span class="pill">'+(profile.pioneer?"PIONEER":"COMMUNITY MINER")+'</span>';
  $("#startBtn").disabled=Boolean(session);
  $("#claimBtn").disabled=!session;
@@ -99,6 +109,13 @@ async function load(){
  if(!r.ok)throw new Error(x.error||"MINING_STATUS_FAILED");
  state=x;serverLoadedAt=Date.now();render(); await applyPendingReferral(); await loadGrowthState();
  if(timer)clearInterval(timer);timer=setInterval(updateTicker,1000);
+ if(heartbeatTimer)clearInterval(heartbeatTimer);
+ const beat=async()=>{try{
+   const rr=await api("/api/human-signal/resource/heartbeat",{method:"POST"});
+   const xx=await rr.json();
+   if(rr.ok&&xx.resource){state.resource=xx.resource;render();}
+ }catch{}};
+ if(state.session){void beat();heartbeatTimer=setInterval(beat,5*60*1000);}
 }
 $("#copyInvite")?.addEventListener("click",async()=>{
   const link=$("#inviteLink")?.textContent||"";
