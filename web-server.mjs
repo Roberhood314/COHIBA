@@ -1306,6 +1306,41 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/economy/status"){
+    const mainnetRecord=loadLaunchRecord("mainnet-beta");
+    const mainnetLive=Boolean(mainnetRecord?.locked&&mainnetRecord?.mint);
+    const ownerApproved=process.env.COHIBA_MAINNET_OWNER_APPROVAL==="APPROVE MAINNET COHIBA";
+    const marketEnabled=process.env.COHIBA_MARKET_TRADING_ENABLED==="true";
+    const distributionEnabled=process.env.COHIBA_COMMUNITY_DISTRIBUTION_ENABLED==="true";
+    json(res,200,{
+      ok:true,
+      project:"COHIBA",
+      phase:mainnetLive?"POST_MAINNET":"PRE_MAINNET",
+      mining:{
+        asset:"SP",
+        name:"Signal Points",
+        transferable:false,
+        sellable:false,
+        tradable:false,
+        claimableOnSite:true,
+        cohEmission:false
+      },
+      coh:{
+        mainnetLive,
+        ownerApproved,
+        distributionEnabled,
+        marketEnabled,
+        transferable:mainnetLive&&distributionEnabled,
+        tradingAllowed:mainnetLive&&distributionEnabled&&marketEnabled,
+        guaranteedSpConversion:false
+      },
+      notice:mainnetLive
+        ?"COH trading remains gated by community distribution policy and explicit market enablement."
+        :"Mine Signal Points now. COH is not mined, sold, transferred or distributed before Mainnet."
+    });
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/human-proof/status"){
     try{
       const store=ensureHumanProofStore(loadHumanSignalNetwork());
