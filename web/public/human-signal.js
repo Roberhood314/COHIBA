@@ -61,6 +61,21 @@ async function loadHumanProof(){
     await loadProviderReadiness();
   }catch(err){$("#humanProofState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 }
+async function loadEconomy(){
+  try{
+    const r=await fetch("/api/economy/status"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"ECONOMY_STATUS_FAILED");
+    const m=x.mining||{},c=x.coh||{};
+    $("#economyState").innerHTML=
+      '<strong>'+esc(x.phase||"PRE_MAINNET")+'</strong>'+
+      '<p>Mining asset: <span class="verified">'+esc(m.asset||"SP")+' · '+esc(m.name||"Signal Points")+'</span></p>'+
+      '<p class="note">Sellable '+(m.sellable?"YES":"NO")+' · Transferable '+(m.transferable?"YES":"NO")+' · Tradable '+(m.tradable?"YES":"NO")+' · COH emission '+(m.cohEmission?"YES":"NO")+'</p>'+
+      '<p class="'+(c.tradingAllowed?"verified":"note")+'">'+esc(x.notice||"")+'</p>';
+  }catch(err){
+    $("#economyState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';
+  }
+}
+
 async function loadMining(){
   if(!authToken){
     $("#startMining").disabled=true; $("#claimMining").disabled=true;
@@ -188,5 +203,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
+load(); loadIdentity(); loadEconomy(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();
