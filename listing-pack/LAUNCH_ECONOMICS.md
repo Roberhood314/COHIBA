@@ -23,7 +23,7 @@ COHIBA does not publish a reference opening price, target market capitalization 
 - Treasury: 3%
 - Team: 2%
 
-Team, development and treasury allocations should use disclosed wallets and vesting where practical.
+Team, development and treasury allocations must follow the disclosure/custody rules in [Token Allocation & Vesting Policy](../docs/TOKEN_ALLOCATION_VESTING.md). Team and development vesting schedules are defined there; treasury custody must follow the [Treasury & Key Management Policy](../docs/TREASURY_KEY_MANAGEMENT.md).
 
 ## Liquidity principles
 1. Publish the pool address and trading pair.
@@ -64,3 +64,10 @@ COHIBA should not submit a tracked-market listing request until all applicable f
 
 ## Safety
 Never commit seed phrases, private keys, exchange credentials, launch keys, or Railway secrets to GitHub or listing forms.
+
+
+## Governance references
+- [Token Allocation & Vesting Policy](../docs/TOKEN_ALLOCATION_VESTING.md)
+- [Treasury & Key Management Policy](../docs/TREASURY_KEY_MANAGEMENT.md)
+- [Governance Framework](../docs/GOVERNANCE_FRAMEWORK.md)
+- [Launch & Post-Launch Operations](../launch/POST_LAUNCH_OPERATIONS.md)

@@ -1,0 +1,8 @@
+{
+  "name": "bigint-buffer",
+  "version": "1.1.6",
+  "private": true,
+  "description": "COHIBA local security fork of bigint-buffer 1.x. Pure-JS compatibility implementation mitigating CVE-2025-3194; not an upstream release.",
+  "main": "index.cjs",
+  "license": "MIT"
+}

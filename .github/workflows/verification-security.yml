@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install locked dependencies
+        run: npm ci
       - name: Invariant and mutation tests
         run: npm test
       - name: Security posture
@@ -34,3 +35,4 @@ jobs:
             docs/VERIFICATION_SPEC.md
             docs/THREAT_MODEL.md
             docs/SECURITY_CONTROL_MATRIX.md
+            package-lock.json
