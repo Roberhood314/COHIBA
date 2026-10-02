@@ -2670,6 +2670,76 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/community/mining-dashboard"){
+    try{
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      network.miningSessions=Array.isArray(network.miningSessions)?network.miningSessions:[];
+      const profiles=Array.isArray(network.profiles)?network.profiles:[];
+      const sessions=network.miningSessions;
+      const now=Date.now();
+
+      const phoneVerified=profiles.filter(p=>Boolean(p.humanProofs?.phone?.verified)).length;
+      const walletBound=profiles.filter(p=>Boolean(p.wallet)).length;
+      const cohWalletActive=profiles.filter(p=>Boolean(p.cohWallet?.ownerAddress)).length;
+      const pioneerProfiles=profiles.filter(p=>Boolean(p.pioneer)).length;
+      const humanVerified=profiles.filter(p=>publicHumanProof(p).confidence.tier==="HUMAN_VERIFIED").length;
+      const minerIds=new Set(sessions.map(x=>x.profileId).filter(Boolean));
+      const activeMinerIds=new Set(
+        sessions.filter(x=>x.status==="ACTIVE" && Date.parse(x.endsAt)>now).map(x=>x.profileId).filter(Boolean)
+      );
+      const pendingCoh=profiles.reduce((sum,p)=>sum+Number(p.pendingCoh||0),0);
+      const signalPoints=profiles.reduce((sum,p)=>sum+Number(p.signalPoints||0),0);
+      const referralAttributed=profiles.filter(p=>Boolean(p.invitedBy)).length;
+      const trustConnections=profiles.reduce((sum,p)=>sum+(Array.isArray(p.trustConnections)?p.trustConnections.length:0),0);
+
+      const dayKey=value=>{
+        const t=Date.parse(value||"");
+        return Number.isFinite(t)?new Date(t).toISOString().slice(0,10):null;
+      };
+      const days=[];
+      for(let i=13;i>=0;i--){
+        const d=new Date(now-i*86400000).toISOString().slice(0,10);
+        days.push(d);
+      }
+      const growth=days.map(day=>({
+        day,
+        newProfiles:profiles.filter(p=>dayKey(p.createdAt)===day).length,
+        miningStarts:sessions.filter(x=>dayKey(x.startedAt||x.createdAt)===day).length
+      }));
+
+      json(res,200,{
+        ok:true,
+        generatedAt:new Date().toISOString(),
+        phase:"PRE_MAINNET",
+        privacy:"AGGREGATE_ONLY",
+        totals:{
+          profiles:profiles.length,
+          phoneVerified,
+          humanVerified,
+          walletBound,
+          cohWalletActive,
+          minersEver:minerIds.size,
+          activeMiners:activeMinerIds.size,
+          pioneerProfiles,
+          miningSessions:sessions.length,
+          pendingCoh:Number(pendingCoh.toFixed(8)),
+          signalPoints:Number(signalPoints.toFixed(8)),
+          referralAttributed,
+          trustConnections
+        },
+        growth,
+        notes:{
+          pendingCoh:"Provisional off-chain accounting; not transferable COH SPL.",
+          activeMiner:"Distinct profile with an ACTIVE mining session whose endsAt is still in the future.",
+          privacy:"No phone numbers, wallet addresses, session tokens or profile identifiers are returned."
+        }
+      });
+    }catch(error){
+      json(res,500,{ok:false,error:"MINING_DASHBOARD_UNAVAILABLE"});
+    }
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/health"){
     json(res,200,{ok:true,service:"cohiba-web-live"});
     return;
