@@ -21,7 +21,8 @@
     "verify:security": "node scripts/verify-security-posture.mjs",
     "evidence:generate": "node scripts/generate-security-evidence.mjs",
     "verify:all": "npm run test && npm run verify:security && npm run typecheck",
-    "verify:ops": "node scripts/run-operational-drills.mjs"
+    "verify:ops": "node scripts/run-operational-drills.mjs",
+    "node:agent": "node scripts/cohiba-node-agent.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
