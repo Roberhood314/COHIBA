@@ -1071,6 +1071,24 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/human-proof/readiness"){
+    const phone=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+    const google=Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET);
+    const facebook=Boolean(process.env.FACEBOOK_APP_ID&&process.env.FACEBOOK_APP_SECRET&&process.env.FACEBOOK_GRAPH_VERSION);
+    const identityPepperReady=Boolean(process.env.HUMAN_IDENTITY_PEPPER);
+    const reviewKeyReady=Boolean(process.env.HUMAN_SIGNAL_REVIEW_KEY);
+    const providersReady=phone&&google&&facebook;
+    json(res,200,{
+      ok:true,
+      mode:providersReady?"FULL_PROVIDER_READY":"GRACE",
+      providers:{phone,google,facebook},
+      internal:{identityPepperReady,reviewKeyReady},
+      miningHumanProofEnforced:process.env.ENFORCE_HUMAN_PROOF_FOR_MINING==="true",
+      fullHumanVerificationReady:providersReady&&identityPepperReady&&reviewKeyReady
+    });
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/human-proof/status"){
     try{
       const store=ensureHumanProofStore(loadHumanSignalNetwork());
