@@ -25,3 +25,14 @@ test("oauth state expires and is single-use",()=>{
   s.used=true;
   assert.equal(isOauthStateValid(s),false);
 });
+
+test("Vietnam phone formats normalize to E.164",()=>{
+  assert.equal(normalizePhone("0901234567"),"+84901234567");
+  assert.equal(normalizePhone("84901234567"),"+84901234567");
+  assert.equal(normalizePhone("+84901234567"),"+84901234567");
+  assert.equal(normalizePhone("+84 901 234 567"),"+84901234567");
+});
+test("invalid phone formats are rejected",()=>{
+  assert.throws(()=>normalizePhone(""),/INVALID_E164_PHONE/);
+  assert.throws(()=>normalizePhone("1234"),/INVALID_E164_PHONE/);
+});
