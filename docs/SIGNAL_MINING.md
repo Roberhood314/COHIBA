@@ -132,3 +132,24 @@ The public mining UI should show:
 - infrastructure readiness.
 
 Mining must remain explainable rather than an opaque reward engine.
+
+
+## Pre-Mainnet / Post-Mainnet economic gate
+
+### PRE-MAINNET
+- Users mine only non-transferable Signal Points (SP).
+- SP cannot be sold, transferred, exchanged or traded.
+- Signal Mining emits no COH.
+- SP does not create a guaranteed entitlement to COH.
+- The public economy status endpoint must report COH trading as disabled.
+
+### POST-MAINNET
+COH transfer/trading may only be enabled after all of the following are true:
+- the official COH Mainnet mint exists and is verified;
+- explicit owner Mainnet approval was provided;
+- a public community distribution policy has been approved;
+- legal/compliance review for the intended distribution/market activity is complete where required;
+- the project has a real supported market or exchange/DEX venue;
+- an explicit production market gate is enabled.
+
+SP-to-COH conversion is never implied by Signal Mining. Any future distribution formula must be published separately before activation.
