@@ -257,7 +257,8 @@ $("#onboardCreateProfile")?.addEventListener("click",async()=>{
   try{
     const r=await fetch("/api/account/onboarding/profile",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({displayName,onboardingToken})});
     const x=await r.json();if(!r.ok)throw new Error(x.error||"PROFILE_CREATE_FAILED");
-    setOnboardingState('<span class="verified">Tạo tài khoản thành công ✓ Bây giờ hãy kết nối ví COH.</span>');
+    if(x.token){authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);}
+    setOnboardingState('<span class="verified">Tài khoản đã tạo và số điện thoại đã xác minh ✓ Bây giờ hãy kết nối ví COH.</span>');
     $("#accountStep3").style.display="none";
     $("#connectWallet").scrollIntoView({behavior:"smooth",block:"center"});
   }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
@@ -271,19 +272,20 @@ $("#connectWallet").addEventListener("click",async()=>{
     }
     const conn=await provider.connect();
     const wallet=conn.publicKey.toString();
-    let r=await fetch("/api/human-signal/auth/challenge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({wallet})});
+    let r=await api("/api/human-signal/auth/challenge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({wallet})});
     let x=await r.json(); if(!r.ok) throw new Error(x.error||"CHALLENGE_FAILED");
     const encoded=new TextEncoder().encode(x.challenge.message);
     const signed=await provider.signMessage(encoded,"utf8");
     const bytes=signed.signature;
     let binary=""; for(const b of bytes) binary+=String.fromCharCode(b);
     const signature=btoa(binary);
-    r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature,onboardingToken})});
+    r=await api("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature,onboardingToken})});
     x=await r.json(); if(!r.ok) throw new Error(x.error||"VERIFY_FAILED");
     authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
     localStorage.removeItem("cohiba_onboarding_id");
     localStorage.removeItem("cohiba_onboarding_token");
     onboardingId=""; onboardingToken="";
+    setOnboardingState('<span class="verified">Ví đã xác minh và COH Wallet đã kích hoạt ✓</span>');
     await loadIdentity(); await loadMining(); await loadPioneer();
   }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
