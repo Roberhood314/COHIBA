@@ -7,6 +7,19 @@ async function api(path,opts={}){
   if(authToken) headers.authorization="Bearer "+authToken;
   return fetch(path,{...opts,headers});
 }
+async function loadHumanProof(){
+  if(!authToken){
+    $("#sendOtp").disabled=true; $("#checkOtp").disabled=true; $("#verifyGoogle").disabled=true; $("#verifyFacebook").disabled=true;
+    return;
+  }
+  try{
+    const r=await api("/api/human-proof/status"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"HUMAN_PROOF_STATUS_FAILED");
+    const p=x.proof||{},c=p.confidence||{};
+    $("#humanProofState").innerHTML='<strong>'+esc(c.tier||"UNVERIFIED")+'</strong><p>Confidence: '+esc(c.score||0)+'/100</p><p class="note">Phone '+(p.phone?.verified?"✓":"—")+' · Google '+(p.google?.verified?"✓":"—")+' · Facebook '+(p.facebook?.verified?"✓":"—")+' · Anti-bot '+(p.antiBot?"✓":"—")+'</p>';
+    $("#sendOtp").disabled=false; $("#checkOtp").disabled=false; $("#verifyGoogle").disabled=false; $("#verifyFacebook").disabled=false;
+  }catch(err){$("#humanProofState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
+}
 async function loadMining(){
   if(!authToken){
     $("#startMining").disabled=true; $("#claimMining").disabled=true;
@@ -34,7 +47,7 @@ async function loadIdentity(){
       if(r.ok){
         const x=await r.json(),p=x.profile;
         $("#identityState").innerHTML='<strong>'+esc(p.id)+'</strong><p class="note">Roles: '+esc((p.roles||[]).join(" · "))+'</p><p>Active days: '+esc(p.activeDays)+' · streak: '+esc(p.streak)+' · trust: '+esc(p.trustConnections)+'/5 · trust score: '+esc(p.trustScore)+'</p>';
-        $("#dailySignal").disabled=false; $("#addTrust").disabled=false; $("#startMining").disabled=false;
+        $("#dailySignal").disabled=false; $("#addTrust").disabled=false; $("#startMining").disabled=false; $("#sendOtp").disabled=false; $("#checkOtp").disabled=false; $("#verifyGoogle").disabled=false; $("#verifyFacebook").disabled=false;
       }else{authToken="";localStorage.removeItem("cohiba_human_signal_token");}
     }
   }catch{}
@@ -89,6 +102,27 @@ $("#dailySignal").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
   await loadIdentity();
 });
+$("#sendOtp").addEventListener("click",async()=>{
+  const phone=$("#phoneNumber").value.trim(),consent=$("#phoneConsent").checked;
+  const r=await api("/api/human-proof/phone/start",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,consent})}); const x=await r.json();
+  $("#humanProofState").innerHTML=r.ok?'<p class="verified">OTP sent.</p>':'<p class="rejected">'+esc(x.error)+'</p>';
+});
+$("#checkOtp").addEventListener("click",async()=>{
+  const phone=$("#phoneNumber").value.trim(),code=$("#otpCode").value.trim();
+  const r=await api("/api/human-proof/phone/check",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,code})}); const x=await r.json();
+  if(!r.ok) return $("#humanProofState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  await loadHumanProof();
+});
+$("#verifyGoogle").addEventListener("click",async()=>{
+  const r=await api("/api/human-proof/google/start",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#humanProofState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  location.href=x.authUrl;
+});
+$("#verifyFacebook").addEventListener("click",async()=>{
+  const r=await api("/api/human-proof/facebook/start",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#humanProofState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  location.href=x.authUrl;
+});
 $("#startMining").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/mining/start",{method:"POST"}); const x=await r.json();
   if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
@@ -105,5 +139,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadMining();
+load(); loadIdentity(); loadMining(); loadHumanProof();
 })();
