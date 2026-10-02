@@ -183,11 +183,31 @@ function authHumanSignalProfile(req,store){
   return profile;
 }
 
-function verifiedReputationForProfile(profileId,records){
-  return records.filter(r=>r.profileId===profileId && r.status==="VERIFIED").reduce((sum,r)=>{
+function verifiedReputationForProfile(profileId,records,now=Date.now()){
+  const cutoff=now-30*86400000;
+  return records.filter(r=>{
+    const ts=Date.parse(r.reviewedAt||r.submittedAt||0);
+    return r.profileId===profileId && r.status==="VERIFIED" && Number.isFinite(ts) && ts>=cutoff;
+  }).reduce((sum,r)=>{
     const weights={SECURITY:30,CODE:25,RESEARCH:20,DOCUMENTATION:15,TRANSLATION:12,CREATIVE:10,COMMUNITY:8};
     return sum+(weights[r.type]||0);
   },0);
+}
+
+function noteMeaningfulAction(profile,type,now=Date.now()){
+  profile.utilityActions=Array.isArray(profile.utilityActions)?profile.utilityActions:[];
+  const cutoff=now-7*86400000;
+  profile.utilityActions=profile.utilityActions.filter(x=>Date.parse(x.at)>=cutoff);
+  const today=new Date(now).toISOString().slice(0,10);
+  const dedupeKey=type+":"+today;
+  if(!profile.utilityActions.some(x=>x.key===dedupeKey)){
+    profile.utilityActions.push({key:dedupeKey,type,at:new Date(now).toISOString()});
+  }
+}
+
+function meaningfulActions7d(profile,now=Date.now()){
+  const cutoff=now-7*86400000;
+  return (Array.isArray(profile.utilityActions)?profile.utilityActions:[]).filter(x=>Date.parse(x.at)>=cutoff).length;
 }
 
 function miningRateForProfile(profile,networkStore,contributionStore){
@@ -195,7 +215,7 @@ function miningRateForProfile(profile,networkStore,contributionStore){
     profile,
     profileCount:networkStore.profiles.length,
     verifiedReputation30d:verifiedReputationForProfile(profile.id,contributionStore.records),
-    meaningfulActions7d:Number(profile.meaningfulActions7d||0)
+    meaningfulActions7d:meaningfulActions7d(profile)
   });
 }
 
@@ -677,6 +697,7 @@ const server=http.createServer(async (req,res)=>{
         profile.streak=nextStreak(profile.lastActiveDay,profile.streak,today);
         profile.activeDays=Number(profile.activeDays||0)+1;
         profile.lastActiveDay=today;
+        noteMeaningfulAction(profile,"DAILY_SIGNAL");
         saveHumanSignalNetwork(store);
       }
       const contributions=loadHumanSignal().records;
@@ -708,6 +729,7 @@ const server=http.createServer(async (req,res)=>{
       if(!profile.trustConnections.includes(target.id)){
         if(profile.trustConnections.length>=MAX_TRUST_CONNECTIONS) throw new Error("TRUST_CONNECTION_LIMIT");
         profile.trustConnections.push(target.id);
+        noteMeaningfulAction(profile,"TRUST_CONNECTION");
         saveHumanSignalNetwork(store);
       }
       const contributions=loadHumanSignal().records;
@@ -871,6 +893,14 @@ const server=http.createServer(async (req,res)=>{
       };
       store.records.push(record);
       saveHumanSignal(store);
+      if(linkedProfileId){
+        const networkStore=loadHumanSignalNetwork();
+        const linkedProfile=networkStore.profiles.find(x=>x.id===linkedProfileId);
+        if(linkedProfile){
+          noteMeaningfulAction(linkedProfile,"CONTRIBUTION_SUBMIT");
+          saveHumanSignalNetwork(networkStore);
+        }
+      }
       json(res,201,{ok:true,record:publicContribution(record)});
     }catch(error){
       const message=String(error?.message||error);
