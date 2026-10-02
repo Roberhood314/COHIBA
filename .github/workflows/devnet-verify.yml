@@ -3,6 +3,8 @@ name: COHIBA Local Token Verify
 on:
   push:
     branches: [devnet, main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,10 +19,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
-      - name: Install JS dependencies
-        run: npm install
+      - name: Install locked JS dependencies
+        run: npm ci
 
       - name: Typecheck
         run: npm run typecheck
