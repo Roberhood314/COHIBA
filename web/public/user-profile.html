@@ -2,93 +2,76 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hồ sơ COH — COHIBA</title>
-<meta name="description" content="Hồ sơ người dùng COHIBA Human Signal: ví COH, xác thực, mining, Pending COH và trạng thái Mainnet.">
+<title>Tài khoản khai thác COH — COHIBA</title>
+<meta name="description" content="Tạo tài khoản, xác minh số điện thoại và bắt đầu khai thác COH.">
 <link rel="canonical" href="https://cohibameme.site/user-profile.html">
 <style>
-:root{--bg:#050403;--panel:#0d0906;--gold:#e5bd61;--text:#eee9df;--muted:#aa9f91;--line:rgba(229,189,97,.24);--ok:#98d5a2;--bad:#ed9287}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#34250f 0,#090704 38%,#050403 75%);color:var(--text);font:15px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
-main{width:min(1080px,calc(100% - 28px));margin:auto;padding:28px 0 80px}a{color:var(--gold)}h1,h2,h3{margin-top:0}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:20px}.brand{font-weight:900;color:var(--gold);text-decoration:none}.tag{font-size:12px;letter-spacing:.12em;color:var(--gold);font-weight:800}
-.hero{border:1px solid var(--line);border-radius:16px;padding:22px;background:linear-gradient(180deg,rgba(229,189,97,.10),rgba(13,9,6,.92));margin-bottom:16px}
-.hero h1{font:700 clamp(36px,7vw,66px)/1 Georgia,serif;color:var(--gold);margin:8px 0 10px}.hero p{max-width:780px;color:#d8cfbf}.status-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}.muted{color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid var(--line);background:rgba(13,9,6,.92);border-radius:14px;padding:18px}.wide{grid-column:1/-1}.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:12px;padding:14px}.metric b{font-size:24px;color:var(--gold);display:block}.metric small{color:var(--muted)}
-.wallet{word-break:break-all;font-family:ui-monospace,monospace}.check{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.check:first-child{border-top:0}.history{overflow:auto}.history table{width:100%;border-collapse:collapse;min-width:720px}.history th,.history td{text-align:left;padding:10px;border-top:1px solid var(--line);font-size:13px}.history th{color:var(--muted)}
-button,.button{display:inline-block;background:var(--gold);color:#151005;border:0;border-radius:9px;padding:11px 15px;font-weight:900;text-decoration:none;cursor:pointer}.ghost{background:transparent;color:var(--gold);border:1px solid var(--line)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{color:var(--muted)}
-details{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}summary{cursor:pointer;color:var(--gold);font-weight:800}
-@media(max-width:760px){.grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}.top{align-items:flex-start}.hero{padding:17px}.card{padding:15px}}
-button,input,textarea,select{font-family:inherit;font-size:16px;line-height:1.4}h1,h2,h3,p,a,span,strong,b{overflow-wrap:break-word}@media(max-width:760px){.hero h1{font-size:clamp(34px,10vw,52px);line-height:1.04}.tag{letter-spacing:.10em}}
+:root{--bg:#050403;--panel:#0e0a06;--gold:#ebbf58;--gold2:#ffe49a;--text:#f4efe5;--muted:#a79d90;--line:rgba(235,191,88,.25);--ok:#99d8a4;--bad:#ef9285}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:radial-gradient(circle at 50% -15%,#38270d 0,#0a0704 36%,#050403 72%);color:var(--text);font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+main{width:min(760px,calc(100% - 28px));margin:auto;padding:24px 0 70px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.brand{color:var(--gold2);font-weight:900;text-decoration:none;letter-spacing:.1em}.back{color:var(--gold);text-decoration:none;font-size:13px}
+.hero{margin-bottom:16px}.hero p{color:var(--muted);margin:0}.hero h1{font:700 clamp(38px,10vw,70px)/1 Georgia,"Times New Roman",serif;color:var(--gold2);margin:8px 0 12px}
+.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(25,18,9,.96),rgba(10,7,4,.97));padding:22px;margin-top:14px}.card h2{margin:0 0 8px;color:var(--gold2)}.muted{color:var(--muted)}.ok{color:var(--ok)}.bad{color:var(--bad)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.step{border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;color:var(--muted)}.step.active{border-color:var(--gold);color:var(--gold2);background:rgba(235,191,88,.08)}.step.done{color:var(--ok)}
+label{display:block;font-weight:800;margin:14px 0 7px}input{width:100%;padding:14px 15px;border:1px solid var(--line);border-radius:10px;background:#070503;color:var(--text);font:inherit;font-size:16px}input:focus{outline:2px solid rgba(235,191,88,.25);border-color:var(--gold)}
+.check{display:flex;gap:10px;align-items:flex-start;margin-top:14px}.check input{width:22px;height:22px;flex:0 0 auto;margin-top:1px}.btn{width:100%;margin-top:16px;padding:14px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,#d9a83b,#f2d170);color:#120d05;font:900 15px/1.2 inherit;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.ghost{background:transparent;color:var(--gold2);border:1px solid var(--line)}
+.state{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);min-height:30px}.profile-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:11px 0}.profile-row:first-child{border-top:0}.profile-row span{color:var(--muted)}.big{font-size:38px;color:var(--gold2);font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none!important}
+@media(max-width:600px){.steps{grid-template-columns:1fr}.actions{grid-template-columns:1fr}.card{padding:18px}}
 </style>
 </head>
 <body>
 <main>
-<div class="top"><a class="brand" href="/">COHIBA</a><a href="/human-signal.html#mining">← Mining</a></div>
-<section class="hero">
-<p class="tag">COH NETWORK · USER PROFILE</p>
-<h1>Hồ sơ COH của bạn</h1>
-<p>Trung tâm trạng thái tài khoản trong mạng COHIBA: xác thực con người, COH Wallet, Pending COH, mining và điều kiện Mainnet.</p>
-<div id="topStatus" class="status-row"><span class="pill muted">Đang tải hồ sơ…</span></div>
-<div class="actions"><a class="button" href="/human-signal.html#mining">KHAI THÁC COH NGAY</a><button id="refreshProfile" class="ghost" type="button">Làm mới</button></div>
-</section>
+<div class="top"><a class="brand" href="/">COHIBA</a><a class="back" href="/">Trang chủ</a></div>
+<section class="hero"><p>COH MINING ACCOUNT</p><h1>Tạo tài khoản khai thác.</h1><p>Chỉ 3 bước: số điện thoại → OTP → hồ sơ. Sau đó có thể bắt đầu khai thác COH ngay.</p></section>
 
-<section id="loginRequired" class="card" style="display:none">
-<h2>Chưa đăng nhập hồ sơ</h2><p class="muted">Hãy xác minh ví Solana trước để mở hồ sơ COH.</p>
-<a class="button" href="/human-signal.html#quickMiningStart">XÁC MINH VÍ</a>
-</section>
-
-<div id="dashboard" style="display:none">
-<section class="metric-grid">
-<div class="metric"><small>Pending COH</small><b id="pendingCoh">0</b><span class="muted">Pre-Mainnet</span></div>
-<div class="metric"><small>Signal Points</small><b id="signalPoints">0</b><span class="muted">SP</span></div>
-<div class="metric"><small>Active Days</small><b id="activeDays">0</b><span class="muted">ngày</span></div>
-<div class="metric"><small>Trust</small><b id="trustCount">0</b><span class="muted">kết nối</span></div>
-</section>
-
-<div class="grid" style="margin-top:14px">
-<section class="card">
-<h2>Danh tính trong mạng COH</h2>
-<div id="identityBox"></div>
-</section>
-<section class="card">
-<h2>COH Wallet</h2>
-<div id="walletBox"></div>
-</section>
-
-<section class="card">
-<h2>Human Verification</h2>
-<div id="proofBox"></div>
-</section>
-<section class="card">
-<h2>Mainnet Eligibility</h2>
-<div id="mainnetBox"></div>
-</section>
-
-<section class="card wide">
-<h2>Tiến trình tài khoản</h2>
-<div id="checklist"></div>
-</section>
-
-<section class="card wide">
-<h2>Mining hiện tại</h2>
-<div id="miningBox"></div>
-<details><summary>Xem thông số mining</summary><div id="miningTech"></div></details>
-</section>
-
-<section class="card wide history">
-<h2>Lịch sử phiên mining</h2>
-<div id="historyBox"></div>
-</section>
-
-<section class="card">
-<h2>Mạng lưới & đóng góp</h2>
-<div id="networkBox"></div>
-</section>
-<section class="card">
-<h2>Pioneer / Referral</h2>
-<div id="pioneerBox"></div>
-</section>
+<div class="steps">
+<div id="stepBadge1" class="step active">1 · Số điện thoại</div>
+<div id="stepBadge2" class="step">2 · Xác minh OTP</div>
+<div id="stepBadge3" class="step">3 · Hồ sơ & Mining</div>
 </div>
+
+<section id="stepPhone" class="card">
+<h2>Tạo tài khoản khai thác</h2>
+<p class="muted">Nhập số Việt Nam dạng 0901234567 hoặc +84901234567.</p>
+<label>Số điện thoại</label>
+<input id="phone" inputmode="tel" autocomplete="tel" placeholder="0901234567">
+<label class="check"><input id="consent" type="checkbox"><span>Tôi đồng ý nhận SMS OTP để xác minh tài khoản khai thác COH.</span></label>
+<button id="sendOtp" class="btn" type="button">GỬI MÃ OTP</button>
+<div id="phoneState" class="state muted">Chưa gửi OTP.</div>
+</section>
+
+<section id="stepOtp" class="card hidden">
+<h2>Xác minh số điện thoại</h2>
+<p class="muted">Nhập mã OTP được gửi qua SMS.</p>
+<label>Mã OTP</label>
+<input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Nhập mã OTP">
+<button id="verifyOtp" class="btn" type="button">XÁC MINH OTP</button>
+<button id="backPhone" class="btn ghost" type="button">ĐỔI SỐ ĐIỆN THOẠI</button>
+<div id="otpState" class="state muted">Đang chờ mã OTP.</div>
+</section>
+
+<section id="stepProfile" class="card hidden">
+<h2>Tạo hồ sơ COH</h2>
+<p class="muted">Đặt tên hiển thị cho tài khoản khai thác của bạn.</p>
+<label>Tên tài khoản</label>
+<input id="displayName" maxlength="32" autocomplete="nickname" placeholder="Ví dụ: JohnPC">
+<button id="createAccount" class="btn" type="button">TẠO HỒ SƠ & ĐĂNG NHẬP</button>
+<div id="profileState" class="state muted">Số điện thoại đã xác minh.</div>
+</section>
+
+<section id="accountReady" class="card hidden">
+<h2>Hồ sơ khai thác COH</h2>
+<div class="profile-row"><span>Tên tài khoản</span><b id="accountName">—</b></div>
+<div class="profile-row"><span>Profile ID</span><b id="profileId">—</b></div>
+<div class="profile-row"><span>Xác minh điện thoại</span><b class="ok">✓ VERIFIED</b></div>
+<div class="profile-row"><span>Pending COH</span><b id="pendingCoh" class="big">0</b></div>
+<div class="profile-row"><span>Trạng thái mining</span><b id="miningStatus">IDLE</b></div>
+<div class="actions">
+<a class="btn" href="/mining.html">KHAI THÁC COH NGAY</a>
+<button id="logout" class="btn ghost" type="button">ĐĂNG XUẤT</button>
 </div>
+<p class="muted" style="font-size:12px;margin-top:14px">Pending COH là số dư provisional off-chain trước Mainnet; chưa phải COH SPL on-chain và chưa thể chuyển/giao dịch.</p>
+</section>
 </main>
-<script src="/user-profile.js"></script>
+<script src="/user-profile.js?v=phone-mining-v2"></script>
 </body>
 </html>
