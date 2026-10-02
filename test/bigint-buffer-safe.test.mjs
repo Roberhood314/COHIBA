@@ -5,13 +5,13 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const shim = require("../vendor/bigint-buffer-safe/index.cjs");
+const rootPkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const forkPkg = JSON.parse(fs.readFileSync(new URL("../vendor/bigint-buffer-safe/package.json", import.meta.url), "utf8"));
 
-test("patched bigint-buffer fork is installed with the expected local version", () => {
-  const installed = JSON.parse(
-    fs.readFileSync(new URL("../node_modules/bigint-buffer/package.json", import.meta.url), "utf8")
-  );
-  assert.equal(installed.name, "bigint-buffer");
-  assert.equal(installed.version, "1.1.6");
+test("production dependencies pin bigint-buffer to the audited local security fork", () => {
+  assert.equal(rootPkg.overrides?.["bigint-buffer"], "file:vendor/bigint-buffer-safe");
+  assert.equal(forkPkg.name, "bigint-buffer");
+  assert.equal(forkPkg.version, "1.1.6");
 });
 
 test("patched bigint-buffer fork preserves API and rejects unsafe input", () => {
