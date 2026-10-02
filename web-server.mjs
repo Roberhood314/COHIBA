@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Connection, Keypair, PublicKey, clusterApiUrl } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction, clusterApiUrl } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint, setAuthority, AuthorityType } from "@solana/spl-token";
 import { createV1, findMetadataPda, mplTokenMetadata, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { keypairIdentity, percentAmount, publicKey as umiPublicKey } from "@metaplex-foundation/umi";
@@ -24,6 +24,7 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://cohiba-web-live-
 const CANONICAL_PUBLIC_ORIGIN = "https://cohibameme.site";
 const METADATA_URI = `${PUBLIC_BASE_URL.replace(/\/$/,"")}/token-metadata.json`;
 const MAINNET_MIN_SOL = 0.03;
+const HSC_MEMO_PROGRAM=new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const launchAttempts = new Map();
 const apiRateWindows = new Map();
 
@@ -185,6 +186,45 @@ function hscCompositeStore(){
     profiles:net.profiles||[],
     contributions:contrib.records||[]
   };
+}
+
+async function anchorHscStateDevnet(){
+  if(process.env.ALLOW_HSC_DEVNET_ANCHOR!=="true") throw new Error("HSC_DEVNET_ANCHOR_LOCKED");
+  const connection=await ensureDevnetFunding(DEVNET_PAYER);
+  const composite=hscCompositeStore();
+  const state=coreStateRoot(composite);
+  const core=loadHumanSignalCore();
+  core.anchors=Array.isArray(core.anchors)?core.anchors:[];
+  const existing=core.anchors.find(a=>a.network==="devnet"&&a.stateRoot===state.stateRoot);
+  if(existing) return existing;
+  const payload={
+    protocol:"COHIBA_HSC",
+    version:"0.1",
+    stateRoot:state.stateRoot,
+    eventHead:verifyEventChain(composite.events||[]).head||null,
+    createdAt:new Date().toISOString()
+  };
+  const data=Buffer.from(JSON.stringify(payload),"utf8");
+  if(data.length>566) throw new Error("HSC_ANCHOR_PAYLOAD_TOO_LARGE");
+  const tx=new Transaction().add(new TransactionInstruction({
+    keys:[],
+    programId:HSC_MEMO_PROGRAM,
+    data
+  }));
+  const signature=await sendAndConfirmTransaction(connection,tx,[DEVNET_PAYER],{commitment:"confirmed"});
+  const anchorRecord={
+    id:"ANCHOR-"+state.stateRoot.slice(0,16).toUpperCase(),
+    network:"devnet",
+    stateRoot:state.stateRoot,
+    eventHead:payload.eventHead,
+    signature,
+    explorer:"https://explorer.solana.com/tx/"+signature+"?cluster=devnet",
+    anchoredAt:new Date().toISOString()
+  };
+  core.anchors.push(anchorRecord);
+  appendCoreEvent(core,{type:"STATE_ROOT_ANCHORED",actor:"SYSTEM",subject:anchorRecord.id,data:{network:"devnet",stateRoot:state.stateRoot,signature}});
+  saveHumanSignalCore(core);
+  return anchorRecord;
 }
 
 function emitHsc(type,actor="SYSTEM",subject=null,data={}){
@@ -932,6 +972,30 @@ const server=http.createServer(async (req,res)=>{
       anchoredOnSolana:false,
       note:"Current HSC root is deterministic off-chain application state. Solana anchoring is a later Devnet phase."
     });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/hsc/anchors"){
+    const core=loadHumanSignalCore();
+    json(res,200,{ok:true,anchors:(core.anchors||[]).slice().reverse().slice(0,100)});
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/hsc/anchor/devnet"){
+    try{
+      requireHumanSignalOrigin(req);
+      requireHumanSignalReviewKey(req);
+      const anchorRecord=await anchorHscStateDevnet();
+      json(res,200,{ok:true,anchor:anchorRecord});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=
+        m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        m==="HUMAN_SIGNAL_REVIEW_KEY_INVALID"?403:
+        ["HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED","HSC_DEVNET_ANCHOR_LOCKED","DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"].includes(m)?409:
+        500;
+      json(res,status,{ok:false,error:m});
+    }
     return;
   }
 
