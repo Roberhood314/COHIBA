@@ -57,30 +57,37 @@ test("Genesis Pioneer starts at +50% and fades to zero after 180 active days",()
   assert.equal(pioneerBonus({pioneer:false,activeDays:0}),0);
 });
 
-test("stacked mining boosts are capped at 2.5x",()=>{
+test("hybrid mining honors 60/40 Human/Resource weights and 2.5x ceiling",()=>{
   const rate=calculateMiningRate({
     profile:{pioneer:true,activeDays:0,trustConnections:[1,2,3,4,5],streak:999},
     profileCount:0,
     verifiedReputation30d:1000000,
     meaningfulActions7d:1000000,
     referralBoostInput:1,
-    eligibilityFactor:1
+    eligibilityFactor:1,
+    resourceScoreInput:1
   });
+  assert.equal(rate.model,"HYBRID_HUMAN_RESOURCE");
+  assert.deepEqual(rate.weights,{human:0.60,resource:0.40});
+  assert.equal(rate.humanScore,1);
+  assert.equal(rate.resourceScore,1);
   assert.equal(rate.totalMultiplier,2.5);
-  assert.ok(rate.rawTotalMultiplier>2.5);
   assert.equal(rate.rate,2.5);
 });
 
-test("Genesis Pioneer base launch rate is 1.5 SP/Pending COH per hour",()=>{
-  const rate=calculateMiningRate({
+test("resource contribution increases a new-session rate without rewarding CPU/GPU directly",()=>{
+  const input={
     profile:{pioneer:true,activeDays:0,trustConnections:[],streak:0},
     profileCount:0,
     verifiedReputation30d:0,
     meaningfulActions7d:0,
     referralBoostInput:0,
     eligibilityFactor:1
-  });
-  assert.equal(rate.baseRate,1);
-  assert.equal(rate.totalMultiplier,1.5);
-  assert.equal(rate.rate,1.5);
+  };
+  const withoutResource=calculateMiningRate({...input,resourceScoreInput:0});
+  const withResource=calculateMiningRate({...input,resourceScoreInput:0.75});
+  assert.equal(withoutResource.baseRate,1);
+  assert.ok(withoutResource.rate>1);
+  assert.ok(withResource.rate>withoutResource.rate);
+  assert.ok(withResource.totalMultiplier<=2.5);
 });
