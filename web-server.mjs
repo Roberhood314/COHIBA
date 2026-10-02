@@ -12,6 +12,7 @@ import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToke
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -291,12 +292,31 @@ function meaningfulActions7d(profile,now=Date.now()){
   return (Array.isArray(profile.utilityActions)?profile.utilityActions:[]).filter(x=>Date.parse(x.at)>=cutoff).length;
 }
 
+function humanProofProvidersReady(){
+  const phone=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+  const google=Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET);
+  const facebook=Boolean(process.env.FACEBOOK_APP_ID&&process.env.FACEBOOK_APP_SECRET&&process.env.FACEBOOK_GRAPH_VERSION);
+  const pepper=Boolean(process.env.HUMAN_IDENTITY_PEPPER);
+  return {phone,google,facebook,pepper,ready:pepper&&phone&&(google||facebook)};
+}
+
+function verifiedReferralCountFor(profile,profiles){
+  if(!profile?.referralCode) return 0;
+  return (profiles||[]).filter(p=>p.invitedBy===profile.referralCode && publicHumanProof(p).confidence.tier==="HUMAN_VERIFIED").length;
+}
+
 function miningRateForProfile(profile,networkStore,contributionStore){
+  const providers=humanProofProvidersReady();
+  const enforce=process.env.MINING_HUMAN_PROOF_MODE==="enforced" && providers.ready;
+  const support=publicPioneerSupport(profile,{providersReady:providers.ready,enforceHumanProof:enforce});
+  const verifiedReferrals=verifiedReferralCountFor(profile,networkStore.profiles);
   return calculateMiningRate({
     profile,
     profileCount:networkStore.profiles.length,
     verifiedReputation30d:verifiedReputationForProfile(profile.id,contributionStore.records),
-    meaningfulActions7d:meaningfulActions7d(profile)
+    meaningfulActions7d:meaningfulActions7d(profile),
+    referralBoostInput:referralBoost(verifiedReferrals),
+    eligibilityFactor:support.eligibility.factor
   });
 }
 
@@ -1183,6 +1203,75 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/human-signal/pioneer"){
+    try{
+      const networkStore=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,networkStore);
+      const contributionStore=loadHumanSignal();
+      profile.hasContribution=contributionStore.records.some(r=>r.profileId===profile.id);
+      profile.hasMined=(networkStore.miningSessions||[]).some(x=>x.profileId===profile.id);
+      const providers=humanProofProvidersReady();
+      const enforce=process.env.MINING_HUMAN_PROOF_MODE==="enforced" && providers.ready;
+      const support=publicPioneerSupport(profile,{providersReady:providers.ready,enforceHumanProof:enforce});
+      support.verifiedReferrals=verifiedReferralCountFor(profile,networkStore.profiles);
+      support.referralBoost=referralBoost(support.verifiedReferrals);
+      saveHumanSignalNetwork(networkStore);
+      json(res,200,{
+        ok:true,
+        mode:enforce?"enforced":"grace",
+        providers,
+        support,
+        miningRate:miningRateForProfile(profile,networkStore,contributionStore)
+      });
+    }catch(error){
+      json(res,401,{ok:false,error:String(error?.message||error)});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/referral/apply"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const code=String(parsed.code||"").trim().toUpperCase();
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      if(profile.invitedBy) throw new Error("REFERRAL_ALREADY_ATTRIBUTED");
+      const inviter=store.profiles.find(p=>String(p.referralCode||"").toUpperCase()===code);
+      if(!inviter) throw new Error("REFERRAL_CODE_NOT_FOUND");
+      if(inviter.id===profile.id) throw new Error("SELF_REFERRAL_NOT_ALLOWED");
+      profile.invitedBy=inviter.referralCode;
+      noteMeaningfulAction(profile,"REFERRAL_ATTRIBUTED");
+      saveHumanSignalNetwork(store);
+      json(res,200,{ok:true,invitedBy:profile.invitedBy,note:"Referral boost for inviter counts only after invitee reaches HUMAN_VERIFIED."});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/readiness"){
+    const providers=humanProofProvidersReady();
+    json(res,200,{
+      ok:true,
+      miningHumanProofMode:process.env.MINING_HUMAN_PROOF_MODE||"grace",
+      providers,
+      devnetAnchorEnabled:process.env.ALLOW_HSC_DEVNET_ANCHOR==="true",
+      reviewKeyConfigured:Boolean(process.env.HUMAN_SIGNAL_REVIEW_KEY),
+      missing:[
+        ...(!providers.pepper?["HUMAN_IDENTITY_PEPPER"]:[]),
+        ...(!providers.phone?["TWILIO_VERIFY"]:[]),
+        ...(!providers.google?["GOOGLE_OAUTH"]:[]),
+        ...(!providers.facebook?["FACEBOOK_OAUTH"]:[]),
+        ...(!process.env.HUMAN_SIGNAL_REVIEW_KEY?["HUMAN_SIGNAL_REVIEW_KEY"]:[])
+      ]
+    });
+    return;
+  }
+
   if(req.method==="POST" && raw==="/api/human-signal/mining/start"){
     try{
       requireHumanSignalOrigin(req);
@@ -1201,6 +1290,7 @@ const server=http.createServer(async (req,res)=>{
         profile.pioneer=networkStore.profiles.findIndex(x=>x.id===profile.id)<PIONEER_COHORT_SIZE;
       }
       const rate=miningRateForProfile(profile,networkStore,contributionStore);
+      if(rate.eligibilityFactor<=0) throw new Error("MINING_NOT_ELIGIBLE");
       const session=newMiningSession(profile.id,rate);
       networkStore.miningSessions.push(session);
       saveHumanSignalNetwork(networkStore);
@@ -1208,7 +1298,7 @@ const server=http.createServer(async (req,res)=>{
       json(res,201,{ok:true,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
     }catch(error){
       const message=String(error?.message||error);
-      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:500;
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:message==="MINING_NOT_ELIGIBLE"?403:500;
       json(res,status,{ok:false,error:message});
     }
     return;
