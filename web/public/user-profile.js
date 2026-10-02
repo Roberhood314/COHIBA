@@ -170,14 +170,16 @@ $("#savePassword").addEventListener("click",async()=>{
  $("#savePassword").disabled=true;$("#passwordState").textContent="Đang cập nhật mật khẩu…";
  try{
    if(a!==b)throw new Error("Mật khẩu nhập lại chưa khớp.");
-   await authPost("/api/account/password",{password:a});
+   const x=await authPost("/api/account/password",{password:a});
+   if(x.token){authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);}
    $("#changePassword").value="";$("#changePassword2").value="";
    $("#passwordState").innerHTML='<span class="ok">Mật khẩu đã cập nhật ✓</span>';
  }catch(err){
    $("#passwordState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
  }finally{$("#savePassword").disabled=false}
 });
-$("#logout").addEventListener("click",()=>{
+$("#logout").addEventListener("click",async()=>{
+ try{if(authToken)await authPost("/api/account/logout",{});}catch{}
  localStorage.removeItem("cohiba_human_signal_token");authToken="";location.reload();
 });
 (async()=>{
