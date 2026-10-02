@@ -12,6 +12,7 @@ import { normalizeContribution, contributionDigest, contributionId, publicContri
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
 import { resourceContributionScore, recordResourceHeartbeat } from "./lib/resource-mining.mjs";
+import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } from "./lib/node-jobs.mjs";
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
@@ -2148,6 +2149,89 @@ const server=http.createServer(async (req,res)=>{
         ...(!process.env.HUMAN_SIGNAL_REVIEW_KEY?["HUMAN_SIGNAL_REVIEW_KEY"]:[])
       ]
     });
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/node/jobs/request"){
+    try{
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      network.miningSessions=Array.isArray(network.miningSessions)?network.miningSessions:[];
+      const active=network.miningSessions.some(x=>x.profileId===profile.id && x.status==="ACTIVE" && Date.parse(x.endsAt)>Date.now());
+      if(!active) throw new Error("ACTIVE_MINING_SESSION_REQUIRED");
+
+      profile.resourceProof=profile.resourceProof&&typeof profile.resourceProof==="object"?profile.resourceProof:{};
+      profile.resourceProof.nodeJobs=Array.isArray(profile.resourceProof.nodeJobs)?profile.resourceProof.nodeJobs:[];
+      const now=Date.now();
+      for(const job of profile.resourceProof.nodeJobs){
+        if(job.status==="ISSUED" && Date.parse(job.expiresAt)<=now) job.status="EXPIRED";
+      }
+      const pending=profile.resourceProof.nodeJobs.find(x=>x.status==="ISSUED" && Date.parse(x.expiresAt)>now);
+      if(pending){
+        json(res,200,{ok:true,status:"PENDING_JOB",job:publicNodeJob(pending),retryAfterMs:0});
+        return;
+      }
+
+      const remaining=jobCooldownRemaining(profile.resourceProof.nodeJobs,now);
+      if(remaining>0){
+        json(res,200,{ok:true,status:"COOLDOWN",job:null,retryAfterMs:remaining});
+        return;
+      }
+
+      const job=createNodeJob(profile.id,{now});
+      profile.resourceProof.nodeJobs.push(job);
+      profile.resourceProof.nodeJobs=profile.resourceProof.nodeJobs.slice(-100);
+      saveHumanSignalNetwork(network);
+      json(res,201,{ok:true,status:"ISSUED",job:publicNodeJob(job),retryAfterMs:0});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:
+        m==="ACTIVE_MINING_SESSION_REQUIRED"?409:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/node/jobs/submit"){
+    try{
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      profile.resourceProof=profile.resourceProof&&typeof profile.resourceProof==="object"?profile.resourceProof:{};
+      profile.resourceProof.nodeJobs=Array.isArray(profile.resourceProof.nodeJobs)?profile.resourceProof.nodeJobs:[];
+      profile.resourceProof.jobs=Array.isArray(profile.resourceProof.jobs)?profile.resourceProof.jobs:[];
+
+      const job=profile.resourceProof.nodeJobs.find(x=>x.id===String(parsed.jobId||""));
+      if(!job || job.profileId!==profile.id) throw new Error("NODE_JOB_NOT_FOUND");
+      const checked=verifyNodeJob(job,parsed.result,Date.now());
+      job.completedAt=new Date().toISOString();
+      job.status=checked.ok?"VERIFIED":"REJECTED";
+      delete job.expectedResult;
+
+      profile.resourceProof.jobs.push({
+        jobId:job.id,
+        type:job.type,
+        verified:checked.ok,
+        verifiedAt:checked.ok?job.completedAt:null,
+        rejectedAt:checked.ok?null:job.completedAt
+      });
+      profile.resourceProof.jobs=profile.resourceProof.jobs.slice(-500);
+      saveHumanSignalNetwork(network);
+
+      if(!checked.ok){
+        json(res,400,{ok:false,error:checked.error,verified:false,resource:resourceContributionScore(profile)});
+        return;
+      }
+      emitHsc("RESOURCE_JOB_VERIFIED",profile.id,job.id,{type:job.type,protocolVersion:job.protocolVersion});
+      json(res,200,{ok:true,verified:true,resource:resourceContributionScore(profile)});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:
+        m==="REQUEST_TOO_LARGE"?413:
+        ["NODE_JOB_NOT_FOUND","NODE_JOB_NOT_ACTIVE","NODE_JOB_EXPIRED","NODE_JOB_RESULT_INVALID","NODE_JOB_RESULT_MISMATCH"].includes(m)?400:500;
+      json(res,status,{ok:false,error:m});
+    }
     return;
   }
 
