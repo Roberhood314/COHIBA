@@ -31,6 +31,7 @@ const HSC_MEMO_PROGRAM=new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcH
 const launchAttempts = new Map();
 const apiRateWindows = new Map();
 const otpRateWindows = new Map();
+const loginRateWindows = new Map();
 
 function rateLimitApi(req){
   const key=requestIp(req);
@@ -204,6 +205,42 @@ function cleanDisplayName(value){
   if(!/^[\p{L}\p{N}_. -]+$/u.test(name)) throw new Error("DISPLAY_NAME_INVALID");
   return name;
 }
+
+function validateAccountPassword(value){
+  const password=String(value||"");
+  if(password.length<8 || password.length>128) throw new Error("PASSWORD_LENGTH");
+  if(!/[A-Za-z\p{L}]/u.test(password) || !/\d/.test(password)) throw new Error("PASSWORD_COMPLEXITY");
+  return password;
+}
+function createPasswordCredential(password){
+  const value=validateAccountPassword(password);
+  const salt=crypto.randomBytes(16);
+  const hash=crypto.scryptSync(value,salt,64,{N:16384,r:8,p:1,maxmem:64*1024*1024});
+  return {scheme:"scrypt-v1",salt:salt.toString("base64"),hash:hash.toString("base64"),updatedAt:new Date().toISOString()};
+}
+function verifyPasswordCredential(password,credential){
+  try{
+    if(!credential || credential.scheme!=="scrypt-v1") return false;
+    const salt=Buffer.from(String(credential.salt||""),"base64");
+    const expected=Buffer.from(String(credential.hash||""),"base64");
+    if(salt.length<16 || expected.length!==64) return false;
+    const actual=crypto.scryptSync(String(password||""),salt,64,{N:16384,r:8,p:1,maxmem:64*1024*1024});
+    return crypto.timingSafeEqual(expected,actual);
+  }catch{return false;}
+}
+function enforceLoginRateLimit(req,phoneHash){
+  const now=Date.now(),windowMs=15*60*1000,max=8;
+  const key=requestIp(req)+":"+String(phoneHash||"").slice(0,32);
+  const recent=(loginRateWindows.get(key)||[]).filter(ts=>now-ts<windowMs);
+  if(recent.length>=max) throw new Error("LOGIN_RATE_LIMITED");
+  recent.push(now);loginRateWindows.set(key,recent);
+  if(loginRateWindows.size>5000){
+    for(const [k,times] of loginRateWindows){
+      if(!times.some(ts=>now-ts<windowMs)) loginRateWindows.delete(k);
+    }
+  }
+}
+
 function validOnboardingRecord(record){
   return Boolean(record && record.status==="PROFILE_READY" && record.tokenHash && Date.parse(record.tokenExpiresAt)>Date.now() && !record.usedAt);
 }
@@ -1748,6 +1785,7 @@ const server=http.createServer(async (req,res)=>{
       let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
       const parsed=body?JSON.parse(body):{};
       const token=String(parsed.onboardingToken||"");
+      const password=validateAccountPassword(parsed.password);
       const onboardingStore=loadAccountOnboarding();
       const record=onboardingStore.records.find(x=>x.tokenHash===onboardingTokenHash(token));
       if(!record || record.status!=="PHONE_VERIFIED" || Date.parse(record.tokenExpiresAt)<=Date.now() || record.usedAt) throw new Error("ONBOARDING_TOKEN_INVALID");
@@ -1777,11 +1815,13 @@ const server=http.createServer(async (req,res)=>{
           humanProofs:{
             phone:{verified:true,identityHash:record.phoneHash,verifiedAt:record.phoneVerifiedAt||new Date().toISOString(),provider:record.provider||"infobip"}
           },
-          accountType:"PHONE_MINING"
+          accountType:"PHONE_MINING",
+          passwordCredential:createPasswordCredential(password)
         };
         network.profiles.push(profile);
         created=true;
       }else{
+        profile.passwordCredential=createPasswordCredential(password);
         profile.humanProofs=profile.humanProofs&&typeof profile.humanProofs==="object"?profile.humanProofs:{};
         profile.humanProofs.phone={verified:true,identityHash:record.phoneHash,verifiedAt:record.phoneVerifiedAt||new Date().toISOString(),provider:record.provider||"infobip"};
       }
@@ -1809,8 +1849,56 @@ const server=http.createServer(async (req,res)=>{
     }catch(error){
       const m=String(error?.message||error);
       const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
-        ["DISPLAY_NAME_LENGTH","DISPLAY_NAME_INVALID","ONBOARDING_TOKEN_INVALID"].includes(m)?400:
+        ["DISPLAY_NAME_LENGTH","DISPLAY_NAME_INVALID","ONBOARDING_TOKEN_INVALID","PASSWORD_LENGTH","PASSWORD_COMPLEXITY"].includes(m)?400:
         m==="DISPLAY_NAME_TAKEN"?409:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/login"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const phone=normalizePhone(parsed.phone);
+      const phoneHash=hashIdentity("phone",phone,identityPepper());
+      enforceLoginRateLimit(req,phoneHash);
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=network.profiles.find(p=>p.humanProofs?.phone?.identityHash===phoneHash);
+      if(!profile || !verifyPasswordCredential(String(parsed.password||""),profile.passwordCredential)) throw new Error("INVALID_CREDENTIALS");
+      const session=newSession(profile.id);
+      network.sessions=network.sessions.filter(x=>isSessionValid(x)).slice(-5000);
+      network.sessions.push(session.record);
+      saveHumanSignalNetwork(network);
+      emitHsc("ACCOUNT_LOGIN",profile.id,profile.id,{method:"PHONE_PASSWORD"});
+      json(res,200,{ok:true,token:session.token,expiresAt:session.record.expiresAt,profile:publicHumanProfile(profile,loadHumanSignal().records)});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="LOGIN_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["INVALID_CREDENTIALS","INVALID_E164_PHONE"].includes(m)?401:500;
+      json(res,status,{ok:false,error:m==="INVALID_CREDENTIALS"?"PHONE_OR_PASSWORD_INVALID":m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/password"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const password=validateAccountPassword(parsed.password);
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      profile.passwordCredential=createPasswordCredential(password);
+      saveHumanSignalNetwork(network);
+      emitHsc("ACCOUNT_PASSWORD_UPDATED",profile.id,profile.id,{method:"AUTHENTICATED_SESSION"});
+      json(res,200,{ok:true,passwordConfigured:true,updatedAt:profile.passwordCredential.updatedAt});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:
+        ["PASSWORD_LENGTH","PASSWORD_COMPLEXITY"].includes(m)?400:500;
       json(res,status,{ok:false,error:m});
     }
     return;
