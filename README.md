@@ -235,3 +235,30 @@ Public profiles expose only verification status, timestamps and a confidence tie
 `HUMAN_VERIFIED` requires score >= 70, verified phone, and at least one Google or Facebook proof. This is a Sybil-resistance confidence tier, not government-ID KYC and not a guarantee of global one-person-one-account uniqueness.
 
 See [docs/HUMAN_PROOF.md](docs/HUMAN_PROOF.md).
+
+
+## COHIBA Human Signal Core
+
+Human Signal Core (HSC) is COHIBA's application coordination layer. It is not a new blockchain.
+
+**Solana** provides settlement and public anchoring. **HSC** provides:
+- human identity confidence;
+- trust graph;
+- contribution proofs;
+- Signal Mining;
+- reputation;
+- developer app registry;
+- utility index;
+- append-only hash-chained core events;
+- deterministic state roots;
+- gated Solana Devnet state anchoring.
+
+Public endpoints:
+- `/api/hsc/status`
+- `/api/hsc/state-root`
+- `/api/hsc/apps`
+- `/api/hsc/anchors`
+
+Devnet anchoring requires `ALLOW_HSC_DEVNET_ANCHOR=true` and a separate Human Signal review key. This mechanism does not authorize or trigger COH Mainnet launch.
+
+Architecture: [docs/HUMAN_SIGNAL_CORE.md](docs/HUMAN_SIGNAL_CORE.md)
