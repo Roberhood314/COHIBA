@@ -1,11 +1,31 @@
 (()=>{"use strict";
 const $=s=>document.querySelector(s);
 let authToken=localStorage.getItem("cohiba_human_signal_token")||"";
+let onboardingId=localStorage.getItem("cohiba_onboarding_id")||"";
+let onboardingToken=localStorage.getItem("cohiba_onboarding_token")||"";
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,opts={}){
   const headers={...(opts.headers||{})};
   if(authToken) headers.authorization="Bearer "+authToken;
   return fetch(path,{...opts,headers});
+}
+function setOnboardingState(html){const el=$("#accountOnboardingState");if(el)el.innerHTML=html;}
+function restoreOnboardingUi(){
+  if(onboardingToken){
+    $("#accountStep1").style.display="none";
+    $("#accountStep2").style.display="none";
+    $("#accountStep3").style.display="block";
+    setOnboardingState('<span class="verified">Số điện thoại đã xác minh. Hãy đặt tên tài khoản.</span>');
+  }else if(onboardingId){
+    $("#accountStep1").style.display="none";
+    $("#accountStep2").style.display="block";
+    $("#accountStep3").style.display="none";
+    setOnboardingState('<span class="verified">OTP đã gửi. Hãy nhập mã xác minh.</span>');
+  }
+}
+function phantomBrowseUrl(){
+  const target=location.origin+"/human-signal.html?wallet=verify";
+  return "https://phantom.app/ul/browse/"+encodeURIComponent(target);
 }
 async function loadPioneer(){
   try{
@@ -196,10 +216,46 @@ $("#signalForm").addEventListener("submit",async e=>{
     e.currentTarget.reset(); load();
   }catch(err){box.innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
+$("#onboardSendOtp")?.addEventListener("click",async()=>{
+  const phone=$("#onboardPhone").value.trim(),consent=$("#onboardConsent").checked;
+  setOnboardingState('<span class="note">Đang gửi OTP…</span>');
+  try{
+    const r=await fetch("/api/account/onboarding/phone/start",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,consent})});
+    const x=await r.json(); if(!r.ok) throw new Error(x.error||"OTP_SEND_FAILED");
+    onboardingId=x.onboardingId; localStorage.setItem("cohiba_onboarding_id",onboardingId);
+    $("#accountStep1").style.display="none";$("#accountStep2").style.display="block";
+    setOnboardingState('<span class="verified">OTP đã được gửi.</span>');
+  }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
+});
+$("#onboardCheckOtp")?.addEventListener("click",async()=>{
+  const phone=$("#onboardPhone").value.trim(),code=$("#onboardOtp").value.trim();
+  setOnboardingState('<span class="note">Đang xác minh OTP…</span>');
+  try{
+    const r=await fetch("/api/account/onboarding/phone/check",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,code,onboardingId})});
+    const x=await r.json(); if(!r.ok) throw new Error(x.error||"OTP_VERIFY_FAILED");
+    onboardingToken=x.onboardingToken;localStorage.setItem("cohiba_onboarding_token",onboardingToken);
+    $("#accountStep2").style.display="none";$("#accountStep3").style.display="block";
+    setOnboardingState('<span class="verified">Số điện thoại đã xác minh ✓</span>');
+  }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
+});
+$("#onboardCreateProfile")?.addEventListener("click",async()=>{
+  const displayName=$("#onboardName").value.trim();
+  setOnboardingState('<span class="note">Đang tạo tài khoản…</span>');
+  try{
+    const r=await fetch("/api/account/onboarding/profile",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({displayName,onboardingToken})});
+    const x=await r.json();if(!r.ok)throw new Error(x.error||"PROFILE_CREATE_FAILED");
+    setOnboardingState('<span class="verified">Tạo tài khoản thành công ✓ Bây giờ hãy kết nối ví COH.</span>');
+    $("#accountStep3").style.display="none";
+    $("#connectWallet").scrollIntoView({behavior:"smooth",block:"center"});
+  }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
+});
 $("#connectWallet").addEventListener("click",async()=>{
   try{
     const provider=window.solana;
-    if(!provider?.isPhantom) throw new Error("PHANTOM_WALLET_NOT_FOUND");
+    if(!provider?.isPhantom){
+      location.href=phantomBrowseUrl();
+      return;
+    }
     const conn=await provider.connect();
     const wallet=conn.publicKey.toString();
     let r=await fetch("/api/human-signal/auth/challenge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({wallet})});
@@ -209,9 +265,12 @@ $("#connectWallet").addEventListener("click",async()=>{
     const bytes=signed.signature;
     let binary=""; for(const b of bytes) binary+=String.fromCharCode(b);
     const signature=btoa(binary);
-    r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature})});
+    r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature,onboardingToken})});
     x=await r.json(); if(!r.ok) throw new Error(x.error||"VERIFY_FAILED");
     authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
+    localStorage.removeItem("cohiba_onboarding_id");
+    localStorage.removeItem("cohiba_onboarding_token");
+    onboardingId=""; onboardingToken="";
     await loadIdentity(); await loadMining(); await loadPioneer();
   }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
@@ -289,5 +348,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); syncQuickMiningUi(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
+restoreOnboardingUi(); load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); syncQuickMiningUi(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();
