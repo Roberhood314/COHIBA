@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hồ sơ COH — COHIBA</title>
+<meta name="description" content="Hồ sơ người dùng COHIBA Human Signal: ví COH, xác thực, mining, Pending COH và trạng thái Mainnet.">
+<link rel="canonical" href="https://cohibameme.site/user-profile.html">
+<style>
+:root{--bg:#050403;--panel:#0d0906;--gold:#e5bd61;--text:#eee9df;--muted:#aa9f91;--line:rgba(229,189,97,.24);--ok:#98d5a2;--bad:#ed9287}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#34250f 0,#090704 38%,#050403 75%);color:var(--text);font:15px/1.55 Arial,sans-serif}
+main{width:min(1080px,calc(100% - 28px));margin:auto;padding:28px 0 80px}a{color:var(--gold)}h1,h2,h3{margin-top:0}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:20px}.brand{font-weight:900;color:var(--gold);text-decoration:none}.tag{font-size:12px;letter-spacing:.12em;color:var(--gold);font-weight:800}
+.hero{border:1px solid var(--line);border-radius:16px;padding:22px;background:linear-gradient(180deg,rgba(229,189,97,.10),rgba(13,9,6,.92));margin-bottom:16px}
+.hero h1{font:700 clamp(36px,7vw,66px)/1 Georgia,serif;color:var(--gold);margin:8px 0 10px}.hero p{max-width:780px;color:#d8cfbf}.status-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid var(--line);background:rgba(13,9,6,.92);border-radius:14px;padding:18px}.wide{grid-column:1/-1}.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:12px;padding:14px}.metric b{font-size:24px;color:var(--gold);display:block}.metric small{color:var(--muted)}
+.wallet{word-break:break-all;font-family:ui-monospace,monospace}.check{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.check:first-child{border-top:0}.history{overflow:auto}.history table{width:100%;border-collapse:collapse;min-width:720px}.history th,.history td{text-align:left;padding:10px;border-top:1px solid var(--line);font-size:13px}.history th{color:var(--muted)}
+button,.button{display:inline-block;background:var(--gold);color:#151005;border:0;border-radius:9px;padding:11px 15px;font-weight:900;text-decoration:none;cursor:pointer}.ghost{background:transparent;color:var(--gold);border:1px solid var(--line)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{color:var(--muted)}
+details{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}summary{cursor:pointer;color:var(--gold);font-weight:800}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}.top{align-items:flex-start}.hero{padding:17px}.card{padding:15px}}
+</style>
+</head>
+<body>
+<main>
+<div class="top"><a class="brand" href="/">COHIBA</a><a href="/human-signal.html#mining">← Mining</a></div>
+<section class="hero">
+<p class="tag">COH NETWORK · USER PROFILE</p>
+<h1>Hồ sơ COH của bạn</h1>
+<p>Trung tâm trạng thái tài khoản trong mạng COHIBA: xác thực con người, COH Wallet, Pending COH, mining và điều kiện Mainnet.</p>
+<div id="topStatus" class="status-row"><span class="pill muted">Đang tải hồ sơ…</span></div>
+<div class="actions"><a class="button" href="/human-signal.html#mining">KHAI THÁC COH NGAY</a><button id="refreshProfile" class="ghost" type="button">Làm mới</button></div>
+</section>
+
+<section id="loginRequired" class="card" style="display:none">
+<h2>Chưa đăng nhập hồ sơ</h2><p class="muted">Hãy xác minh ví Solana trước để mở hồ sơ COH.</p>
+<a class="button" href="/human-signal.html#quickMiningStart">XÁC MINH VÍ</a>
+</section>
+
+<div id="dashboard" style="display:none">
+<section class="metric-grid">
+<div class="metric"><small>Pending COH</small><b id="pendingCoh">0</b><span class="muted">Pre-Mainnet</span></div>
+<div class="metric"><small>Signal Points</small><b id="signalPoints">0</b><span class="muted">SP</span></div>
+<div class="metric"><small>Active Days</small><b id="activeDays">0</b><span class="muted">ngày</span></div>
+<div class="metric"><small>Trust</small><b id="trustCount">0</b><span class="muted">kết nối</span></div>
+</section>
+
+<div class="grid" style="margin-top:14px">
+<section class="card">
+<h2>Danh tính trong mạng COH</h2>
+<div id="identityBox"></div>
+</section>
+<section class="card">
+<h2>COH Wallet</h2>
+<div id="walletBox"></div>
+</section>
+
+<section class="card">
+<h2>Human Verification</h2>
+<div id="proofBox"></div>
+</section>
+<section class="card">
+<h2>Mainnet Eligibility</h2>
+<div id="mainnetBox"></div>
+</section>
+
+<section class="card wide">
+<h2>Tiến trình tài khoản</h2>
+<div id="checklist"></div>
+</section>
+
+<section class="card wide">
+<h2>Mining hiện tại</h2>
+<div id="miningBox"></div>
+<details><summary>Xem thông số mining</summary><div id="miningTech"></div></details>
+</section>
+
+<section class="card wide history">
+<h2>Lịch sử phiên mining</h2>
+<div id="historyBox"></div>
+</section>
+
+<section class="card">
+<h2>Mạng lưới & đóng góp</h2>
+<div id="networkBox"></div>
+</section>
+<section class="card">
+<h2>Pioneer / Referral</h2>
+<div id="pioneerBox"></div>
+</section>
+</div>
+</div>
+</main>
+<script src="/user-profile.js"></script>
+</body>
+</html>
