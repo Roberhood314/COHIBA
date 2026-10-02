@@ -180,3 +180,18 @@ COHIBA now includes a working Human Signal MVP: a contribution registry and repu
 - Reputation API: `/api/human-signal/reputation`
 
 Each submission is canonicalized and receives a deterministic SHA-256 proof ID. The current proof class is explicitly off-chain; COHIBA does not claim Solana anchoring until a later version actually writes proof evidence on-chain. Reputation is derived only from verified contributions and creates no token entitlement.
+
+
+### Human Signal v0.2 — identity and trust network
+
+Human Signal v0.2 adapts useful network-design ideas seen in Pi Network without copying its blockchain or mining model:
+
+- Solana wallet-signature identity;
+- daily participation sessions with streaks;
+- capped trust connections (max 5);
+- derived community roles: SIGNALER, CONTRIBUTOR, BUILDER, CONNECTOR, VERIFIER;
+- public aggregate network state;
+- no pre-Mainnet COH emission or reward promise;
+- trust graph is for reputation/community discovery only and is not part of Solana consensus.
+
+See [docs/HUMAN_SIGNAL_NETWORK.md](docs/HUMAN_SIGNAL_NETWORK.md).
