@@ -18,6 +18,24 @@ async function post(path,payload,timeout=12000){
    return x;
  }finally{clearTimeout(t)}
 }
+async function authPost(path,payload,timeout=12000){
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
+ try{
+   const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+authToken},body:JSON.stringify(payload),cache:"no-store",signal:c.signal});
+   const x=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(x.error||("HTTP_"+r.status));
+   return x;
+ }finally{clearTimeout(t)}
+}
+function showMode(mode){
+ const login=mode==="login";
+ $("#loginCard").classList.toggle("hidden",!login);
+ $("#registerFlow").classList.toggle("hidden",login);
+ $("#tabLogin").classList.toggle("active",login);
+ $("#tabRegister").classList.toggle("active",!login);
+ $("#accountTabs").classList.remove("hidden");
+}
+
 function resetOnboarding(message="Phiên xác minh đã hết hạn. Vui lòng xác minh số điện thoại lại."){
   onboardingId="";onboardingToken="";verifiedPhone="";
   sessionStorage.removeItem("cohiba_onboarding_id");
@@ -40,7 +58,11 @@ function friendly(err){
   ONBOARDING_TOKEN_INVALID:"Phiên tạo tài khoản không còn hiệu lực. Hệ thống sẽ đưa bạn về xác minh số điện thoại để đăng nhập lại.",
   DISPLAY_NAME_TAKEN:"Tên tài khoản này đã được dùng.",
   DISPLAY_NAME_LENGTH:"Tên tài khoản cần từ 3 đến 32 ký tự.",
-  DISPLAY_NAME_INVALID:"Tên tài khoản chứa ký tự không hợp lệ."
+  DISPLAY_NAME_INVALID:"Tên tài khoản chứa ký tự không hợp lệ.",
+  PASSWORD_LENGTH:"Mật khẩu phải có từ 8 đến 128 ký tự.",
+  PASSWORD_COMPLEXITY:"Mật khẩu phải có ít nhất một chữ và một số.",
+  PHONE_OR_PASSWORD_INVALID:"Số điện thoại hoặc mật khẩu không đúng.",
+  LOGIN_RATE_LIMITED:"Đăng nhập sai quá nhiều lần. Hãy thử lại sau 15 phút."
  };
  return map[m]||m;
 }
@@ -51,6 +73,7 @@ async function loadAccount(){
   const x=await r.json();
   if(!r.ok)throw new Error(x.error||"AUTH_FAILED");
   $("#stepPhone").classList.add("hidden");$("#stepOtp").classList.add("hidden");$("#stepProfile").classList.add("hidden");
+  $("#loginCard").classList.add("hidden");$("#registerFlow").classList.add("hidden");$("#accountTabs").classList.add("hidden");
   $("#accountReady").classList.remove("hidden");
   [1,2,3].forEach(i=>{$("#stepBadge"+i).classList.remove("active");$("#stepBadge"+i).classList.add("done")});
   $("#accountName").textContent=x.profile?.displayName||x.profile?.id||"—";
@@ -103,9 +126,11 @@ $("#backPhone").addEventListener("click",()=>{
 });
 $("#createAccount").addEventListener("click",async()=>{
  const displayName=$("#displayName").value.trim();
- $("#createAccount").disabled=true;$("#profileState").textContent="Đang tạo hồ sơ…";
+ const password=$("#newPassword").value,confirm=$("#confirmPassword").value;
+ $("#createAccount").disabled=true;$("#profileState").textContent="Đang lưu hồ sơ và mật khẩu…";
  try{
-  const x=await post("/api/account/onboarding/profile",{displayName,onboardingToken});
+  if(password!==confirm)throw new Error("Mật khẩu nhập lại chưa khớp.");
+  const x=await post("/api/account/onboarding/profile",{displayName,password,onboardingToken});
   authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);
   sessionStorage.removeItem("cohiba_onboarding_id");sessionStorage.removeItem("cohiba_onboarding_token");sessionStorage.removeItem("cohiba_verified_phone");
   await loadAccount();
@@ -119,19 +144,52 @@ $("#createAccount").addEventListener("click",async()=>{
  }
  finally{$("#createAccount").disabled=false}
 });
+$("#tabLogin").addEventListener("click",()=>showMode("login"));
+$("#tabRegister").addEventListener("click",()=>showMode("register"));
+$("#forgotPassword").addEventListener("click",()=>{
+ const phone=$("#loginPhone").value.trim();
+ if(phone)$("#phone").value=phone;
+ showMode("register");
+ $("#phoneState").textContent="Xác minh OTP để tạo hoặc đặt lại mật khẩu cho tài khoản.";
+});
+$("#loginButton").addEventListener("click",async()=>{
+ const phone=$("#loginPhone").value.trim(),password=$("#loginPassword").value;
+ $("#loginButton").disabled=true;$("#loginState").textContent="Đang đăng nhập…";
+ try{
+   const x=await post("/api/account/login",{phone,password});
+   authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);
+   $("#loginPassword").value="";
+   await loadAccount();
+ }catch(err){
+   $("#loginState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
+ }finally{$("#loginButton").disabled=false}
+});
+$("#showPasswordChange").addEventListener("click",()=>$("#passwordChange").classList.toggle("hidden"));
+$("#savePassword").addEventListener("click",async()=>{
+ const a=$("#changePassword").value,b=$("#changePassword2").value;
+ $("#savePassword").disabled=true;$("#passwordState").textContent="Đang cập nhật mật khẩu…";
+ try{
+   if(a!==b)throw new Error("Mật khẩu nhập lại chưa khớp.");
+   await authPost("/api/account/password",{password:a});
+   $("#changePassword").value="";$("#changePassword2").value="";
+   $("#passwordState").innerHTML='<span class="ok">Mật khẩu đã cập nhật ✓</span>';
+ }catch(err){
+   $("#passwordState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
+ }finally{$("#savePassword").disabled=false}
+});
 $("#logout").addEventListener("click",()=>{
  localStorage.removeItem("cohiba_human_signal_token");authToken="";location.reload();
 });
 (async()=>{
  if(await loadAccount())return;
  if(onboardingToken&&verifiedPhone){
-   setStep(3);
+   showMode("register");setStep(3);
    $("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>';
  }else if(onboardingId&&verifiedPhone){
-   setStep(2);
+   showMode("register");setStep(2);
  }else{
    if(onboardingToken||onboardingId) resetOnboarding();
-   else setStep(1);
+   else {setStep(1);showMode("login");}
  }
 })();
 })();
