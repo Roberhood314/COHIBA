@@ -104,6 +104,31 @@ async function loadEconomy(){
   }
 }
 
+async function syncQuickMiningUi(){
+  const btn=$("#quickMiningButton"),status=$("#quickMiningStatus");
+  if(!btn||!status) return;
+  if(!authToken){
+    btn.textContent="XÁC MINH VÍ ĐỂ KHAI THÁC";
+    status.innerHTML='<span class="note">Chưa xác minh ví.</span>';
+    btn.disabled=false;
+    return;
+  }
+  try{
+    const r=await api("/api/human-signal/mining/status"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"MINING_STATUS_FAILED");
+    const s=x.session,p=x.profile||{};
+    if(s){
+      btn.textContent="XEM PHIÊN KHAI THÁC";
+      status.innerHTML='<span class="verified">Đang khai thác</span><span class="note">Pending COH: '+esc(p.pendingCoh||0)+'</span>';
+    }else{
+      btn.textContent="KHAI THÁC COH NGAY";
+      status.innerHTML='<span class="verified">Sẵn sàng</span><span class="note">Pending COH: '+esc(p.pendingCoh||0)+'</span>';
+    }
+  }catch(err){
+    status.innerHTML='<span class="rejected">'+esc(err.message)+'</span>';
+  }
+}
+
 async function loadMining(){
   if(!authToken){
     $("#startMining").disabled=true; $("#claimMining").disabled=true;
@@ -114,11 +139,14 @@ async function loadMining(){
     if(!r.ok) throw new Error(x.error||"MINING_STATUS_FAILED");
     const p=x.profile||{},rate=x.currentRate||{},s=x.session;
     $("#miningState").innerHTML=
-      '<strong>'+esc(p.pioneer?"PIONEER COHORT":"COMMUNITY MINER")+'</strong>'+
-      '<p>Signal Points: <span class="verified">'+esc(p.signalPoints||0)+' SP</span> · Pending COH: <span class="verified">'+esc(p.pendingCoh||0)+'</span></p>'+
-      '<p>Current rate: '+esc(rate.rate||0)+' SP/hour · base '+esc(rate.baseRate||0)+'</p>'+
-      '<p class="note">Rate breakdown: Pioneer +'+esc(Math.round((rate.multipliers?.pioneer||0)*100))+'% · Trust +'+esc(Math.round((rate.multipliers?.trust||0)*100))+'% · Streak +'+esc(Math.round((rate.multipliers?.streak||0)*100))+'% · Contribution +'+esc(Math.round((rate.multipliers?.contribution||0)*100))+'% · Utility +'+esc(Math.round((rate.multipliers?.utility||0)*100))+'% · Growth +'+esc(Math.round((rate.multipliers?.growth||0)*100))+'% · Eligibility ×'+esc(rate.eligibilityFactor??1)+'</p>'+
-      (s?'<p>Session: '+esc(s.status)+' · claimable '+esc(s.claimablePoints||0)+' SP<br><span class="note">Ends '+esc(s.endsAt)+'</span></p>':'<p class="note">No active mining session.</p>');
+      '<strong>'+esc(p.pioneer?"PIONEER":"COMMUNITY MINER")+'</strong>'+
+      '<p>Pending COH: <span class="verified">'+esc(p.pendingCoh||0)+'</span></p>'+
+      (s?'<p class="verified">Phiên mining đang hoạt động</p><p>Claimable: '+esc(s.claimablePoints||0)+'</p><p class="note">Kết thúc: '+esc(s.endsAt)+'</p>':'<p class="note">Chưa có phiên mining đang hoạt động.</p>');
+    const tech=$("#miningTechState");
+    if(tech) tech.innerHTML=
+      '<p>Signal Points: '+esc(p.signalPoints||0)+' SP</p>'+
+      '<p>Rate: '+esc(rate.rate||0)+' SP/hour · Base '+esc(rate.baseRate||0)+'</p>'+
+      '<p class="note">Pioneer +'+esc(Math.round((rate.multipliers?.pioneer||0)*100))+'% · Trust +'+esc(Math.round((rate.multipliers?.trust||0)*100))+'% · Streak +'+esc(Math.round((rate.multipliers?.streak||0)*100))+'% · Contribution +'+esc(Math.round((rate.multipliers?.contribution||0)*100))+'% · Utility +'+esc(Math.round((rate.multipliers?.utility||0)*100))+'% · Growth +'+esc(Math.round((rate.multipliers?.growth||0)*100))+'% · Eligibility ×'+esc(rate.eligibilityFactor??1)+'</p>';
     $("#startMining").disabled=Boolean(s);
     $("#claimMining").disabled=!s;
   }catch(err){
@@ -225,15 +253,35 @@ $("#applyReferral").addEventListener("click",async()=>{
   if(!r.ok) return $("#pioneerState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#referralInput").value=""; await loadPioneer();
 });
+$("#quickMiningButton").addEventListener("click",async()=>{
+  if(!authToken){
+    $("#connectWallet").scrollIntoView({behavior:"smooth",block:"center"});
+    $("#connectWallet").focus();
+    return;
+  }
+  try{
+    const r=await api("/api/human-signal/mining/status"),x=await r.json();
+    if(r.ok && x.session){
+      $("#mining").scrollIntoView({behavior:"smooth",block:"start"});
+      return;
+    }
+    const sr=await api("/api/human-signal/mining/start",{method:"POST"}),sx=await sr.json();
+    if(!sr.ok) throw new Error(sx.error||"MINING_START_FAILED");
+    await loadMining(); await syncQuickMiningUi();
+    $("#mining").scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(err){
+    $("#quickMiningStatus").innerHTML='<span class="rejected">'+esc(err.message)+'</span>';
+  }
+});
 $("#startMining").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/mining/start",{method:"POST"}); const x=await r.json();
   if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
-  await loadMining();
+  await loadMining(); await syncQuickMiningUi();
 });
 $("#claimMining").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/mining/claim",{method:"POST"}); const x=await r.json();
   if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
-  await loadMining();
+  await loadMining(); await syncQuickMiningUi();
 });
 $("#addTrust").addEventListener("click",async()=>{
   const targetProfileId=$("#targetProfileId").value.trim();
@@ -241,5 +289,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
+load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); syncQuickMiningUi(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();
