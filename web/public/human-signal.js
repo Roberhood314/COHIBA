@@ -7,6 +7,26 @@ async function api(path,opts={}){
   if(authToken) headers.authorization="Bearer "+authToken;
   return fetch(path,{...opts,headers});
 }
+async function loadMining(){
+  if(!authToken){
+    $("#startMining").disabled=true; $("#claimMining").disabled=true;
+    return;
+  }
+  try{
+    const r=await api("/api/human-signal/mining/status"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"MINING_STATUS_FAILED");
+    const p=x.profile||{},rate=x.currentRate||{},s=x.session;
+    $("#miningState").innerHTML=
+      '<strong>'+esc(p.pioneer?"PIONEER COHORT":"COMMUNITY MINER")+'</strong>'+
+      '<p>Balance: <span class="verified">'+esc(p.signalPoints||0)+' SP</span></p>'+
+      '<p>Current rate: '+esc(rate.rate||0)+' SP/hour · base '+esc(rate.baseRate||0)+'</p>'+
+      (s?'<p>Session: '+esc(s.status)+' · claimable '+esc(s.claimablePoints||0)+' SP<br><span class="note">Ends '+esc(s.endsAt)+'</span></p>':'<p class="note">No active mining session.</p>');
+    $("#startMining").disabled=Boolean(s);
+    $("#claimMining").disabled=!s;
+  }catch(err){
+    $("#miningState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';
+  }
+}
 async function loadIdentity(){
   try{
     if(authToken){
@@ -14,7 +34,7 @@ async function loadIdentity(){
       if(r.ok){
         const x=await r.json(),p=x.profile;
         $("#identityState").innerHTML='<strong>'+esc(p.id)+'</strong><p class="note">Roles: '+esc((p.roles||[]).join(" · "))+'</p><p>Active days: '+esc(p.activeDays)+' · streak: '+esc(p.streak)+' · trust: '+esc(p.trustConnections)+'/5 · trust score: '+esc(p.trustScore)+'</p>';
-        $("#dailySignal").disabled=false; $("#addTrust").disabled=false;
+        $("#dailySignal").disabled=false; $("#addTrust").disabled=false; $("#startMining").disabled=false;
       }else{authToken="";localStorage.removeItem("cohiba_human_signal_token");}
     }
   }catch{}
@@ -61,7 +81,7 @@ $("#connectWallet").addEventListener("click",async()=>{
     r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature})});
     x=await r.json(); if(!r.ok) throw new Error(x.error||"VERIFY_FAILED");
     authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
-    await loadIdentity();
+    await loadIdentity(); await loadMining();
   }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
 $("#dailySignal").addEventListener("click",async()=>{
@@ -69,11 +89,21 @@ $("#dailySignal").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
   await loadIdentity();
 });
+$("#startMining").addEventListener("click",async()=>{
+  const r=await api("/api/human-signal/mining/start",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  await loadMining();
+});
+$("#claimMining").addEventListener("click",async()=>{
+  const r=await api("/api/human-signal/mining/claim",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  await loadMining();
+});
 $("#addTrust").addEventListener("click",async()=>{
   const targetProfileId=$("#targetProfileId").value.trim();
   const r=await api("/api/human-signal/trust",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({targetProfileId})}); const x=await r.json();
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity();
+load(); loadIdentity(); loadMining();
 })();
