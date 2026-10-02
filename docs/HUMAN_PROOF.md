@@ -32,13 +32,13 @@ Public APIs expose only verification status and timestamps, never phone/email/pr
 This tier is a Sybil-resistance signal, not a government-ID KYC result.
 
 ## Phone OTP
-Production provider: Twilio Verify (or a compatible provider).
-Required secrets:
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_VERIFY_SERVICE_SID`
+Production provider: Infobip 2FA SMS.
 
-Twilio's official Verify flow sends an OTP and then checks the submitted code. Consent/opt-in must be obtained before sending SMS.
+Required secrets:
+- `INFOBIP_API_KEY`
+- `INFOBIP_BASE_URL`
+
+The backend bootstraps and persists its Infobip 2FA application/message identifiers when they are not supplied explicitly. Consent/opt-in is required before sending SMS. Server-side abuse protection limits OTP starts and verification attempts per IP + keyed phone identity, in addition to Infobip's provider-side limits.
 
 ## Google
 Use OAuth 2.0/OpenID Connect with minimum scopes:
@@ -64,3 +64,19 @@ Do not scrape Facebook profiles and do not ask for passwords.
 
 ## Mining policy
 Human verification may become an eligibility gate or modest anti-Sybil modifier for Signal Mining, but must not automatically issue COH or promise financial value.
+
+
+## Recovery and relink policy
+- A provider proof is not silently transferred between profiles.
+- Re-verification of the same factor must pass the provider challenge again.
+- Phone replacement requires a fresh OTP to the replacement number before the new keyed identity replaces the old proof.
+- Google/Facebook relink requires a fresh OAuth state and callback; stale OAuth states are rejected.
+- Public APIs must never reveal raw phone, email, provider subject IDs, API keys or OAuth secrets.
+- Administrative proof changes require an auditable server-side event; client-side flags are never authoritative.
+
+## Abuse controls
+- General API rate limiting applies to all API requests.
+- Phone OTP has an additional dedicated limiter.
+- Infobip application policy limits PIN attempts and send frequency.
+- Invalid verification context fails closed.
+- Human Proof enforcement for Signal Mining remains disabled until real phone OTP and at least one OAuth provider pass production E2E testing.
