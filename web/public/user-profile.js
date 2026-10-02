@@ -2,13 +2,30 @@
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const token=localStorage.getItem("cohiba_human_signal_token")||"";
-async function api(path){return fetch(path,{headers:token?{authorization:"Bearer "+token}:{}})}
+let profileLoading=false;
+async function api(path){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+    return await fetch(path,{
+      headers:token?{authorization:"Bearer "+token}:{},
+      cache:"no-store",
+      signal:controller.signal
+    });
+  }finally{
+    clearTimeout(timeout);
+  }
+}
 function yes(v){return v?'<span class="ok">✓ Đạt</span>':'<span class="bad">Chưa đạt</span>'}
 function fmt(v){const n=Number(v||0);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:8}):"0"}
 function shortDate(v){if(!v)return "—";try{return new Date(v).toLocaleString("vi-VN")}catch{return String(v)}}
 
 async function loadProfile(){
+  if(profileLoading) return;
   if(!token){$("#loginRequired").style.display="block";$("#dashboard").style.display="none";return}
+  profileLoading=true;
+  const refresh=$("#refreshProfile");
+  if(refresh){refresh.disabled=true;refresh.textContent="Đang tải…";}
   try{
     const r=await api("/api/human-signal/dashboard"),x=await r.json();
     if(!r.ok) throw new Error(x.error||"PROFILE_LOAD_FAILED");
@@ -78,9 +95,14 @@ async function loadProfile(){
       '<p>Invited by: '+esc(acc.invitedBy||"—")+'</p>'+
       '<p>Verified referrals: '+esc(ps.verifiedReferrals||0)+'</p>';
   }catch(err){
+    const message=err?.name==="AbortError"?"Kết nối chậm. Hãy thử làm mới hồ sơ.":String(err?.message||err);
     $("#loginRequired").style.display="block";
-    $("#loginRequired").innerHTML='<h2>Không tải được hồ sơ</h2><p class="bad">'+esc(err.message)+'</p><a class="button" href="/human-signal.html#mining">Mở Human Signal</a>';
+    $("#loginRequired").innerHTML='<h2>Không tải được hồ sơ</h2><p class="bad">'+esc(message)+'</p><button id="retryProfile" class="button" type="button">Thử lại</button> <a class="button ghost" href="/human-signal.html#mining">Mở Human Signal</a>';
     $("#dashboard").style.display="none";
+    $("#retryProfile")?.addEventListener("click",loadProfile,{once:true});
+  }finally{
+    profileLoading=false;
+    if(refresh){refresh.disabled=false;refresh.textContent="Làm mới";}
   }
 }
 $("#refreshProfile").addEventListener("click",loadProfile);
