@@ -11,6 +11,7 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
+import { resourceContributionScore, recordResourceHeartbeat } from "./lib/resource-mining.mjs";
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
@@ -398,13 +399,15 @@ function miningRateForProfile(profile,networkStore,contributionStore){
   const enforce=process.env.MINING_HUMAN_PROOF_MODE==="enforced" && providers.ready;
   const support=publicPioneerSupport(profile,{providersReady:providers.ready,enforceHumanProof:enforce});
   const verifiedReferrals=verifiedReferralCountFor(profile,networkStore.profiles);
+  const resource=resourceContributionScore(profile);
   return calculateMiningRate({
     profile,
     profileCount:networkStore.profiles.length,
     verifiedReputation30d:verifiedReputationForProfile(profile.id,contributionStore.records),
     meaningfulActions7d:meaningfulActions7d(profile),
     referralBoostInput:referralBoost(verifiedReferrals),
-    eligibilityFactor:support.eligibility.factor
+    eligibilityFactor:support.eligibility.factor,
+    resourceScoreInput:resource.score
   });
 }
 
@@ -2112,6 +2115,39 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/human-signal/resource/status"){
+    try{
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      json(res,200,{ok:true,resource:resourceContributionScore(profile)});
+    }catch(error){
+      const m=String(error?.message||error);
+      json(res,["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:500,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/resource/heartbeat"){
+    try{
+      requireHumanSignalOrigin(req);
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      network.miningSessions=Array.isArray(network.miningSessions)?network.miningSessions:[];
+      const active=network.miningSessions.some(x=>x.profileId===profile.id && x.status==="ACTIVE" && Date.parse(x.endsAt)>Date.now());
+      if(!active) throw new Error("ACTIVE_MINING_SESSION_REQUIRED");
+      const heartbeat=recordResourceHeartbeat(profile,Date.now());
+      if(heartbeat.accepted) saveHumanSignalNetwork(network);
+      json(res,200,{ok:true,heartbeat,resource:resourceContributionScore(profile)});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:
+        m==="ACTIVE_MINING_SESSION_REQUIRED"?409:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
   if(req.method==="POST" && raw==="/api/human-signal/mining/start"){
     try{
       requireHumanSignalOrigin(req);
@@ -2182,6 +2218,7 @@ const server=http.createServer(async (req,res)=>{
         pendingCohTransferable:false,
         profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pendingCoh:Number(profile.pendingCoh||0),pioneer:Boolean(profile.pioneer)},
         currentRate:rate,
+        resource:resourceContributionScore(profile),
         rateUnits:rateUnits(rate.rate),
         reserve:miningReserveState(networkStore.profiles||[]),
         session:active?publicMiningSession(active):null
