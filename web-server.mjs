@@ -10,6 +10,7 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
+import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -217,6 +218,109 @@ function miningRateForProfile(profile,networkStore,contributionStore){
     verifiedReputation30d:verifiedReputationForProfile(profile.id,contributionStore.records),
     meaningfulActions7d:meaningfulActions7d(profile)
   });
+}
+
+function identityPepper(){
+  const value=process.env.HUMAN_IDENTITY_PEPPER;
+  if(!value) throw new Error("IDENTITY_PEPPER_NOT_CONFIGURED");
+  return value;
+}
+
+function ensureHumanProofStore(store){
+  store.oauthStates=Array.isArray(store.oauthStates)?store.oauthStates:[];
+  for(const p of store.profiles){
+    p.humanProofs=p.humanProofs&&typeof p.humanProofs==="object"?p.humanProofs:{};
+  }
+  return store;
+}
+
+async function twilioVerifyStart(phone){
+  const sid=process.env.TWILIO_ACCOUNT_SID;
+  const token=process.env.TWILIO_AUTH_TOKEN;
+  const service=process.env.TWILIO_VERIFY_SERVICE_SID;
+  if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
+  const body=new URLSearchParams({To:phone,Channel:"sms"});
+  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/Verifications`,{
+    method:"POST",
+    headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
+    body
+  });
+  const x=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error("PHONE_VERIFY_SEND_FAILED");
+  return {status:x.status||"pending"};
+}
+
+async function twilioVerifyCheck(phone,code){
+  const sid=process.env.TWILIO_ACCOUNT_SID;
+  const token=process.env.TWILIO_AUTH_TOKEN;
+  const service=process.env.TWILIO_VERIFY_SERVICE_SID;
+  if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
+  const body=new URLSearchParams({To:phone,Code:String(code||"")});
+  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/VerificationCheck`,{
+    method:"POST",
+    headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
+    body
+  });
+  const x=await r.json().catch(()=>({}));
+  if(!r.ok || x.status!=="approved") throw new Error("PHONE_CODE_INVALID");
+  return true;
+}
+
+function googleAuthUrl(state){
+  const id=process.env.GOOGLE_CLIENT_ID;
+  if(!id) throw new Error("GOOGLE_OAUTH_NOT_CONFIGURED");
+  const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/google/callback";
+  const q=new URLSearchParams({
+    client_id:id,redirect_uri:redirect,response_type:"code",
+    scope:"openid email profile",state,
+    prompt:"select_account",include_granted_scopes:"true"
+  });
+  return "https://accounts.google.com/o/oauth2/v2/auth?"+q.toString();
+}
+
+async function googleExchange(code){
+  const id=process.env.GOOGLE_CLIENT_ID, secret=process.env.GOOGLE_CLIENT_SECRET;
+  if(!id||!secret) throw new Error("GOOGLE_OAUTH_NOT_CONFIGURED");
+  const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/google/callback";
+  const tr=await fetch("https://oauth2.googleapis.com/token",{
+    method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({code,client_id:id,client_secret:secret,redirect_uri:redirect,grant_type:"authorization_code"})
+  });
+  const tx=await tr.json().catch(()=>({}));
+  if(!tr.ok||!tx.access_token) throw new Error("GOOGLE_TOKEN_EXCHANGE_FAILED");
+  const ur=await fetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{authorization:"Bearer "+tx.access_token}});
+  const u=await ur.json().catch(()=>({}));
+  if(!ur.ok||!u.sub) throw new Error("GOOGLE_USERINFO_FAILED");
+  return {sub:String(u.sub),emailVerified:Boolean(u.email_verified)};
+}
+
+function facebookAuthUrl(state){
+  const id=process.env.FACEBOOK_APP_ID;
+  if(!id) throw new Error("FACEBOOK_OAUTH_NOT_CONFIGURED");
+  const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/facebook/callback";
+  const q=new URLSearchParams({client_id:id,redirect_uri:redirect,state,response_type:"code",scope:"public_profile,email"});
+  return "https://www.facebook.com/dialog/oauth?"+q.toString();
+}
+
+async function facebookExchange(code){
+  const id=process.env.FACEBOOK_APP_ID,secret=process.env.FACEBOOK_APP_SECRET,version=process.env.FACEBOOK_GRAPH_VERSION;
+  if(!id||!secret||!version) throw new Error("FACEBOOK_OAUTH_NOT_CONFIGURED");
+  const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/facebook/callback";
+  const tq=new URLSearchParams({client_id:id,client_secret:secret,redirect_uri:redirect,code});
+  const tr=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/oauth/access_token?${tq.toString()}`);
+  const tx=await tr.json().catch(()=>({}));
+  if(!tr.ok||!tx.access_token) throw new Error("FACEBOOK_TOKEN_EXCHANGE_FAILED");
+  const ur=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/me?fields=id&access_token=${encodeURIComponent(tx.access_token)}`);
+  const u=await ur.json().catch(()=>({}));
+  if(!ur.ok||!u.id) throw new Error("FACEBOOK_USERINFO_FAILED");
+  return {sub:String(u.id)};
+}
+
+function safeRedirect(res,pathname){
+  const p=String(pathname||"/human-signal.html");
+  const safe=p.startsWith("/")&&!p.startsWith("//")?p:"/human-signal.html";
+  res.writeHead(302,{...headers,location:safe,"cache-control":"no-store"});
+  res.end();
 }
 
 function publicHumanProfile(profile,contributions=[]){
@@ -758,6 +862,135 @@ const server=http.createServer(async (req,res)=>{
       trustEdges:store.profiles.reduce((n,p)=>n+(p.trustConnections||[]).length,0),
       profiles:profiles.slice(0,100)
     });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-proof/status"){
+    try{
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      json(res,200,{ok:true,proof:publicHumanProof(profile)});
+    }catch(error){
+      json(res,401,{ok:false,error:String(error?.message||error)});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-proof/phone/start"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      if(parsed.consent!==true) throw new Error("PHONE_CONSENT_REQUIRED");
+      const phone=normalizePhone(parsed.phone);
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      await twilioVerifyStart(phone);
+      profile.pendingPhoneHash=hashIdentity("phone",phone,identityPepper());
+      saveHumanSignalNetwork(store);
+      json(res,200,{ok:true,status:"OTP_SENT"});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:["PHONE_VERIFY_NOT_CONFIGURED"].includes(m)?409:["PHONE_CONSENT_REQUIRED","INVALID_E164_PHONE"].includes(m)?400:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-proof/phone/check"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const phone=normalizePhone(parsed.phone);
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      const phoneHash=hashIdentity("phone",phone,identityPepper());
+      if(profile.pendingPhoneHash!==phoneHash) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
+      await twilioVerifyCheck(phone,String(parsed.code||""));
+      profile.humanProofs.phone={verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString()};
+      delete profile.pendingPhoneHash;
+      saveHumanSignalNetwork(store);
+      json(res,200,{ok:true,proof:publicHumanProof(profile)});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="PHONE_VERIFY_NOT_CONFIGURED"?409:["PHONE_CODE_INVALID","PHONE_VERIFICATION_CONTEXT_MISMATCH","INVALID_E164_PHONE"].includes(m)?400:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-proof/google/start"){
+    try{
+      requireHumanSignalOrigin(req);
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      const state=newOauthState(profile.id,"google","/human-signal.html?humanProof=google");
+      store.oauthStates=store.oauthStates.filter(x=>isOauthStateValid(x)).slice(-2000);
+      store.oauthStates.push(state); saveHumanSignalNetwork(store);
+      json(res,200,{ok:true,authUrl:googleAuthUrl(state.state)});
+    }catch(error){
+      const m=String(error?.message||error);
+      json(res,m==="GOOGLE_OAUTH_NOT_CONFIGURED"?409:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:401,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-proof/google/callback"){
+    try{
+      const url=new URL(req.url||"/","http://localhost");
+      const stateValue=String(url.searchParams.get("state")||"");
+      const code=String(url.searchParams.get("code")||"");
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const state=store.oauthStates.find(x=>x.state===stateValue&&x.provider==="google");
+      if(!isOauthStateValid(state)||!code) throw new Error("OAUTH_STATE_INVALID");
+      const identity=await googleExchange(code);
+      state.used=true;
+      const profile=store.profiles.find(x=>x.id===state.profileId);
+      if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
+      profile.humanProofs.google={verified:true,identityHash:hashIdentity("google",identity.sub,identityPepper()),verifiedAt:new Date().toISOString(),emailVerified:Boolean(identity.emailVerified)};
+      saveHumanSignalNetwork(store);
+      safeRedirect(res,state.returnTo+"&status=verified");
+    }catch{
+      safeRedirect(res,"/human-signal.html?humanProof=google&status=failed");
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-proof/facebook/start"){
+    try{
+      requireHumanSignalOrigin(req);
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      const state=newOauthState(profile.id,"facebook","/human-signal.html?humanProof=facebook");
+      store.oauthStates=store.oauthStates.filter(x=>isOauthStateValid(x)).slice(-2000);
+      store.oauthStates.push(state); saveHumanSignalNetwork(store);
+      json(res,200,{ok:true,authUrl:facebookAuthUrl(state.state)});
+    }catch(error){
+      const m=String(error?.message||error);
+      json(res,m==="FACEBOOK_OAUTH_NOT_CONFIGURED"?409:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:401,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-proof/facebook/callback"){
+    try{
+      const url=new URL(req.url||"/","http://localhost");
+      const stateValue=String(url.searchParams.get("state")||"");
+      const code=String(url.searchParams.get("code")||"");
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const state=store.oauthStates.find(x=>x.state===stateValue&&x.provider==="facebook");
+      if(!isOauthStateValid(state)||!code) throw new Error("OAUTH_STATE_INVALID");
+      const identity=await facebookExchange(code);
+      state.used=true;
+      const profile=store.profiles.find(x=>x.id===state.profileId);
+      if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
+      profile.humanProofs.facebook={verified:true,identityHash:hashIdentity("facebook",identity.sub,identityPepper()),verifiedAt:new Date().toISOString()};
+      saveHumanSignalNetwork(store);
+      safeRedirect(res,state.returnTo+"&status=verified");
+    }catch{
+      safeRedirect(res,"/human-signal.html?humanProof=facebook&status=failed");
+    }
     return;
   }
 
