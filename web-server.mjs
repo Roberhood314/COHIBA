@@ -394,6 +394,43 @@ async function googleExchange(code){
   return {sub:String(u.sub),emailVerified:Boolean(u.email_verified)};
 }
 
+async function humanProofProviderHealth(){
+  const out={
+    phone:{configured:false,reachable:false},
+    google:{configured:false,ready:false},
+    facebook:{configured:false,ready:false}
+  };
+
+  const sid=process.env.TWILIO_ACCOUNT_SID;
+  const token=process.env.TWILIO_AUTH_TOKEN;
+  const service=process.env.TWILIO_VERIFY_SERVICE_SID;
+  out.phone.configured=Boolean(sid&&token&&service);
+  if(out.phone.configured){
+    try{
+      const r=await fetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
+        headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64")}
+      });
+      out.phone.reachable=r.ok;
+    }catch{}
+  }
+
+  const gid=process.env.GOOGLE_CLIENT_ID;
+  const gsecret=process.env.GOOGLE_CLIENT_SECRET;
+  out.google.configured=Boolean(gid&&gsecret);
+  out.google.ready=Boolean(
+    out.google.configured &&
+    /\.apps\.googleusercontent\.com$/.test(String(gid))
+  );
+
+  const fid=process.env.FACEBOOK_APP_ID;
+  const fsecret=process.env.FACEBOOK_APP_SECRET;
+  const fversion=process.env.FACEBOOK_GRAPH_VERSION;
+  out.facebook.configured=Boolean(fid&&fsecret&&fversion);
+  out.facebook.ready=out.facebook.configured;
+
+  return out;
+}
+
 function facebookAuthUrl(state){
   const id=process.env.FACEBOOK_APP_ID;
   if(!id) throw new Error("FACEBOOK_OAUTH_NOT_CONFIGURED");
@@ -1068,6 +1105,26 @@ const server=http.createServer(async (req,res)=>{
       const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="REQUEST_TOO_LARGE"?413:400;
       json(res,status,{ok:false,error:m});
     }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-proof/provider-health"){
+    const health=await humanProofProviderHealth();
+    const internal={
+      identityPepperReady:Boolean(process.env.HUMAN_IDENTITY_PEPPER),
+      reviewKeyReady:Boolean(process.env.HUMAN_SIGNAL_REVIEW_KEY)
+    };
+    const providerHealthReady=
+      health.phone.configured&&health.phone.reachable&&
+      health.google.ready&&
+      health.facebook.ready;
+    json(res,200,{
+      ok:true,
+      health,
+      internal,
+      providerHealthReady,
+      mode:providerHealthReady&&internal.identityPepperReady&&internal.reviewKeyReady?"FULL_PROVIDER_READY":"GRACE"
+    });
     return;
   }
 
