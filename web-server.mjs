@@ -158,6 +158,7 @@ const COMMUNITY_METRICS_FILE=path.join(DATA_DIR,"cohiba-community-metrics.json")
 const HUMAN_SIGNAL_FILE=path.join(DATA_DIR,"cohiba-human-signal.json");
 const HUMAN_SIGNAL_NETWORK_FILE=path.join(DATA_DIR,"cohiba-human-signal-network.json");
 const HUMAN_SIGNAL_CORE_FILE=path.join(DATA_DIR,"cohiba-human-signal-core.json");
+const INFOBIP_2FA_FILE=path.join(DATA_DIR,"cohiba-infobip-2fa.json");
 
 function loadHumanSignalCore(){
   try{
@@ -293,11 +294,13 @@ function meaningfulActions7d(profile,now=Date.now()){
 }
 
 function humanProofProvidersReady(){
-  const phone=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+  const twilio=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+  const infobip=Boolean(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL);
+  const phone=twilio||infobip;
   const google=Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET);
   const facebook=Boolean(process.env.FACEBOOK_APP_ID&&process.env.FACEBOOK_APP_SECRET&&process.env.FACEBOOK_GRAPH_VERSION);
   const pepper=Boolean(process.env.HUMAN_IDENTITY_PEPPER);
-  return {phone,google,facebook,pepper,ready:pepper&&phone&&(google||facebook)};
+  return {phone,twilio,infobip,google,facebook,pepper,ready:pepper&&phone&&(google||facebook)};
 }
 
 function verifiedReferralCountFor(profile,profiles){
@@ -332,6 +335,132 @@ function ensureHumanProofStore(store){
     p.humanProofs=p.humanProofs&&typeof p.humanProofs==="object"?p.humanProofs:{};
   }
   return store;
+}
+
+function infobipBaseUrl(){
+  const raw=String(process.env.INFOBIP_BASE_URL||"").trim().replace(/\/$/,"");
+  if(!raw) throw new Error("INFOBIP_NOT_CONFIGURED");
+  return /^https?:\/\//i.test(raw)?raw:"https://"+raw;
+}
+
+function infobipHeaders(){
+  const key=String(process.env.INFOBIP_API_KEY||"").trim();
+  if(!key) throw new Error("INFOBIP_NOT_CONFIGURED");
+  return {
+    authorization:"App "+key,
+    "content-type":"application/json",
+    accept:"application/json"
+  };
+}
+
+function loadInfobip2faConfig(){
+  try{
+    if(!fs.existsSync(INFOBIP_2FA_FILE)) return {};
+    const x=JSON.parse(fs.readFileSync(INFOBIP_2FA_FILE,"utf8"));
+    return x&&typeof x==="object"?x:{};
+  }catch{return {};}
+}
+
+function saveInfobip2faConfig(value){
+  fs.mkdirSync(DATA_DIR,{recursive:true});
+  atomicWriteJson(INFOBIP_2FA_FILE,value);
+}
+
+async function ensureInfobip2faConfig(){
+  const base=infobipBaseUrl();
+  const headers=infobipHeaders();
+  const cfg=loadInfobip2faConfig();
+
+  cfg.applicationId=process.env.INFOBIP_2FA_APPLICATION_ID||cfg.applicationId||null;
+  cfg.messageId=process.env.INFOBIP_2FA_MESSAGE_ID||cfg.messageId||null;
+  cfg.senderId=process.env.INFOBIP_SENDER_ID||cfg.senderId||"Infobip 2FA";
+
+  if(!cfg.applicationId){
+    const r=await fetch(base+"/2fa/2/applications",{
+      method:"POST",headers,
+      body:JSON.stringify({
+        name:"COHIBA Human Verification",
+        configuration:{
+          pinAttempts:5,
+          allowMultiplePinVerifications:false,
+          pinTimeToLive:"5m",
+          verifyPinLimit:"1/3s",
+          sendPinPerApplicationLimit:"10000/1d",
+          sendPinPerPhoneNumberLimit:"5/1d"
+        },
+        enabled:true
+      })
+    });
+    const x=await r.json().catch(()=>({}));
+    if(!r.ok || !x.applicationId) throw new Error("INFOBIP_2FA_APPLICATION_CREATE_FAILED");
+    cfg.applicationId=String(x.applicationId);
+    cfg.applicationCreatedAt=new Date().toISOString();
+    saveInfobip2faConfig(cfg);
+  }
+
+  if(!cfg.messageId){
+    const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId)+"/messages",{
+      method:"POST",headers,
+      body:JSON.stringify({
+        pinType:"NUMERIC",
+        pinPlaceholder:"{{pin}}",
+        messageText:"COHIBA verification code: {{pin}}",
+        pinLength:6,
+        language:"en",
+        senderId:cfg.senderId
+      })
+    });
+    const x=await r.json().catch(()=>({}));
+    if(!r.ok || !x.messageId) throw new Error("INFOBIP_2FA_TEMPLATE_CREATE_FAILED");
+    cfg.messageId=String(x.messageId);
+    cfg.templateCreatedAt=new Date().toISOString();
+    saveInfobip2faConfig(cfg);
+  }
+
+  cfg.updatedAt=new Date().toISOString();
+  saveInfobip2faConfig(cfg);
+  return cfg;
+}
+
+async function infobipVerifyStart(phone){
+  const cfg=await ensureInfobip2faConfig();
+  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin",{
+    method:"POST",
+    headers:infobipHeaders(),
+    body:JSON.stringify({
+      applicationId:cfg.applicationId,
+      messageId:cfg.messageId,
+      from:cfg.senderId,
+      to:String(phone).replace(/^\+/,"")
+    })
+  });
+  const x=await r.json().catch(()=>({}));
+  if(!r.ok || !x.pinId) throw new Error("PHONE_VERIFY_SEND_FAILED");
+  return {status:"pending",provider:"infobip",pinId:String(x.pinId)};
+}
+
+async function infobipVerifyCheck(pinId,code){
+  if(!pinId) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
+  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin/"+encodeURIComponent(pinId)+"/verify",{
+    method:"POST",
+    headers:infobipHeaders(),
+    body:JSON.stringify({pin:String(code||"")})
+  });
+  const x=await r.json().catch(()=>({}));
+  if(!r.ok || x.verified!==true) throw new Error("PHONE_CODE_INVALID");
+  return true;
+}
+
+async function phoneVerifyStart(phone){
+  if(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL) return infobipVerifyStart(phone);
+  return twilioVerifyStart(phone);
+}
+
+async function phoneVerifyCheck(profile,phone,code){
+  if(profile?.pendingPhoneProvider==="infobip"){
+    return infobipVerifyCheck(profile.pendingPhonePinId,code);
+  }
+  return twilioVerifyCheck(phone,code);
 }
 
 async function twilioVerifyStart(phone){
@@ -401,17 +530,29 @@ async function humanProofProviderHealth(){
     facebook:{configured:false,ready:false}
   };
 
-  const sid=process.env.TWILIO_ACCOUNT_SID;
-  const token=process.env.TWILIO_AUTH_TOKEN;
-  const service=process.env.TWILIO_VERIFY_SERVICE_SID;
-  out.phone.configured=Boolean(sid&&token&&service);
-  if(out.phone.configured){
+  if(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL){
+    out.phone.configured=true;
+    out.phone.provider="infobip";
     try{
-      const r=await fetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
-        headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64")}
-      });
-      out.phone.reachable=r.ok;
-    }catch{}
+      await ensureInfobip2faConfig();
+      out.phone.reachable=true;
+    }catch(error){
+      out.phone.error=String(error?.message||error);
+    }
+  }else{
+    const sid=process.env.TWILIO_ACCOUNT_SID;
+    const token=process.env.TWILIO_AUTH_TOKEN;
+    const service=process.env.TWILIO_VERIFY_SERVICE_SID;
+    out.phone.configured=Boolean(sid&&token&&service);
+    out.phone.provider=out.phone.configured?"twilio":null;
+    if(out.phone.configured){
+      try{
+        const r=await fetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
+          headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64")}
+        });
+        out.phone.reachable=r.ok;
+      }catch{}
+    }
   }
 
   const gid=process.env.GOOGLE_CLIENT_ID;
@@ -1129,7 +1270,9 @@ const server=http.createServer(async (req,res)=>{
   }
 
   if(req.method==="GET" && raw==="/api/human-proof/readiness"){
-    const phone=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+    const twilio=Boolean(process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.TWILIO_VERIFY_SERVICE_SID);
+    const infobip=Boolean(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL);
+    const phone=twilio||infobip;
     const google=Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET);
     const facebook=Boolean(process.env.FACEBOOK_APP_ID&&process.env.FACEBOOK_APP_SECRET&&process.env.FACEBOOK_GRAPH_VERSION);
     const identityPepperReady=Boolean(process.env.HUMAN_IDENTITY_PEPPER);
@@ -1166,8 +1309,10 @@ const server=http.createServer(async (req,res)=>{
       const phone=normalizePhone(parsed.phone);
       const store=ensureHumanProofStore(loadHumanSignalNetwork());
       const profile=authHumanSignalProfile(req,store);
-      await twilioVerifyStart(phone);
+      const verification=await phoneVerifyStart(phone);
       profile.pendingPhoneHash=hashIdentity("phone",phone,identityPepper());
+      profile.pendingPhoneProvider=verification.provider||"twilio";
+      profile.pendingPhonePinId=verification.pinId||null;
       saveHumanSignalNetwork(store);
       json(res,200,{ok:true,status:"OTP_SENT"});
     }catch(error){
@@ -1188,9 +1333,11 @@ const server=http.createServer(async (req,res)=>{
       const profile=authHumanSignalProfile(req,store);
       const phoneHash=hashIdentity("phone",phone,identityPepper());
       if(profile.pendingPhoneHash!==phoneHash) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
-      await twilioVerifyCheck(phone,String(parsed.code||""));
-      profile.humanProofs.phone={verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString()};
+      await phoneVerifyCheck(profile,phone,String(parsed.code||""));
+      profile.humanProofs.phone={verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString(),provider:profile.pendingPhoneProvider||"twilio"};
       delete profile.pendingPhoneHash;
+      delete profile.pendingPhoneProvider;
+      delete profile.pendingPhonePinId;
       saveHumanSignalNetwork(store);
       emitHsc("HUMAN_PROOF_UPDATED",profile.id,profile.id,{factor:"PHONE"});
       json(res,200,{ok:true,proof:publicHumanProof(profile)});
