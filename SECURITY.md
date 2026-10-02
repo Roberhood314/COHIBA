@@ -70,3 +70,11 @@ Implemented controls and automated tests are not an independent audit. COHIBA mu
 
 ## Mainnet rule
 Mainnet remains disabled until the final release review, independent review requirement, dependency-risk review and recovery drill have been completed or explicitly documented as unresolved blockers.
+
+
+## Operational security references
+- [Threat Model v2](docs/THREAT_MODEL.md)
+- [Treasury & Key Management Policy](docs/TREASURY_KEY_MANAGEMENT.md)
+- [Incident Response Runbook](docs/INCIDENT_RESPONSE_RUNBOOK.md)
+- [Canonical Project Registry](docs/CANONICAL_PROJECT_REGISTRY.md)
+- [Launch & Post-Launch Operations](launch/POST_LAUNCH_OPERATIONS.md)
