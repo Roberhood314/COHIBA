@@ -1153,33 +1153,54 @@ const server=http.createServer(async (req,res)=>{
       if(!challenge || challenge.used || Date.parse(challenge.expiresAt)<=Date.now()) throw new Error("CHALLENGE_INVALID_OR_EXPIRED");
       if(!verifySolanaMessage(challenge.wallet,challenge.message,String(parsed.signature||""))) throw new Error("SIGNATURE_INVALID");
       challenge.used=true;
-      const id=profileIdForWallet(challenge.wallet);
+      const walletProfileId=profileIdForWallet(challenge.wallet);
       let onboarding=null;
       if(onboardingToken){
         const onboardingStore=loadAccountOnboarding();
         onboarding=onboardingStore.records.find(x=>x.tokenHash===onboardingTokenHash(onboardingToken));
         if(!validOnboardingRecord(onboarding)) throw new Error("ONBOARDING_TOKEN_INVALID");
-        const phoneInUse=store.profiles.some(p=>p.id!==id && p.humanProofs?.phone?.identityHash===onboarding.phoneHash);
-        if(phoneInUse) throw new Error("PHONE_ALREADY_REGISTERED");
       }
-      let profile=store.profiles.find(x=>x.id===id);
+
+      // If the caller already has a valid phone-created session, bind the signed wallet
+      // to that same profile instead of creating a second wallet-only identity.
+      let authenticatedProfile=null;
+      try{ authenticatedProfile=authHumanSignalProfile(req,store); }catch{}
+      const walletOwner=store.profiles.find(p=>p.wallet===challenge.wallet);
+      if(walletOwner && authenticatedProfile && walletOwner.id!==authenticatedProfile.id) throw new Error("WALLET_ALREADY_BOUND");
+
+      let profile=authenticatedProfile || walletOwner || store.profiles.find(x=>x.id===walletProfileId);
       if(!profile){
-        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:onboarding?.displayName||id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0,signalPoints:0,pendingCoh:0,mainnetReviewStatus:"PENDING",humanProofs:{}};
+        profile={id:walletProfileId,wallet:challenge.wallet,walletPublic:false,displayName:onboarding?.displayName||walletProfileId,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0,signalPoints:0,pendingCoh:0,mainnetReviewStatus:"PENDING",humanProofs:{}};
         store.profiles.push(profile);
       }
+
+      if(profile.wallet && profile.wallet!==challenge.wallet) throw new Error("PROFILE_WALLET_ALREADY_BOUND");
+      profile.wallet=challenge.wallet;
+      profile.cohWallet={
+        ownerAddress:challenge.wallet,
+        custody:"NON_CUSTODIAL",
+        network:"SOLANA",
+        phase:"PRE_MAINNET",
+        tokenAccount:null,
+        activatedAt:profile.cohWallet?.activatedAt||new Date().toISOString()
+      };
+
       if(onboarding){
-        profile.displayName=onboarding.displayName;
+        const phoneInUse=store.profiles.some(p=>p.id!==profile.id && p.humanProofs?.phone?.identityHash===onboarding.phoneHash);
+        if(phoneInUse) throw new Error("PHONE_ALREADY_REGISTERED");
+        profile.displayName=onboarding.displayName||profile.displayName;
         profile.humanProofs=profile.humanProofs&&typeof profile.humanProofs==="object"?profile.humanProofs:{};
         profile.humanProofs.phone={verified:true,identityHash:onboarding.phoneHash,verifiedAt:onboarding.phoneVerifiedAt||new Date().toISOString(),provider:onboarding.provider||"infobip"};
         const onboardingStore=loadAccountOnboarding();
         const rec=onboardingStore.records.find(x=>x.id===onboarding.id);
-        if(rec){rec.usedAt=new Date().toISOString();rec.status="BOUND_TO_WALLET";rec.profileId=id;saveAccountOnboarding(onboardingStore);}
+        if(rec){rec.usedAt=new Date().toISOString();rec.status="BOUND_TO_WALLET";rec.profileId=profile.id;saveAccountOnboarding(onboardingStore);}
       }
-      const session=newSession(id);
+      const session=newSession(profile.id);
       store.sessions=store.sessions.filter(x=>isSessionValid(x)).slice(-5000);
       store.sessions.push(session.record);
       saveHumanSignalNetwork(store);
       emitHsc("PROFILE_VERIFIED",profile.id,profile.id,{walletProof:true});
+      emitHsc("COH_WALLET_ACTIVATED",profile.id,profile.id,{ownerAddress:profile.wallet,custody:"NON_CUSTODIAL"});
       const contributions=loadHumanSignal().records;
       json(res,200,{ok:true,token:session.token,expiresAt:session.record.expiresAt,profile:publicHumanProfile(profile,contributions)});
     }catch(error){
