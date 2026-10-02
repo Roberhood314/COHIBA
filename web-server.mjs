@@ -351,6 +351,16 @@ function authHumanSignalProfile(req,store){
   if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
   return profile;
 }
+function authHumanSignalSession(req,store){
+  const auth=String(req.headers.authorization||"");
+  const token=auth.startsWith("Bearer ")?auth.slice(7):"";
+  if(!token) throw new Error("HUMAN_SIGNAL_AUTH_REQUIRED");
+  const hash=hashSessionToken(token);
+  const session=store.sessions.find(x=>x.tokenHash===hash);
+  if(!isSessionValid(session)) throw new Error("HUMAN_SIGNAL_SESSION_INVALID");
+  return {token,hash,session};
+}
+
 
 function verifiedReputationForProfile(profileId,records,now=Date.now()){
   const cutoff=now-30*86400000;
@@ -1892,16 +1902,42 @@ const server=http.createServer(async (req,res)=>{
       const parsed=body?JSON.parse(body):{};
       const password=validateAccountPassword(parsed.password);
       const network=ensureHumanProofStore(loadHumanSignalNetwork());
-      const profile=authHumanSignalProfile(req,network);
+      const current=authHumanSignalSession(req,network);
+      const profile=network.profiles.find(x=>x.id===current.session.profileId);
+      if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
       profile.passwordCredential=createPasswordCredential(password);
+
+      // Password rotation revokes every previous session and returns one fresh session.
+      network.sessions=network.sessions.filter(x=>x.profileId!==profile.id && isSessionValid(x)).slice(-5000);
+      const fresh=newSession(profile.id);
+      network.sessions.push(fresh.record);
       saveHumanSignalNetwork(network);
-      emitHsc("ACCOUNT_PASSWORD_UPDATED",profile.id,profile.id,{method:"AUTHENTICATED_SESSION"});
-      json(res,200,{ok:true,passwordConfigured:true,updatedAt:profile.passwordCredential.updatedAt});
+      emitHsc("ACCOUNT_PASSWORD_UPDATED",profile.id,profile.id,{method:"AUTHENTICATED_SESSION",sessionsRevoked:true});
+      json(res,200,{ok:true,passwordConfigured:true,updatedAt:profile.passwordCredential.updatedAt,token:fresh.token,expiresAt:fresh.record.expiresAt});
     }catch(error){
       const m=String(error?.message||error);
       const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
         ["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:
         ["PASSWORD_LENGTH","PASSWORD_COMPLEXITY"].includes(m)?400:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/logout"){
+    try{
+      requireHumanSignalOrigin(req);
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const current=authHumanSignalSession(req,network);
+      const profileId=current.session.profileId;
+      network.sessions=network.sessions.filter(x=>x.tokenHash!==current.hash && isSessionValid(x)).slice(-5000);
+      saveHumanSignalNetwork(network);
+      emitHsc("ACCOUNT_LOGOUT",profileId,profileId,{sessionRevoked:true});
+      json(res,200,{ok:true});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(m)?401:500;
       json(res,status,{ok:false,error:m});
     }
     return;
