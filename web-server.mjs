@@ -1663,13 +1663,15 @@ const server=http.createServer(async (req,res)=>{
       project:"COHIBA",
       phase:mainnetLive?"POST_MAINNET":"PRE_MAINNET",
       mining:{
-        asset:"SP",
-        name:"Signal Points",
+        model:"HYBRID_HUMAN_RESOURCE",
+        accounting:["Signal Points (SP)","Pending COH (provisional off-chain ledger)"],
         transferable:false,
         sellable:false,
         tradable:false,
         claimableOnSite:true,
-        cohEmission:false
+        splCohEmission:false,
+        pendingCohProvisional:true,
+        pendingCohTransferable:false
       },
       coh:{
         mainnetLive,
@@ -1682,7 +1684,7 @@ const server=http.createServer(async (req,res)=>{
       },
       notice:mainnetLive
         ?"COH trading remains gated by community distribution policy and explicit market enablement."
-        :"Mine Signal Points now. COH is not mined, sold, transferred or distributed before Mainnet."
+        :"Mining records Signal Points and provisional Pending COH off-chain. No transferable SPL COH is minted, sold, transferred or distributed before Mainnet."
     });
     return;
   }
