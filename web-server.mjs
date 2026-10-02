@@ -657,7 +657,7 @@ function publicHumanProfile(profile,contributions=[]){
   return {
     id:profile.id,
     displayName:profile.displayName||profile.id,
-    walletVerified:true,
+    walletVerified:Boolean(profile.wallet),
     walletPublic:Boolean(profile.walletPublic),
     wallet:profile.walletPublic?profile.wallet:null,
     cohWallet:{
@@ -1239,8 +1239,8 @@ const server=http.createServer(async (req,res)=>{
       const mainnetEligible=humanVerified && walletActive && reviewStatus==="APPROVED";
       const verifiedContribs=contributionStore.records.filter(x=>x.profileId===profile.id && x.status==="VERIFIED").length;
       const checklist=[
-        {id:"wallet",label:"Ví Solana đã xác minh",done:Boolean(profile.wallet),required:true},
-        {id:"coh_wallet",label:"COH Wallet đã kích hoạt",done:walletActive,required:true},
+        {id:"wallet",label:"Ví Solana đã xác minh (tuỳ chọn)",done:Boolean(profile.wallet),required:false},
+        {id:"coh_wallet",label:"COH Wallet đã kích hoạt (tuỳ chọn trước Mainnet)",done:walletActive,required:false},
         {id:"phone",label:"Số điện thoại đã xác minh",done:Boolean(proof.phone?.verified),required:true},
         {id:"social",label:"Google hoặc Facebook đã xác minh",done:Boolean(proof.google?.verified||proof.facebook?.verified),required:true},
         {id:"human",label:"Đạt HUMAN_VERIFIED",done:humanVerified,required:true},
@@ -1701,7 +1701,7 @@ const server=http.createServer(async (req,res)=>{
       record.usedAt=new Date().toISOString();
       record.profileId=profile.id;
       saveAccountOnboarding(onboardingStore);
-      emitHsc(created?"PHONE_ACCOUNT_CREATED":"PHONE_ACCOUNT_LOGIN",profile.id,profile.id,{phoneVerified:true});
+      emitHsc("PROFILE_VERIFIED",profile.id,profile.id,{phoneVerified:true,accountType:"PHONE_MINING",created});
 
       json(res,200,{
         ok:true,
