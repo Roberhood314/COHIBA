@@ -10,7 +10,7 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
-const DATA_DIR = process.env.COHIBA_DATA_DIR || DATA_DIR;
+const DATA_DIR = process.env.COHIBA_DATA_DIR || "/data";
 const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
