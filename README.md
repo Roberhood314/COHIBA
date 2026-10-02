@@ -218,3 +218,20 @@ where the modifiers represent Pioneer participation, trust graph, streak, verifi
 - trust/streak/contribution/utility boosts are capped or logarithmic.
 
 See [docs/SIGNAL_MINING.md](docs/SIGNAL_MINING.md).
+
+
+### Human Proof v0.1 — multi-signal person verification
+
+Human Signal supports a privacy-minimized multi-proof onboarding model:
+
+- Solana wallet signature;
+- phone ownership via SMS OTP;
+- Google/Gmail account control via OAuth/OpenID Connect;
+- Facebook account control via OAuth;
+- optional anti-bot challenge signal.
+
+Public profiles expose only verification status, timestamps and a confidence tier. Provider identifiers are stored as HMAC-SHA256 values using a private identity pepper; raw phone/email/provider identifiers are not intended for public profile storage.
+
+`HUMAN_VERIFIED` requires score >= 70, verified phone, and at least one Google or Facebook proof. This is a Sybil-resistance confidence tier, not government-ID KYC and not a guarantee of global one-person-one-account uniqueness.
+
+See [docs/HUMAN_PROOF.md](docs/HUMAN_PROOF.md).
