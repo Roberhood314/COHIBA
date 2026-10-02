@@ -7,6 +7,7 @@ import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint, setAuth
 import { createV1, findMetadataPda, mplTokenMetadata, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { keypairIdentity, percentAmount, publicKey as umiPublicKey } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -148,6 +149,38 @@ function saveLaunchRecord(network,record){
 
 
 const COMMUNITY_METRICS_FILE=path.join(DATA_DIR,"cohiba-community-metrics.json");
+const HUMAN_SIGNAL_FILE=path.join(DATA_DIR,"cohiba-human-signal.json");
+
+function loadHumanSignal(){
+  try{
+    if(!fs.existsSync(HUMAN_SIGNAL_FILE)) return {schemaVersion:"1.0",records:[],updatedAt:null};
+    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_FILE,"utf8"));
+    if(!parsed || !Array.isArray(parsed.records)) throw new Error("INVALID_HUMAN_SIGNAL_STORE");
+    return parsed;
+  }catch{
+    return {schemaVersion:"1.0",records:[],updatedAt:null,storageRecovered:true};
+  }
+}
+
+function saveHumanSignal(store){
+  fs.mkdirSync(DATA_DIR,{recursive:true});
+  store.updatedAt=new Date().toISOString();
+  atomicWriteJson(HUMAN_SIGNAL_FILE,store);
+}
+
+function requireHumanSignalOrigin(req){
+  const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
+  const origin=String(req.headers.origin||"");
+  if(origin!==expected) throw new Error("HUMAN_SIGNAL_ORIGIN_INVALID");
+}
+
+function requireHumanSignalReviewKey(req){
+  const configured=process.env.HUMAN_SIGNAL_REVIEW_KEY;
+  if(!configured) throw new Error("HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED");
+  const supplied=String(req.headers["x-human-signal-review-key"]||"");
+  if(!supplied || supplied!==configured) throw new Error("HUMAN_SIGNAL_REVIEW_KEY_INVALID");
+}
+
 const COMMUNITY_SOURCES=new Set(["direct","x","solana-discord","reddit","github","security-outreach","creator-outreach","other"]);
 const COMMUNITY_EVENTS=new Set([
   "home_view","community_view","community_x_click","community_github_click",
@@ -498,6 +531,124 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+
+  if(req.method==="POST" && raw==="/api/human-signal/contributions"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>8192) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const normalized=normalizeContribution(body?JSON.parse(body):{});
+      const proofHash=contributionDigest(normalized);
+      const id=contributionId(proofHash);
+      const store=loadHumanSignal();
+      const existing=store.records.find(x=>x.proofHash===proofHash);
+      if(existing){
+        json(res,409,{ok:false,error:"DUPLICATE_CONTRIBUTION",record:publicContribution(existing)});
+        return;
+      }
+      const record={
+        ...normalized,
+        id,
+        proofHash,
+        status:"SUBMITTED",
+        submittedAt:new Date().toISOString(),
+        reviewedAt:null,
+        reviewNote:null,
+        onChain:null
+      };
+      store.records.push(record);
+      saveHumanSignal(store);
+      json(res,201,{ok:true,record:publicContribution(record)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=
+        message==="REQUEST_TOO_LARGE"?413:
+        message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["INVALID_CONTRIBUTION_TYPE","INVALID_EVIDENCE_URL","TITLE_TOO_SHORT","SUMMARY_TOO_SHORT","EVIDENCE_URL_REQUIRED"].includes(message)?400:
+        500;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/contributions"){
+    const store=loadHumanSignal();
+    const records=store.records.slice().reverse().slice(0,100).map(publicContribution);
+    json(res,200,{
+      ok:true,
+      protocol:"COHIBA Human Signal",
+      version:"0.1",
+      proofClass:"COHIBA_HUMAN_SIGNAL_OFFCHAIN_SHA256_V1",
+      onChainProofClaimed:false,
+      count:store.records.length,
+      records,
+      updatedAt:store.updatedAt
+    });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/reputation"){
+    const store=loadHumanSignal();
+    json(res,200,{
+      ok:true,
+      protocol:"COHIBA Human Signal",
+      scoringVersion:"0.1",
+      tokenEntitlement:false,
+      leaderboard:reputationTable(store.records),
+      updatedAt:store.updatedAt
+    });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/proof"){
+    const url=new URL(req.url||"/","http://localhost");
+    const key=String(url.searchParams.get("id")||url.searchParams.get("hash")||"").trim();
+    const store=loadHumanSignal();
+    const record=store.records.find(x=>x.id===key || x.proofHash===key);
+    if(!record){
+      json(res,404,{ok:false,error:"PROOF_NOT_FOUND"});
+      return;
+    }
+    json(res,200,{ok:true,record:publicContribution(record)});
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/review"){
+    try{
+      requireHumanSignalOrigin(req);
+      requireHumanSignalReviewKey(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const id=String(parsed.id||"").trim();
+      const status=String(parsed.status||"").trim().toUpperCase();
+      if(!["VERIFIED","REJECTED","SUBMITTED"].includes(status)) throw new Error("INVALID_REVIEW_STATUS");
+      const store=loadHumanSignal();
+      const record=store.records.find(x=>x.id===id);
+      if(!record) throw new Error("PROOF_NOT_FOUND");
+      record.status=status;
+      record.reviewedAt=new Date().toISOString();
+      record.reviewNote=String(parsed.reviewNote||"").trim().slice(0,500)||null;
+      saveHumanSignal(store);
+      json(res,200,{ok:true,record:publicContribution(record)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=
+        message==="REQUEST_TOO_LARGE"?413:
+        ["HUMAN_SIGNAL_ORIGIN_INVALID","HUMAN_SIGNAL_REVIEW_KEY_INVALID"].includes(message)?403:
+        message==="HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED"?409:
+        ["INVALID_REVIEW_STATUS","PROOF_NOT_FOUND"].includes(message)?400:
+        500;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
 
   if(req.method==="POST" && raw==="/api/community-event"){
     try{
