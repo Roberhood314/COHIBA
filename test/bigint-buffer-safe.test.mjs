@@ -1,21 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
+import { createRequire } from "node:module";
 
-test("deprecated bigint-buffer package is absent from the installed production tree", () => {
+const require = createRequire(import.meta.url);
+const shim = require("../vendor/bigint-buffer-safe/index.cjs");
+
+test("patched bigint-buffer fork is installed in the production dependency tree", () => {
   const tree = execFileSync("npm", ["ls", "bigint-buffer", "--omit=dev", "--json"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   });
-
-  const parsed = JSON.parse(tree);
-  const deps = parsed.dependencies || {};
-  assert.equal(Object.prototype.hasOwnProperty.call(deps, "bigint-buffer"), false);
+  assert.match(tree, /1\.1\.6-cohiba\.1/);
 });
 
-test("legacy vendored bigint-buffer compatibility shim is not used by production dependencies", () => {
-  const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(pkg.dependencies?.["bigint-buffer"], undefined);
-  assert.equal(pkg.overrides?.["bigint-buffer"], undefined);
+test("patched bigint-buffer fork preserves API and rejects unsafe input", () => {
+  assert.equal(shim.toBigIntBE(Buffer.from([0x01, 0x00])), 256n);
+  assert.equal(shim.toBigIntLE(Buffer.from([0x00, 0x01])), 256n);
+  assert.deepEqual(shim.toBufferBE(256n, 2), Buffer.from([0x01, 0x00]));
+  assert.deepEqual(shim.toBufferLE(256n, 2), Buffer.from([0x00, 0x01]));
+  assert.throws(() => shim.toBigIntLE(null), TypeError);
+  assert.throws(() => shim.toBigIntBE("0100"), TypeError);
+  assert.throws(() => shim.toBufferLE(1n, -1), TypeError);
 });
