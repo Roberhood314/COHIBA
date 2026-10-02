@@ -8,7 +8,10 @@ const files=[
   "docs/WHITEPAPER.md","docs/VERIFICATION_SPEC.md","docs/THREAT_MODEL.md",
   "docs/SECURITY_CONTROL_MATRIX.md","SECURITY.md",
   "scripts/create-token-staged.ts","scripts/revoke-authorities.ts",
-  "lib/launch-invariants.mjs","test/launch-invariants.test.mjs"
+  "lib/launch-invariants.mjs","test/launch-invariants.test.mjs",
+  "operations/BACKUP_RESTORE_STANDARD.md","operations/INCIDENT_TABLETOP_RECORD.md",
+  "treasury/MULTISIG_ACTIVATION_PACKET.md","launch/LIQUIDITY_READINESS_PLAN.md",
+  "release/PRE_MAINNET_EVIDENCE_BUNDLE.md"
 ].filter(p=>fs.existsSync(path.join(root,p)));
 
 const sha256=p=>crypto.createHash("sha256").update(fs.readFileSync(path.join(root,p))).digest("hex");

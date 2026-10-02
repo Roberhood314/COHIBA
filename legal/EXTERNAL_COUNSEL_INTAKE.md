@@ -45,6 +45,9 @@ This document is an intake checklist for qualified counsel. It is not legal advi
 - Canonical Project Registry
 - current website/public statements
 - any planned fundraising, grants, sponsorship or paid ambassador terms.
+- `release/PRE_MAINNET_EVIDENCE_BUNDLE.md`
+- `launch/LIQUIDITY_READINESS_PLAN.md`
+- `treasury/MULTISIG_ACTIVATION_PACKET.md`
 
 ## Written deliverables requested
 - legal-entity recommendation;
