@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Khai thác COH — COHIBA</title>
+<meta name="description" content="Giao diện khai thác COHIBA: tốc độ khai thác, bộ đếm realtime, phiên 24 giờ, Pending COH và Community Mining Reserve.">
+<link rel="canonical" href="https://cohibameme.site/mining.html">
+<style>
+:root{--bg:#050403;--panel:#0d0906;--panel2:#130e08;--gold:#e7bd58;--gold2:#ffe39a;--text:#f3eee4;--muted:#9e9588;--line:rgba(231,189,88,.22);--ok:#99d8a4;--bad:#ef9285}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 50% -10%,#3c2a0c 0,#0a0704 34%,#050403 72%);color:var(--text);font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+main{width:min(1180px,calc(100% - 28px));margin:auto;padding:24px 0 80px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--gold2);font-weight:900;letter-spacing:.12em}.brand img{width:36px;height:36px;border-radius:50%}.topnav{display:flex;gap:8px;flex-wrap:wrap}.topnav a{border:1px solid var(--line);padding:8px 11px;border-radius:999px;text-decoration:none;color:var(--gold2);font-size:12px}
+.hero{border:1px solid var(--line);border-radius:20px;padding:26px;background:linear-gradient(180deg,rgba(231,189,88,.12),rgba(13,9,6,.96));box-shadow:0 30px 80px rgba(0,0,0,.32)}.eyebrow{font-size:11px;color:var(--gold);font-weight:900;letter-spacing:.18em}.hero h1{font:700 clamp(40px,7vw,78px)/.95 Georgia,"Times New Roman",serif;color:var(--gold2);margin:10px 0 10px}.hero p{color:#c9c0b3;max-width:760px}.hero-status{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:12px}.ok{color:var(--ok)}.bad{color:var(--bad)}.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;margin-top:14px}.card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(20,14,8,.96),rgba(10,7,4,.96));padding:20px}.card h2{margin:0 0 14px;color:var(--gold2)}
+.counter{font-size:clamp(42px,8vw,84px);font-weight:900;line-height:1;color:var(--gold2);letter-spacing:-.04em}.counter small{font-size:15px;color:var(--muted);font-weight:700;letter-spacing:0}.submetric{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.mini{border:1px solid var(--line);border-radius:12px;padding:12px}.mini small{display:block;color:var(--muted);font-size:11px}.mini b{font-size:19px;color:#f1e9db}.progress{height:12px;background:#21170c;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin-top:15px}.progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c9962f,#f5d97e);transition:width .4s ease}.session-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;color:#c7bfb2}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:10px;padding:13px 18px;font-weight:900;cursor:pointer;font-size:14px}.primary{background:linear-gradient(135deg,#d6a335,#f3d57b);color:#120d05}.ghost{background:transparent;border:1px solid var(--line);color:var(--gold2)}
+.reserve{font-size:34px;font-weight:900;color:var(--gold2)}.reserve-line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.reserve-line:first-of-type{border-top:0}.reserve-line span{color:var(--muted)}
+.boosts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.boost{border:1px solid var(--line);border-radius:12px;padding:12px}.boost b{color:var(--gold2)}.boost small{display:block;color:var(--muted);margin-top:3px}.how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.how article{border:1px solid var(--line);border-radius:12px;padding:14px}.how h3{margin:0 0 6px;color:#f1e9db}.how p{margin:0;color:var(--muted);font-size:13px}
+.notice{font-size:12px;color:var(--muted);margin-top:12px}.tech{margin-top:14px}.tech summary{cursor:pointer;color:var(--gold2);font-weight:800}.tech pre{white-space:pre-wrap;word-break:break-word;background:#070503;border:1px solid var(--line);padding:12px;border-radius:10px;color:#c8bda8}
+@media(max-width:820px){.grid{grid-template-columns:1fr}.submetric{grid-template-columns:1fr}.how{grid-template-columns:1fr}.hero{padding:20px}.counter{font-size:clamp(46px,14vw,70px)}.btn{width:100%}}
+</style>
+</head>
+<body>
+<main>
+<div class="top">
+<a class="brand" href="/"><img src="/cohiba-icon-v12.jpg" alt="COHIBA">COHIBA MINING</a>
+<div class="topnav"><a href="/user-profile.html">Hồ sơ COH</a><a href="/human-signal.html">Xác thực</a></div>
+</div>
+
+<section class="hero">
+<div class="eyebrow">PRE-MAINNET · HUMAN SIGNAL MINING</div>
+<h1>Khai thác COH.</h1>
+<p>Phiên khai thác tối đa 24 giờ. Pending COH được ghi nhận theo thời gian thực trong hồ sơ và chưa phải COH SPL on-chain.</p>
+<div id="heroStatus" class="hero-status"><span class="pill muted">Đang kiểm tra tài khoản…</span></div>
+</section>
+
+<div class="grid">
+<section class="card">
+<h2>Phiên khai thác</h2>
+<div><span id="liveCounter" class="counter">0.00000000 <small>Pending COH</small></span></div>
+<div class="submetric">
+<div class="mini"><small>Tốc độ / giờ</small><b id="perHour">—</b></div>
+<div class="mini"><small>Tốc độ / phút</small><b id="perMinute">—</b></div>
+<div class="mini"><small>Tốc độ / giây</small><b id="perSecond">—</b></div>
+</div>
+<div class="progress"><i id="sessionProgress"></i></div>
+<div class="session-row"><span id="sessionTime">Chưa có phiên mining.</span><span id="timeLeft">—</span></div>
+<div class="actions">
+<button id="startBtn" class="btn primary" type="button">KHAI THÁC COH NGAY</button>
+<button id="claimBtn" class="btn ghost" type="button" disabled>NHẬN PENDING COH</button>
+</div>
+<p class="notice">Mỗi phiên kết thúc sau 24 giờ. Bạn có thể claim trong phiên; số đã claim được cộng vào Pending COH trong hồ sơ.</p>
+</section>
+
+<section class="card">
+<h2>Community Mining Reserve</h2>
+<div class="reserve" id="reserveRemaining">—</div>
+<div class="reserve-line"><span>Tổng cung cố định</span><b id="totalSupply">1,000,000,000</b></div>
+<div class="reserve-line"><span>Community allocation</span><b id="communityAllocation">100,000,000</b></div>
+<div class="reserve-line"><span>Pending đã ghi nhận</span><b id="pendingAllocated">—</b></div>
+<div class="reserve-line"><span>Reserve còn lại</span><b id="reserveRemaining2">—</b></div>
+<p class="notice">Mining không làm giảm tổng cung 1 tỷ COH. Chỉ Community Mining Reserve giảm theo Pending COH đã ghi nhận.</p>
+</section>
+</div>
+
+<section class="card" style="margin-top:14px">
+<h2>Boost khai thác của bạn</h2>
+<div id="boosts" class="boosts"></div>
+<details class="tech"><summary>Xem thuật toán kỹ thuật</summary><pre id="techState">Đang tải…</pre></details>
+</section>
+
+<section class="card" style="margin-top:14px">
+<h2>Làm sao để tăng tốc độ khai thác?</h2>
+<div class="how">
+<article><h3>Pioneer</h3><p>Người dùng tiên phong nhận bonus cao hơn, sau đó bonus giảm dần theo thời gian hoạt động.</p></article>
+<article><h3>Trust & Streak</h3><p>Duy trì hoạt động đều và xây dựng trust connections hợp lệ để tăng multiplier.</p></article>
+<article><h3>Contribution & Utility</h3><p>Đóng góp đã xác minh, hoạt động hữu ích và referral hợp lệ giúp tăng tốc độ, nhưng luôn chịu trần multiplier.</p></article>
+</div>
+</section>
+</main>
+<script src="/mining.js"></script>
+</body>
+</html>
