@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.5",
+  "schemaVersion": "1.6",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -165,5 +165,27 @@
       "improved adversarial test",
       "credible third-party review"
     ]
+  },
+  "humanSignal": {
+    "name": "COHIBA Human Signal Protocol",
+    "version": "0.1",
+    "status": "MVP_IMPLEMENTED",
+    "publicPage": "https://cohibameme.site/human-signal.html",
+    "registryApi": "https://cohibameme.site/api/human-signal/contributions",
+    "proofApi": "https://cohibameme.site/api/human-signal/proof",
+    "reputationApi": "https://cohibameme.site/api/human-signal/reputation",
+    "proofClass": "COHIBA_HUMAN_SIGNAL_OFFCHAIN_SHA256_V1",
+    "onChainAnchoring": false,
+    "tokenEntitlement": false,
+    "contributionTypes": [
+      "CODE",
+      "SECURITY",
+      "RESEARCH",
+      "TRANSLATION",
+      "CREATIVE",
+      "DOCUMENTATION",
+      "COMMUNITY"
+    ],
+    "architecture": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_SIGNAL_PROTOCOL.md"
   }
 }
