@@ -14,14 +14,32 @@ main{width:min(760px,calc(100% - 28px));margin:auto;padding:24px 0 70px}.top{dis
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.step{border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;color:var(--muted)}.step.active{border-color:var(--gold);color:var(--gold2);background:rgba(235,191,88,.08)}.step.done{color:var(--ok)}
 label{display:block;font-weight:800;margin:14px 0 7px}input{width:100%;padding:14px 15px;border:1px solid var(--line);border-radius:10px;background:#070503;color:var(--text);font:inherit;font-size:16px}input:focus{outline:2px solid rgba(235,191,88,.25);border-color:var(--gold)}
 .check{display:flex;gap:10px;align-items:flex-start;margin-top:14px}.check input{width:22px;height:22px;flex:0 0 auto;margin-top:1px}.btn{width:100%;margin-top:16px;padding:14px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,#d9a83b,#f2d170);color:#120d05;font:900 15px/1.2 inherit;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.ghost{background:transparent;color:var(--gold2);border:1px solid var(--line)}
-.state{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);min-height:30px}.profile-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:11px 0}.profile-row:first-child{border-top:0}.profile-row span{color:var(--muted)}.big{font-size:38px;color:var(--gold2);font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none!important}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.tab{padding:12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--muted);font:800 14px/1 inherit;cursor:pointer}.tab.active{background:rgba(235,191,88,.1);border-color:var(--gold);color:var(--gold2)}.password-hint{font-size:12px;color:var(--muted);margin-top:7px}.state{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);min-height:30px}.profile-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:11px 0}.profile-row:first-child{border-top:0}.profile-row span{color:var(--muted)}.big{font-size:38px;color:var(--gold2);font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none!important}
 @media(max-width:600px){.steps{grid-template-columns:1fr}.actions{grid-template-columns:1fr}.card{padding:18px}}
 </style>
 </head>
 <body>
 <main>
 <div class="top"><a class="brand" href="/">COHIBA</a><div style="display:flex;gap:12px"><a class="back" href="/mining-network.html">Mining Network</a><a class="back" href="/">Trang chủ</a></div></div>
-<section class="hero"><p>COH MINING ACCOUNT</p><h1>Tạo tài khoản khai thác.</h1><p>Chỉ 3 bước: số điện thoại → OTP → hồ sơ. Sau đó có thể bắt đầu khai thác COH ngay.</p></section>
+<section class="hero"><p>COH MINING ACCOUNT</p><h1>Tài khoản khai thác COH.</h1><p>Người dùng mới xác minh OTP và tạo mật khẩu một lần. Người dùng đã có tài khoản chỉ cần số điện thoại + mật khẩu để đăng nhập và xem phiên khai thác.</p></section>
+<div id="accountTabs" class="tabs">
+<button id="tabLogin" class="tab active" type="button">ĐĂNG NHẬP</button>
+<button id="tabRegister" class="tab" type="button">TẠO / KHÔI PHỤC TÀI KHOẢN</button>
+</div>
+
+<section id="loginCard" class="card">
+<h2>Đăng nhập tài khoản</h2>
+<p class="muted">Dùng số điện thoại đã xác minh và mật khẩu COH của bạn.</p>
+<label>Số điện thoại</label>
+<input id="loginPhone" inputmode="tel" autocomplete="tel" placeholder="0901234567">
+<label>Mật khẩu</label>
+<input id="loginPassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="Mật khẩu COH">
+<button id="loginButton" class="btn" type="button">ĐĂNG NHẬP</button>
+<button id="forgotPassword" class="btn ghost" type="button">QUÊN / CHƯA CÓ MẬT KHẨU</button>
+<div id="loginState" class="state muted">Tài khoản cũ chưa có mật khẩu? Chọn “Quên / chưa có mật khẩu” để xác minh OTP và tạo mật khẩu mới.</div>
+</section>
+
+<div id="registerFlow" class="hidden">
 
 <div class="steps">
 <div id="stepBadge1" class="step active">1 · Số điện thoại</div>
@@ -54,10 +72,16 @@ label{display:block;font-weight:800;margin:14px 0 7px}input{width:100%;padding:1
 <p class="muted">Đặt tên hiển thị cho tài khoản khai thác của bạn.</p>
 <label>Tên tài khoản</label>
 <input id="displayName" maxlength="32" autocomplete="nickname" placeholder="Ví dụ: JohnPC">
-<button id="createAccount" class="btn" type="button">TẠO HỒ SƠ & ĐĂNG NHẬP</button>
+<label>Mật khẩu COH</label>
+<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Ít nhất 8 ký tự">
+<label>Nhập lại mật khẩu</label>
+<input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Nhập lại mật khẩu">
+<p class="password-hint">Mật khẩu cần ít nhất 8 ký tự và có cả chữ + số. Server chỉ lưu hash scrypt + salt, không lưu mật khẩu gốc.</p>
+<button id="createAccount" class="btn" type="button">LƯU HỒ SƠ & MẬT KHẨU</button>
 <div id="profileState" class="state muted">Số điện thoại đã xác minh.</div>
 </section>
 
+</div>
 <section id="accountReady" class="card hidden">
 <h2>Hồ sơ khai thác COH</h2>
 <div class="profile-row"><span>Tên tài khoản</span><b id="accountName">—</b></div>
@@ -67,11 +91,20 @@ label{display:block;font-weight:800;margin:14px 0 7px}input{width:100%;padding:1
 <div class="profile-row"><span>Trạng thái mining</span><b id="miningStatus">IDLE</b></div>
 <div class="actions">
 <a class="btn" href="/mining.html">KHAI THÁC COH NGAY</a>
-<button id="logout" class="btn ghost" type="button">ĐĂNG XUẤT</button>
+<button id="showPasswordChange" class="btn ghost" type="button">ĐỔI MẬT KHẨU</button>
 </div>
+<div id="passwordChange" class="hidden">
+<label>Mật khẩu mới</label>
+<input id="changePassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Ít nhất 8 ký tự, gồm chữ + số">
+<label>Nhập lại mật khẩu mới</label>
+<input id="changePassword2" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Nhập lại mật khẩu mới">
+<button id="savePassword" class="btn" type="button">LƯU MẬT KHẨU MỚI</button>
+<div id="passwordState" class="state muted"></div>
+</div>
+<button id="logout" class="btn ghost" type="button">ĐĂNG XUẤT</button>
 <p class="muted" style="font-size:12px;margin-top:14px">Pending COH là số dư provisional off-chain trước Mainnet; chưa phải COH SPL on-chain và chưa thể chuyển/giao dịch.</p>
 </section>
 </main>
-<script src="/user-profile.js?v=phone-mining-v2"></script>
+<script src="/user-profile.js?v=account-password-v3"></script>
 </body>
 </html>
