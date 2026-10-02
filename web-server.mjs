@@ -2150,6 +2150,24 @@ const server=http.createServer(async (req,res)=>{
   });
 });
 
+async function maybeBootstrapInfobip2fa(){
+  if(!(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL)){
+    console.log("COHIBA_INFOBIP_BOOTSTRAP_SKIPPED");
+    return;
+  }
+  try{
+    const cfg=await ensureInfobip2faConfig();
+    console.log("COHIBA_INFOBIP_BOOTSTRAP_READY", JSON.stringify({
+      provider:"infobip",
+      applicationConfigured:Boolean(cfg.applicationId),
+      messageConfigured:Boolean(cfg.messageId),
+      persisted:true
+    }));
+  }catch(error){
+    console.error("COHIBA_INFOBIP_BOOTSTRAP_FAILED", String(error?.message||error));
+  }
+}
+
 async function maybeAutoLaunchMainnet(){
   if(process.env.AUTO_MAINNET_LAUNCH!=="I_UNDERSTAND_MAINNET_COHIBA") return;
   try{
@@ -2203,5 +2221,6 @@ server.maxRequestsPerSocket=100;
 
 server.listen(port,"0.0.0.0",()=>{
   console.log(`COHIBA web listening on :${port}`);
+  setTimeout(()=>{ void maybeBootstrapInfobip2fa(); },700);
   setTimeout(()=>{ void maybeAutoLaunchMainnet(); },1500);
 });
