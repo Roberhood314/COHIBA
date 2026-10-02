@@ -9,6 +9,14 @@ async function api(path,opts={}){
   if(authToken) headers.authorization="Bearer "+authToken;
   return fetch(path,{...opts,headers});
 }
+function normalizePhoneInput(value){
+  let raw=String(value||"").trim().replace(/[\s()-]/g,"");
+  // Vietnam convenience: 09xxxxxxxx -> +849xxxxxxxx, 84xxxxxxxxx -> +84xxxxxxxxx.
+  if(/^0\d{9}$/.test(raw)) raw="+84"+raw.slice(1);
+  else if(/^84\d{9}$/.test(raw)) raw="+"+raw;
+  if(!/^\+[1-9]\d{7,14}$/.test(raw)) throw new Error("Số điện thoại chưa đúng. Hãy nhập dạng +84901234567.");
+  return raw;
+}
 function setOnboardingState(html){const el=$("#accountOnboardingState");if(el)el.innerHTML=html;}
 function restoreOnboardingUi(){
   if(onboardingToken){
@@ -217,9 +225,13 @@ $("#signalForm").addEventListener("submit",async e=>{
   }catch(err){box.innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
 $("#onboardSendOtp")?.addEventListener("click",async()=>{
-  const phone=$("#onboardPhone").value.trim(),consent=$("#onboardConsent").checked;
-  setOnboardingState('<span class="note">Đang gửi OTP…</span>');
+  const consent=$("#onboardConsent").checked;
+  setOnboardingState('<span class="note">Đang kiểm tra số điện thoại…</span>');
   try{
+    const phone=normalizePhoneInput($("#onboardPhone").value);
+    $("#onboardPhone").value=phone;
+    if(!consent) throw new Error("Bạn cần đồng ý nhận SMS OTP để tiếp tục.");
+    setOnboardingState('<span class="note">Đang gửi OTP…</span>');
     const r=await fetch("/api/account/onboarding/phone/start",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,consent})});
     const x=await r.json(); if(!r.ok) throw new Error(x.error||"OTP_SEND_FAILED");
     onboardingId=x.onboardingId; localStorage.setItem("cohiba_onboarding_id",onboardingId);
@@ -228,9 +240,10 @@ $("#onboardSendOtp")?.addEventListener("click",async()=>{
   }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
 });
 $("#onboardCheckOtp")?.addEventListener("click",async()=>{
-  const phone=$("#onboardPhone").value.trim(),code=$("#onboardOtp").value.trim();
+  const code=$("#onboardOtp").value.trim();
   setOnboardingState('<span class="note">Đang xác minh OTP…</span>');
   try{
+    const phone=normalizePhoneInput($("#onboardPhone").value);
     const r=await fetch("/api/account/onboarding/phone/check",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,code,onboardingId})});
     const x=await r.json(); if(!r.ok) throw new Error(x.error||"OTP_VERIFY_FAILED");
     onboardingToken=x.onboardingToken;localStorage.setItem("cohiba_onboarding_token",onboardingToken);
@@ -285,12 +298,12 @@ $("#dailySignal").addEventListener("click",async()=>{
   await loadIdentity();
 });
 $("#sendOtp").addEventListener("click",async()=>{
-  const phone=$("#phoneNumber").value.trim(),consent=$("#phoneConsent").checked;
+  const phone=normalizePhoneInput($("#phoneNumber").value),consent=$("#phoneConsent").checked;
   const r=await api("/api/human-proof/phone/start",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,consent})}); const x=await r.json();
   $("#humanProofState").innerHTML=r.ok?'<p class="verified">OTP sent.</p>':'<p class="rejected">'+esc(x.error)+'</p>';
 });
 $("#checkOtp").addEventListener("click",async()=>{
-  const phone=$("#phoneNumber").value.trim(),code=$("#otpCode").value.trim();
+  const phone=normalizePhoneInput($("#phoneNumber").value),code=$("#otpCode").value.trim();
   const r=await api("/api/human-proof/phone/check",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({phone,code})}); const x=await r.json();
   if(!r.ok) return $("#humanProofState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
   await loadHumanProof();
