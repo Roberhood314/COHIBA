@@ -36,7 +36,7 @@ function friendly(err){
   PHONE_VERIFY_SEND_FAILED:"Nhà cung cấp SMS chưa gửi được OTP. Hãy thử lại.",
   PHONE_CODE_INVALID:"Mã OTP không đúng hoặc đã hết hạn.",
   ONBOARDING_EXPIRED:"Phiên xác minh đã hết hạn. Hãy gửi OTP lại.",
-  ONBOARDING_TOKEN_INVALID:"Phiên tạo tài khoản đã hết hạn. Hãy xác minh số điện thoại lại.",
+  ONBOARDING_TOKEN_INVALID:"Phiên tạo tài khoản không còn hiệu lực. Hệ thống sẽ đưa bạn về xác minh số điện thoại để đăng nhập lại.",
   DISPLAY_NAME_TAKEN:"Tên tài khoản này đã được dùng.",
   DISPLAY_NAME_LENGTH:"Tên tài khoản cần từ 3 đến 32 ký tự.",
   DISPLAY_NAME_INVALID:"Tên tài khoản chứa ký tự không hợp lệ."
