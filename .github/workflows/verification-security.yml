@@ -31,7 +31,8 @@ jobs:
         run: |
           rm -rf node_modules
           npm ci --omit=dev
-          PORT=3080 NODE_ENV=production node web-server.mjs > /tmp/cohiba-runtime.log 2>&1 &
+          mkdir -p /tmp/cohiba-data
+          COHIBA_DATA_DIR=/tmp/cohiba-data PORT=3080 NODE_ENV=production node web-server.mjs > /tmp/cohiba-runtime.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
           for i in {1..20}; do
