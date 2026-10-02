@@ -434,7 +434,7 @@ async function ensureInfobip2faConfig(){
           pinTimeToLive:"5m",
           verifyPinLimit:"1/3s",
           sendPinPerApplicationLimit:"10000/1d",
-          sendPinPerPhoneNumberLimit:"5/1d"
+          sendPinPerPhoneNumberLimit:"10/1d"
         },
         enabled:true
       })
@@ -444,6 +444,34 @@ async function ensureInfobip2faConfig(){
     cfg.applicationId=String(x.applicationId);
     cfg.applicationCreatedAt=new Date().toISOString();
     saveInfobip2faConfig(cfg);
+  }
+
+  if(cfg.applicationId && cfg.rateLimitVersion!=="10-per-day-v1"){
+    try{
+      const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId),{
+        method:"PUT",
+        headers,
+        body:JSON.stringify({
+          name:"COHIBA Human Verification",
+          configuration:{
+            pinAttempts:5,
+            allowMultiplePinVerifications:false,
+            pinTimeToLive:"5m",
+            verifyPinLimit:"1/3s",
+            sendPinPerApplicationLimit:"10000/1d",
+            sendPinPerPhoneNumberLimit:"10/1d"
+          },
+          enabled:true
+        })
+      });
+      const x=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error("INFOBIP_2FA_APPLICATION_UPDATE_FAILED_"+String(r.status));
+      cfg.rateLimitVersion="10-per-day-v1";
+      cfg.applicationUpdatedAt=new Date().toISOString();
+      saveInfobip2faConfig(cfg);
+    }catch(error){
+      console.error("COHIBA_INFOBIP_CONFIG_UPDATE_FAILED",String(error?.message||error));
+    }
   }
 
   if(!cfg.messageId){
@@ -483,7 +511,12 @@ async function infobipVerifyStart(phone){
     })
   });
   const x=await r.json().catch(()=>({}));
-  if(!r.ok || !x.pinId) throw new Error("PHONE_VERIFY_SEND_FAILED");
+  if(!r.ok || !x.pinId){
+    const providerCode=String(x?.requestError?.serviceException?.messageId||x?.errorCode||x?.code||r.status||"UNKNOWN").slice(0,80);
+    console.error("COHIBA_INFOBIP_SEND_FAILED",JSON.stringify({httpStatus:r.status,providerCode}));
+    if(r.status===429 || /LIMIT|RATE|TOO_MANY/i.test(providerCode)) throw new Error("OTP_PROVIDER_DAILY_LIMIT");
+    throw new Error("PHONE_VERIFY_SEND_FAILED");
+  }
   return {status:"pending",provider:"infobip",pinId:String(x.pinId)};
 }
 
@@ -1609,7 +1642,7 @@ const server=http.createServer(async (req,res)=>{
       json(res,200,{ok:true,onboardingId:record.id,status:"OTP_SENT",expiresAt:record.expiresAt});
     }catch(error){
       const m=String(error?.message||error);
-      const status=m==="OTP_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+      const status=["OTP_RATE_LIMITED","OTP_PROVIDER_DAILY_LIMIT"].includes(m)?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
         ["PHONE_CONSENT_REQUIRED","INVALID_E164_PHONE"].includes(m)?400:
         m==="PHONE_ALREADY_REGISTERED"?409:
         m==="PHONE_VERIFY_NOT_CONFIGURED"?409:500;
