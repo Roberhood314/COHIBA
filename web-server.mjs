@@ -11,6 +11,7 @@ import { normalizeContribution, contributionDigest, contributionId, publicContri
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
+import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -154,6 +155,45 @@ function saveLaunchRecord(network,record){
 const COMMUNITY_METRICS_FILE=path.join(DATA_DIR,"cohiba-community-metrics.json");
 const HUMAN_SIGNAL_FILE=path.join(DATA_DIR,"cohiba-human-signal.json");
 const HUMAN_SIGNAL_NETWORK_FILE=path.join(DATA_DIR,"cohiba-human-signal-network.json");
+const HUMAN_SIGNAL_CORE_FILE=path.join(DATA_DIR,"cohiba-human-signal-core.json");
+
+function loadHumanSignalCore(){
+  try{
+    if(!fs.existsSync(HUMAN_SIGNAL_CORE_FILE)) return {schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null};
+    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_CORE_FILE,"utf8"));
+    parsed.events=Array.isArray(parsed.events)?parsed.events:[];
+    parsed.apps=Array.isArray(parsed.apps)?parsed.apps:[];
+    parsed.appUtility=Array.isArray(parsed.appUtility)?parsed.appUtility:[];
+    return parsed;
+  }catch{
+    return {schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null,storageRecovered:true};
+  }
+}
+
+function saveHumanSignalCore(store){
+  fs.mkdirSync(DATA_DIR,{recursive:true});
+  store.updatedAt=new Date().toISOString();
+  atomicWriteJson(HUMAN_SIGNAL_CORE_FILE,store);
+}
+
+function hscCompositeStore(){
+  const core=loadHumanSignalCore();
+  const net=loadHumanSignalNetwork();
+  const contrib=loadHumanSignal();
+  return {
+    ...core,
+    profiles:net.profiles||[],
+    contributions:contrib.records||[]
+  };
+}
+
+function emitHsc(type,actor="SYSTEM",subject=null,data={}){
+  const core=loadHumanSignalCore();
+  const event=appendCoreEvent(core,{type,actor,subject,data});
+  saveHumanSignalCore(core);
+  return event;
+}
+
 
 function loadHumanSignalNetwork(){
   try{
@@ -769,6 +809,7 @@ const server=http.createServer(async (req,res)=>{
       store.sessions=store.sessions.filter(x=>isSessionValid(x)).slice(-5000);
       store.sessions.push(session.record);
       saveHumanSignalNetwork(store);
+      emitHsc("PROFILE_VERIFIED",profile.id,profile.id,{walletProof:true});
       const contributions=loadHumanSignal().records;
       json(res,200,{ok:true,token:session.token,expiresAt:session.record.expiresAt,profile:publicHumanProfile(profile,contributions)});
     }catch(error){
@@ -803,6 +844,7 @@ const server=http.createServer(async (req,res)=>{
         profile.lastActiveDay=today;
         noteMeaningfulAction(profile,"DAILY_SIGNAL");
         saveHumanSignalNetwork(store);
+        emitHsc("DAILY_SIGNAL",profile.id,profile.id,{day:today,streak:profile.streak});
       }
       const contributions=loadHumanSignal().records;
       json(res,200,{ok:true,alreadyActiveToday:profile.lastActiveDay===today,profile:publicHumanProfile(profile,contributions)});
@@ -835,6 +877,7 @@ const server=http.createServer(async (req,res)=>{
         profile.trustConnections.push(target.id);
         noteMeaningfulAction(profile,"TRUST_CONNECTION");
         saveHumanSignalNetwork(store);
+        emitHsc("TRUST_EDGE_ADDED",profile.id,target.id,{outgoingCount:profile.trustConnections.length});
       }
       const contributions=loadHumanSignal().records;
       json(res,200,{ok:true,profile:publicHumanProfile(profile,contributions)});
@@ -862,6 +905,85 @@ const server=http.createServer(async (req,res)=>{
       trustEdges:store.profiles.reduce((n,p)=>n+(p.trustConnections||[]).length,0),
       profiles:profiles.slice(0,100)
     });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/hsc/status"){
+    const composite=hscCompositeStore();
+    json(res,200,{
+      ok:true,
+      name:"COHIBA Human Signal Core",
+      coreType:"APPLICATION_COORDINATION_LAYER",
+      blockchainClaimed:false,
+      settlementLayer:"Solana",
+      ...networkHealth(composite)
+    });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/hsc/state-root"){
+    const composite=hscCompositeStore();
+    const integrity=verifyEventChain(composite.events||[]);
+    json(res,200,{
+      ok:true,
+      version:"0.1",
+      eventChain:integrity,
+      state:coreStateRoot(composite),
+      anchoredOnSolana:false,
+      note:"Current HSC root is deterministic off-chain application state. Solana anchoring is a later Devnet phase."
+    });
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/hsc/apps"){
+    const core=loadHumanSignalCore();
+    json(res,200,{ok:true,count:(core.apps||[]).length,apps:(core.apps||[]),utilityEventCount:(core.appUtility||[]).length});
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/hsc/apps/register"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,network);
+      const proof=publicHumanProof(profile);
+      if(!["HUMAN_VERIFIED","STRONG_SIGNAL"].includes(proof.confidence.tier)) throw new Error("DEVELOPER_HUMAN_PROOF_REQUIRED");
+      const core=loadHumanSignalCore();
+      const app=registerCoreApp(core,{name:parsed.name,description:parsed.description,developerProfileId:profile.id,homepage:parsed.homepage});
+      appendCoreEvent(core,{type:"APP_REGISTERED",actor:profile.id,subject:app.id,data:{name:app.name,homepage:app.homepage}});
+      saveHumanSignalCore(core);
+      json(res,201,{ok:true,app});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="DEVELOPER_HUMAN_PROOF_REQUIRED"?403:m==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/hsc/apps/utility"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const network=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,network);
+      const core=loadHumanSignalCore();
+      const out=recordAppUtility(core,{appId:String(parsed.appId||""),profileId:profile.id,action:parsed.action,proofRef:parsed.proofRef||null});
+      if(!out.duplicate){
+        appendCoreEvent(core,{type:"APP_ACTION_RECORDED",actor:profile.id,subject:String(parsed.appId||""),data:{action:out.record.action,proofRef:out.record.proofRef}});
+        saveHumanSignalCore(core);
+        noteMeaningfulAction(profile,"APP_UTILITY");
+        saveHumanSignalNetwork(network);
+      }
+      json(res,200,{ok:true,...out});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:m});
+    }
     return;
   }
 
@@ -911,6 +1033,7 @@ const server=http.createServer(async (req,res)=>{
       profile.humanProofs.phone={verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString()};
       delete profile.pendingPhoneHash;
       saveHumanSignalNetwork(store);
+      emitHsc("HUMAN_PROOF_UPDATED",profile.id,profile.id,{factor:"PHONE"});
       json(res,200,{ok:true,proof:publicHumanProof(profile)});
     }catch(error){
       const m=String(error?.message||error);
@@ -950,6 +1073,7 @@ const server=http.createServer(async (req,res)=>{
       if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
       profile.humanProofs.google={verified:true,identityHash:hashIdentity("google",identity.sub,identityPepper()),verifiedAt:new Date().toISOString(),emailVerified:Boolean(identity.emailVerified)};
       saveHumanSignalNetwork(store);
+      emitHsc("HUMAN_PROOF_UPDATED",profile.id,profile.id,{factor:"GOOGLE"});
       safeRedirect(res,state.returnTo+"&status=verified");
     }catch{
       safeRedirect(res,"/human-signal.html?humanProof=google&status=failed");
@@ -987,6 +1111,7 @@ const server=http.createServer(async (req,res)=>{
       if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
       profile.humanProofs.facebook={verified:true,identityHash:hashIdentity("facebook",identity.sub,identityPepper()),verifiedAt:new Date().toISOString()};
       saveHumanSignalNetwork(store);
+      emitHsc("HUMAN_PROOF_UPDATED",profile.id,profile.id,{factor:"FACEBOOK"});
       safeRedirect(res,state.returnTo+"&status=verified");
     }catch{
       safeRedirect(res,"/human-signal.html?humanProof=facebook&status=failed");
@@ -1015,6 +1140,7 @@ const server=http.createServer(async (req,res)=>{
       const session=newMiningSession(profile.id,rate);
       networkStore.miningSessions.push(session);
       saveHumanSignalNetwork(networkStore);
+      emitHsc("MINING_STARTED",profile.id,session.id,{rate:session.rateSnapshot.rate,version:session.version});
       json(res,201,{ok:true,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
     }catch(error){
       const message=String(error?.message||error);
@@ -1034,6 +1160,7 @@ const server=http.createServer(async (req,res)=>{
       if(!session) throw new Error("NO_ACTIVE_MINING_SESSION");
       const claim=applyClaim(session,profile,Date.now());
       saveHumanSignalNetwork(networkStore);
+      emitHsc("MINING_CLAIMED",profile.id,session.id,{amount:claim.amount,ended:claim.ended});
       json(res,200,{ok:true,claim,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
     }catch(error){
       const message=String(error?.message||error);
@@ -1126,6 +1253,7 @@ const server=http.createServer(async (req,res)=>{
       };
       store.records.push(record);
       saveHumanSignal(store);
+      emitHsc("CONTRIBUTION_SUBMITTED",linkedProfileId||normalized.contributor,record.id,{proofHash:record.proofHash,type:record.type});
       if(linkedProfileId){
         const networkStore=loadHumanSignalNetwork();
         const linkedProfile=networkStore.profiles.find(x=>x.id===linkedProfileId);
@@ -1209,6 +1337,9 @@ const server=http.createServer(async (req,res)=>{
       record.reviewedAt=new Date().toISOString();
       record.reviewNote=String(parsed.reviewNote||"").trim().slice(0,500)||null;
       saveHumanSignal(store);
+      if(status==="VERIFIED"||status==="REJECTED"){
+        emitHsc(status==="VERIFIED"?"CONTRIBUTION_VERIFIED":"CONTRIBUTION_REJECTED","REVIEWER",record.id,{profileId:record.profileId||null,type:record.type});
+      }
       json(res,200,{ok:true,record:publicContribution(record)});
     }catch(error){
       const message=String(error?.message||error);
