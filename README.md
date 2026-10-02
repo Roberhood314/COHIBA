@@ -121,6 +121,22 @@ The internal preparation for the following areas is complete, but completion dep
 No document in this repository authorizes Mainnet launch by itself.
 
 
+## Governance, treasury & operational hardening
+
+The pre-Mainnet governance/security pack is maintained in:
+
+- [Threat Model v2](docs/THREAT_MODEL.md)
+- [Treasury & Key Management Policy](docs/TREASURY_KEY_MANAGEMENT.md)
+- [Token Allocation & Vesting Policy](docs/TOKEN_ALLOCATION_VESTING.md)
+- [Governance Framework](docs/GOVERNANCE_FRAMEWORK.md)
+- [Incident Response Runbook](docs/INCIDENT_RESPONSE_RUNBOOK.md)
+- [Proof-of-Community Dashboard Standard](docs/PROOF_OF_COMMUNITY_DASHBOARD.md)
+- [Canonical Project Registry Policy](docs/CANONICAL_PROJECT_REGISTRY.md)
+- [Machine-readable Canonical Registry](registry/project-registry.json)
+- [Launch & Post-Launch Operations Plan](launch/POST_LAUNCH_OPERATIONS.md)
+
+The canonical registry is deliberately null for identifiers that do not yet exist or have not been independently verified. Mainnet mint, treasury vault and liquidity pool values must never be replaced with placeholders that resemble real addresses.
+
 ## Open Review campaign
 
 **COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET** is open.
