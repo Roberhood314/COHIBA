@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "2.1",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -215,9 +215,18 @@
       "conversionPromised": false,
       "pioneerCohortLimit": 10000,
       "maxSessionHours": 24,
-      "algorithm": "R = B(N) × [1 + P + T + S + C + U]",
+      "algorithm": "R = B(N) × [1 + P + T + S + C + U + G] × E",
       "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/SIGNAL_MINING.md",
-      "networkApi": "https://cohibameme.site/api/human-signal/mining/network"
+      "networkApi": "https://cohibameme.site/api/human-signal/mining/network",
+      "rateFactors": {
+        "P": "Pioneer",
+        "T": "Trust",
+        "S": "Streak",
+        "C": "Verified Contribution",
+        "U": "App Utility",
+        "G": "Verified Referral Growth",
+        "E": "Human Proof Eligibility"
+      }
     },
     "humanProof": {
       "version": "0.1",
@@ -238,6 +247,26 @@
       "piiPublic": false,
       "identityStorage": "HMAC_SHA256_HASHED_PROVIDER_IDENTIFIERS",
       "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_PROOF.md"
+    },
+    "pioneerSupport": {
+      "version": "0.1",
+      "publicCenter": "https://cohibameme.site/human-signal.html",
+      "onboardingChecklist": true,
+      "missions": true,
+      "referrals": {
+        "enabled": true,
+        "selfReferral": false,
+        "verifiedInviteeRequiredForBoost": true,
+        "maxBoostPercent": 25
+      },
+      "miningModes": [
+        "grace",
+        "enforced"
+      ],
+      "productionMode": "grace",
+      "readinessApi": "https://cohibameme.site/api/human-signal/readiness",
+      "pioneerApi": "https://cohibameme.site/api/human-signal/pioneer",
+      "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/PIONEER_SUPPORT.md"
     }
   },
   "humanSignalCore": {
