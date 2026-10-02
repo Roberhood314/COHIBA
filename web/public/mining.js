@@ -91,8 +91,8 @@ async function applyPendingReferral(){
 async function load(){
  if(!token){
    $("#heroStatus").innerHTML='<span class="pill bad">CHƯA ĐĂNG NHẬP</span>';
-   $("#startBtn").textContent="XÁC MINH VÍ TRƯỚC";
-   $("#startBtn").onclick=()=>location.href="/human-signal.html#quickMiningStart";
+   $("#startBtn").textContent="TẠO / ĐĂNG NHẬP TÀI KHOẢN";
+   $("#startBtn").onclick=()=>location.href="/user-profile.html";
    return;
  }
  const r=await api("/api/human-signal/mining/status"),x=await r.json();
