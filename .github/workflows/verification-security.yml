@@ -27,6 +27,26 @@ jobs:
         run: npm run build
       - name: Dependency audit gate
         run: npm audit --omit=dev --audit-level=high
+      - name: Production runtime smoke
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev
+          PORT=3080 NODE_ENV=production node web-server.mjs > /tmp/cohiba-runtime.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3080/api/health >/tmp/cohiba-health.json; then
+              cat /tmp/cohiba-health.json
+              exit 0
+            fi
+            if ! kill -0 $PID 2>/dev/null; then
+              cat /tmp/cohiba-runtime.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/cohiba-runtime.log
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: cohiba-verification-evidence
