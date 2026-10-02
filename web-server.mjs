@@ -619,12 +619,36 @@ function safeRedirect(res,pathname){
 }
 
 function publicHumanProfile(profile,contributions=[]){
+  const proof=publicHumanProof(profile);
+  const walletActivated=Boolean(profile.cohWallet?.ownerAddress);
+  const reviewStatus=String(profile.mainnetReviewStatus||"PENDING");
+  const mainnetEligible=proof.confidence.tier==="HUMAN_VERIFIED" && walletActivated && reviewStatus==="APPROVED";
   return {
     id:profile.id,
     displayName:profile.displayName||profile.id,
     walletVerified:true,
     walletPublic:Boolean(profile.walletPublic),
     wallet:profile.walletPublic?profile.wallet:null,
+    cohWallet:{
+      activated:walletActivated,
+      ownerAddress:walletActivated?profile.cohWallet.ownerAddress:null,
+      custody:"NON_CUSTODIAL",
+      network:"SOLANA",
+      phase:walletActivated?(profile.cohWallet.phase||"PRE_MAINNET"):"NOT_ACTIVATED",
+      tokenAccount:profile.cohWallet?.tokenAccount||null,
+      recoveryByCohiba:false
+    },
+    mining:{
+      signalPoints:Number(profile.signalPoints||0),
+      pendingCoh:Number(profile.pendingCoh||0),
+      pendingCohClass:"PROVISIONAL_OFFCHAIN",
+      transferable:false,
+      sellable:false,
+      finalDistributionGuaranteed:false
+    },
+    humanProofTier:proof.confidence.tier,
+    mainnetReviewStatus:reviewStatus,
+    mainnetEligible,
     activeDays:Number(profile.activeDays||0),
     streak:Number(profile.streak||0),
     lastActiveDay:profile.lastActiveDay||null,
@@ -1057,7 +1081,7 @@ const server=http.createServer(async (req,res)=>{
       const id=profileIdForWallet(challenge.wallet);
       let profile=store.profiles.find(x=>x.id===id);
       if(!profile){
-        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0};
+        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0,signalPoints:0,pendingCoh:0,mainnetReviewStatus:"PENDING"};
         store.profiles.push(profile);
       }
       const session=newSession(id);
@@ -1070,6 +1094,68 @@ const server=http.createServer(async (req,res)=>{
     }catch(error){
       const message=String(error?.message||error);
       const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/wallet/activate"){
+    try{
+      requireHumanSignalOrigin(req);
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,store);
+      if(!profile.wallet) throw new Error("PROFILE_WALLET_MISSING");
+      profile.cohWallet={
+        ownerAddress:profile.wallet,
+        custody:"NON_CUSTODIAL",
+        network:"SOLANA",
+        phase:"PRE_MAINNET",
+        tokenAccount:null,
+        activatedAt:profile.cohWallet?.activatedAt||new Date().toISOString()
+      };
+      saveHumanSignalNetwork(store);
+      emitHsc("COH_WALLET_ACTIVATED",profile.id,profile.id,{ownerAddress:profile.wallet,custody:"NON_CUSTODIAL"});
+      json(res,200,{ok:true,profile:publicHumanProfile(profile,loadHumanSignal().records)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(message)?401:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/mainnet-review"){
+    try{
+      requireHumanSignalOrigin(req);
+      requireHumanSignalReviewKey(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const profileId=String(parsed.profileId||"").trim();
+      const decision=String(parsed.decision||"").trim().toUpperCase();
+      if(!["APPROVED","REJECTED","PENDING"].includes(decision)) throw new Error("INVALID_REVIEW_DECISION");
+      const store=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=store.profiles.find(x=>x.id===profileId);
+      if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
+      const proof=publicHumanProof(profile);
+      if(decision==="APPROVED"){
+        if(proof.confidence.tier!=="HUMAN_VERIFIED") throw new Error("HUMAN_VERIFICATION_REQUIRED");
+        if(!profile.cohWallet?.ownerAddress) throw new Error("COH_WALLET_REQUIRED");
+      }
+      profile.mainnetReviewStatus=decision;
+      profile.mainnetReviewedAt=new Date().toISOString();
+      profile.mainnetReviewNote=String(parsed.note||"").slice(0,500)||null;
+      saveHumanSignalNetwork(store);
+      emitHsc("MAINNET_PROFILE_REVIEWED","REVIEWER",profile.id,{decision});
+      json(res,200,{ok:true,profile:publicHumanProfile(profile,loadHumanSignal().records)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_ORIGIN_INVALID","HUMAN_SIGNAL_REVIEW_KEY_INVALID"].includes(message)?403:
+        message==="HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED"?409:
+        message==="REQUEST_TOO_LARGE"?413:400;
       json(res,status,{ok:false,error:message});
     }
     return;
@@ -1540,7 +1626,7 @@ const server=http.createServer(async (req,res)=>{
       reviewKeyConfigured:Boolean(process.env.HUMAN_SIGNAL_REVIEW_KEY),
       missing:[
         ...(!providers.pepper?["HUMAN_IDENTITY_PEPPER"]:[]),
-        ...(!providers.phone?["TWILIO_VERIFY"]:[]),
+        ...(!providers.phone?["INFOBIP_2FA"]:[]),
         ...(!providers.google?["GOOGLE_OAUTH"]:[]),
         ...(!providers.facebook?["FACEBOOK_OAUTH"]:[]),
         ...(!process.env.HUMAN_SIGNAL_REVIEW_KEY?["HUMAN_SIGNAL_REVIEW_KEY"]:[])
@@ -1572,7 +1658,7 @@ const server=http.createServer(async (req,res)=>{
       networkStore.miningSessions.push(session);
       saveHumanSignalNetwork(networkStore);
       emitHsc("MINING_STARTED",profile.id,session.id,{rate:session.rateSnapshot.rate,version:session.version});
-      json(res,201,{ok:true,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
+      json(res,201,{ok:true,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pendingCoh:Number(profile.pendingCoh||0),pioneer:Boolean(profile.pioneer)}});
     }catch(error){
       const message=String(error?.message||error);
       const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:message==="MINING_NOT_ELIGIBLE"?403:500;
@@ -1592,7 +1678,7 @@ const server=http.createServer(async (req,res)=>{
       const claim=applyClaim(session,profile,Date.now());
       saveHumanSignalNetwork(networkStore);
       emitHsc("MINING_CLAIMED",profile.id,session.id,{amount:claim.amount,ended:claim.ended});
-      json(res,200,{ok:true,claim,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)}});
+      json(res,200,{ok:true,claim,session:publicMiningSession(session),profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pendingCoh:Number(profile.pendingCoh||0),pioneer:Boolean(profile.pioneer)}});
     }catch(error){
       const message=String(error?.message||error);
       const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="HUMAN_SIGNAL_AUTH_REQUIRED"||message==="HUMAN_SIGNAL_SESSION_INVALID"?401:message==="NO_ACTIVE_MINING_SESSION"?409:500;
@@ -1611,11 +1697,13 @@ const server=http.createServer(async (req,res)=>{
       const rate=miningRateForProfile(profile,networkStore,contributionStore);
       json(res,200,{
         ok:true,
-        unit:"SIGNAL_POINTS",
+        unit:"PENDING_COH_AND_SIGNAL_POINTS",
         transferable:false,
         token:false,
         conversionPromised:false,
-        profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pioneer:Boolean(profile.pioneer)},
+        pendingCohProvisional:true,
+        pendingCohTransferable:false,
+        profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pendingCoh:Number(profile.pendingCoh||0),pioneer:Boolean(profile.pioneer)},
         currentRate:rate,
         session:active?publicMiningSession(active):null
       });
