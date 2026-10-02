@@ -41,6 +41,8 @@
     "node": ">=20 <25"
   },
   "overrides": {
-    "bigint-buffer": "file:vendor/bigint-buffer-safe"
+    "bigint-buffer": "file:vendor/bigint-buffer-safe",
+    "stream-json": "3.5.0",
+    "uuid": "11.1.1"
   }
 }
