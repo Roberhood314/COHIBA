@@ -18,6 +18,15 @@ async function post(path,payload,timeout=12000){
    return x;
  }finally{clearTimeout(t)}
 }
+function resetOnboarding(message="Phiên xác minh đã hết hạn. Vui lòng xác minh số điện thoại lại."){
+  onboardingId="";onboardingToken="";verifiedPhone="";
+  sessionStorage.removeItem("cohiba_onboarding_id");
+  sessionStorage.removeItem("cohiba_onboarding_token");
+  sessionStorage.removeItem("cohiba_verified_phone");
+  $("#otp").value="";
+  setStep(1);
+  $("#phoneState").innerHTML='<span class="bad">'+esc(message)+'</span>';
+}
 function friendly(err){
  const m=String(err?.message||err);
  const map={
@@ -53,6 +62,8 @@ async function loadAccount(){
  }
 }
 $("#sendOtp").addEventListener("click",async()=>{
+ onboardingToken="";
+ sessionStorage.removeItem("cohiba_onboarding_token");
  const phone=$("#phone").value.trim(),consent=$("#consent").checked;
  $("#sendOtp").disabled=true;$("#phoneState").textContent="Đang gửi OTP…";
  try{
@@ -74,7 +85,14 @@ $("#verifyOtp").addEventListener("click",async()=>{
   sessionStorage.setItem("cohiba_onboarding_token",onboardingToken);
   $("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>';
   setStep(3);
- }catch(err){$("#otpState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>'}
+ }catch(err){
+   const code=String(err?.message||err);
+   if(code==="ONBOARDING_EXPIRED" || code==="ONBOARDING_TOKEN_INVALID"){
+     resetOnboarding("Phiên OTP đã hết hạn. Hãy gửi mã OTP mới.");
+   }else{
+     $("#otpState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
+   }
+ }
  finally{$("#verifyOtp").disabled=false}
 });
 $("#backPhone").addEventListener("click",()=>{
@@ -90,7 +108,14 @@ $("#createAccount").addEventListener("click",async()=>{
   authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);
   sessionStorage.removeItem("cohiba_onboarding_id");sessionStorage.removeItem("cohiba_onboarding_token");sessionStorage.removeItem("cohiba_verified_phone");
   await loadAccount();
- }catch(err){$("#profileState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>'}
+ }catch(err){
+   const code=String(err?.message||err);
+   if(code==="ONBOARDING_TOKEN_INVALID" || code==="ONBOARDING_EXPIRED"){
+     resetOnboarding("Phiên tạo tài khoản cũ đã hết hạn. Hệ thống đã đưa bạn về bước xác minh số điện thoại.");
+   }else{
+     $("#profileState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
+   }
+ }
  finally{$("#createAccount").disabled=false}
 });
 $("#logout").addEventListener("click",()=>{
@@ -98,8 +123,14 @@ $("#logout").addEventListener("click",()=>{
 });
 (async()=>{
  if(await loadAccount())return;
- if(onboardingToken){setStep(3);$("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>'}
- else if(onboardingId&&verifiedPhone){setStep(2)}
- else setStep(1);
+ if(onboardingToken&&verifiedPhone){
+   setStep(3);
+   $("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>';
+ }else if(onboardingId&&verifiedPhone){
+   setStep(2);
+ }else{
+   if(onboardingToken||onboardingId) resetOnboarding();
+   else setStep(1);
+ }
 })();
 })();
