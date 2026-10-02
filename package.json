@@ -20,9 +20,10 @@
     "test": "node --test test/*.test.mjs",
     "verify:security": "node scripts/verify-security-posture.mjs",
     "evidence:generate": "node scripts/generate-security-evidence.mjs",
-    "verify:all": "npm run test && npm run verify:security && npm run typecheck",
+    "verify:all": "npm run test && npm run verify:security && npm run verify:evolution && npm run typecheck",
     "verify:ops": "node scripts/run-operational-drills.mjs",
-    "node:agent": "node scripts/cohiba-node-agent.mjs"
+    "node:agent": "node scripts/cohiba-node-agent.mjs",
+    "verify:evolution": "node scripts/verify-evolution-policy.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
