@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction, clusterApiUrl } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getMint, setAuthority, AuthorityType } from "@solana/spl-token";
@@ -10,6 +11,7 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
 import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 import { calculateMiningRate, newMiningSession, applyClaim, publicMiningSession, PIONEER_COHORT_SIZE } from "./lib/signal-mining.mjs";
+import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
 import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
@@ -176,6 +178,35 @@ const HUMAN_SIGNAL_FILE=path.join(DATA_DIR,"cohiba-human-signal.json");
 const HUMAN_SIGNAL_NETWORK_FILE=path.join(DATA_DIR,"cohiba-human-signal-network.json");
 const HUMAN_SIGNAL_CORE_FILE=path.join(DATA_DIR,"cohiba-human-signal-core.json");
 const INFOBIP_2FA_FILE=path.join(DATA_DIR,"cohiba-infobip-2fa.json");
+const ACCOUNT_ONBOARDING_FILE=path.join(DATA_DIR,"cohiba-account-onboarding.json");
+
+function loadAccountOnboarding(){
+  try{
+    if(!fs.existsSync(ACCOUNT_ONBOARDING_FILE)) return {schemaVersion:"1.0",records:[],updatedAt:null};
+    const parsed=JSON.parse(fs.readFileSync(ACCOUNT_ONBOARDING_FILE,"utf8"));
+    parsed.records=Array.isArray(parsed.records)?parsed.records:[];
+    return parsed;
+  }catch{
+    return {schemaVersion:"1.0",records:[],updatedAt:null,storageRecovered:true};
+  }
+}
+function saveAccountOnboarding(store){
+  fs.mkdirSync(DATA_DIR,{recursive:true});
+  store.updatedAt=new Date().toISOString();
+  atomicWriteJson(ACCOUNT_ONBOARDING_FILE,store);
+}
+function onboardingTokenHash(token){
+  return crypto.createHash("sha256").update(String(token||"")).digest("hex");
+}
+function cleanDisplayName(value){
+  const name=String(value||"").trim().replace(/\s+/g," ");
+  if(name.length<3 || name.length>32) throw new Error("DISPLAY_NAME_LENGTH");
+  if(!/^[\p{L}\p{N}_. -]+$/u.test(name)) throw new Error("DISPLAY_NAME_INVALID");
+  return name;
+}
+function validOnboardingRecord(record){
+  return Boolean(record && record.status==="PROFILE_READY" && record.tokenHash && Date.parse(record.tokenExpiresAt)>Date.now() && !record.usedAt);
+}
 
 function loadHumanSignalCore(){
   try{
@@ -1073,16 +1104,33 @@ const server=http.createServer(async (req,res)=>{
         if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");
       }
       const parsed=body?JSON.parse(body):{};
+      const onboardingToken=String(parsed.onboardingToken||"");
       const store=loadHumanSignalNetwork();
       const challenge=store.challenges.find(x=>x.challengeId===String(parsed.challengeId||""));
       if(!challenge || challenge.used || Date.parse(challenge.expiresAt)<=Date.now()) throw new Error("CHALLENGE_INVALID_OR_EXPIRED");
       if(!verifySolanaMessage(challenge.wallet,challenge.message,String(parsed.signature||""))) throw new Error("SIGNATURE_INVALID");
       challenge.used=true;
       const id=profileIdForWallet(challenge.wallet);
+      let onboarding=null;
+      if(onboardingToken){
+        const onboardingStore=loadAccountOnboarding();
+        onboarding=onboardingStore.records.find(x=>x.tokenHash===onboardingTokenHash(onboardingToken));
+        if(!validOnboardingRecord(onboarding)) throw new Error("ONBOARDING_TOKEN_INVALID");
+        const phoneInUse=store.profiles.some(p=>p.id!==id && p.humanProofs?.phone?.identityHash===onboarding.phoneHash);
+        if(phoneInUse) throw new Error("PHONE_ALREADY_REGISTERED");
+      }
       let profile=store.profiles.find(x=>x.id===id);
       if(!profile){
-        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0,signalPoints:0,pendingCoh:0,mainnetReviewStatus:"PENDING"};
+        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:onboarding?.displayName||id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0,signalPoints:0,pendingCoh:0,mainnetReviewStatus:"PENDING",humanProofs:{}};
         store.profiles.push(profile);
+      }
+      if(onboarding){
+        profile.displayName=onboarding.displayName;
+        profile.humanProofs=profile.humanProofs&&typeof profile.humanProofs==="object"?profile.humanProofs:{};
+        profile.humanProofs.phone={verified:true,identityHash:onboarding.phoneHash,verifiedAt:onboarding.phoneVerifiedAt||new Date().toISOString(),provider:onboarding.provider||"infobip"};
+        const onboardingStore=loadAccountOnboarding();
+        const rec=onboardingStore.records.find(x=>x.id===onboarding.id);
+        if(rec){rec.usedAt=new Date().toISOString();rec.status="BOUND_TO_WALLET";rec.profileId=id;saveAccountOnboarding(onboardingStore);}
       }
       const session=newSession(id);
       store.sessions=store.sessions.filter(x=>isSessionValid(x)).slice(-5000);
@@ -1524,6 +1572,104 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="POST" && raw==="/api/account/onboarding/phone/start"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      if(parsed.consent!==true) throw new Error("PHONE_CONSENT_REQUIRED");
+      const phone=normalizePhone(parsed.phone);
+      const phoneHash=hashIdentity("phone",phone,identityPepper());
+      enforceOtpRateLimit(req,phoneHash,"start");
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      if(network.profiles.some(p=>p.humanProofs?.phone?.identityHash===phoneHash)) throw new Error("PHONE_ALREADY_REGISTERED");
+      const verification=await phoneVerifyStart(phone);
+      const store=loadAccountOnboarding();
+      store.records=store.records.filter(x=>Date.parse(x.expiresAt)>Date.now() && !x.usedAt).slice(-2000);
+      const record={
+        id:"ONB-"+crypto.randomBytes(10).toString("hex").toUpperCase(),
+        phoneHash,
+        provider:verification.provider||"twilio",
+        pinId:verification.pinId||null,
+        status:"OTP_SENT",
+        createdAt:new Date().toISOString(),
+        expiresAt:new Date(Date.now()+20*60*1000).toISOString(),
+        tokenHash:null,
+        tokenExpiresAt:null,
+        displayName:null,
+        usedAt:null
+      };
+      store.records.push(record); saveAccountOnboarding(store);
+      json(res,200,{ok:true,onboardingId:record.id,status:"OTP_SENT",expiresAt:record.expiresAt});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="OTP_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["PHONE_CONSENT_REQUIRED","INVALID_E164_PHONE"].includes(m)?400:
+        m==="PHONE_ALREADY_REGISTERED"?409:
+        m==="PHONE_VERIFY_NOT_CONFIGURED"?409:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/onboarding/phone/check"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const phone=normalizePhone(parsed.phone);
+      const phoneHash=hashIdentity("phone",phone,identityPepper());
+      const store=loadAccountOnboarding();
+      const record=store.records.find(x=>x.id===String(parsed.onboardingId||""));
+      if(!record || record.usedAt || Date.parse(record.expiresAt)<=Date.now()) throw new Error("ONBOARDING_EXPIRED");
+      if(record.phoneHash!==phoneHash) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
+      enforceOtpRateLimit(req,phoneHash,"check");
+      await phoneVerifyCheck({pendingPhoneProvider:record.provider,pendingPhonePinId:record.pinId},phone,String(parsed.code||""));
+      const token=crypto.randomBytes(32).toString("base64url");
+      record.status="PHONE_VERIFIED";
+      record.phoneVerifiedAt=new Date().toISOString();
+      record.tokenHash=onboardingTokenHash(token);
+      record.tokenExpiresAt=new Date(Date.now()+30*60*1000).toISOString();
+      saveAccountOnboarding(store);
+      json(res,200,{ok:true,status:"PHONE_VERIFIED",onboardingToken:token,expiresAt:record.tokenExpiresAt});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="OTP_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["PHONE_CODE_INVALID","PHONE_VERIFICATION_CONTEXT_MISMATCH","INVALID_E164_PHONE","ONBOARDING_EXPIRED"].includes(m)?400:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/account/onboarding/profile"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      const token=String(parsed.onboardingToken||"");
+      const displayName=cleanDisplayName(parsed.displayName);
+      const store=loadAccountOnboarding();
+      const record=store.records.find(x=>x.tokenHash===onboardingTokenHash(token));
+      if(!record || record.status!=="PHONE_VERIFIED" || Date.parse(record.tokenExpiresAt)<=Date.now() || record.usedAt) throw new Error("ONBOARDING_TOKEN_INVALID");
+      const network=loadHumanSignalNetwork();
+      const lower=displayName.toLocaleLowerCase("vi");
+      if(network.profiles.some(p=>String(p.displayName||"").toLocaleLowerCase("vi")===lower)) throw new Error("DISPLAY_NAME_TAKEN");
+      if(store.records.some(x=>x.id!==record.id && !x.usedAt && String(x.displayName||"").toLocaleLowerCase("vi")===lower)) throw new Error("DISPLAY_NAME_TAKEN");
+      record.displayName=displayName;
+      record.status="PROFILE_READY";
+      record.profileReadyAt=new Date().toISOString();
+      saveAccountOnboarding(store);
+      json(res,200,{ok:true,status:"PROFILE_READY",displayName,onboardingToken:token});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
+        ["DISPLAY_NAME_LENGTH","DISPLAY_NAME_INVALID","ONBOARDING_TOKEN_INVALID"].includes(m)?400:
+        m==="DISPLAY_NAME_TAKEN"?409:500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/human-proof/status"){
     try{
       const store=ensureHumanProofStore(loadHumanSignalNetwork());
@@ -1802,11 +1948,27 @@ const server=http.createServer(async (req,res)=>{
         pendingCohTransferable:false,
         profile:{id:profile.id,signalPoints:Number(profile.signalPoints||0),pendingCoh:Number(profile.pendingCoh||0),pioneer:Boolean(profile.pioneer)},
         currentRate:rate,
+        rateUnits:rateUnits(rate.rate),
+        reserve:miningReserveState(networkStore.profiles||[]),
         session:active?publicMiningSession(active):null
       });
     }catch(error){
       json(res,401,{ok:false,error:String(error?.message||error)});
     }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/mining/economics"){
+    const networkStore=loadHumanSignalNetwork();
+    const reserve=miningReserveState(networkStore.profiles||[]);
+    let personal=null;
+    try{
+      const profile=authHumanSignalProfile(req,networkStore);
+      const contributionStore=loadHumanSignal();
+      const rate=miningRateForProfile(profile,networkStore,contributionStore);
+      personal={profileId:profile.id,rate:rateUnits(rate.rate),rateDetail:rate,pendingCoh:Number(profile.pendingCoh||0)};
+    }catch{}
+    json(res,200,{ok:true,...reserve,personal,generatedAt:new Date().toISOString()});
     return;
   }
 
