@@ -28,6 +28,7 @@ const MAINNET_MIN_SOL = 0.03;
 const HSC_MEMO_PROGRAM=new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const launchAttempts = new Map();
 const apiRateWindows = new Map();
+const otpRateWindows = new Map();
 
 function rateLimitApi(req){
   const key=requestIp(req);
@@ -44,6 +45,22 @@ function rateLimitApi(req){
     }
   }
   return true;
+}
+
+function enforceOtpRateLimit(req,phoneHash,kind){
+  const now=Date.now();
+  const windowMs=10*60*1000;
+  const max=kind==="start"?3:8;
+  const key=kind+":"+requestIp(req)+":"+String(phoneHash||"").slice(0,32);
+  const recent=(otpRateWindows.get(key)||[]).filter(ts=>now-ts<windowMs);
+  if(recent.length>=max) throw new Error("OTP_RATE_LIMITED");
+  recent.push(now);
+  otpRateWindows.set(key,recent);
+  if(otpRateWindows.size>10000){
+    for(const [k,times] of otpRateWindows){
+      if(!times.some(ts=>now-ts<windowMs)) otpRateWindows.delete(k);
+    }
+  }
 }
 
 function isAllowedMethod(method){
@@ -1277,7 +1294,7 @@ const server=http.createServer(async (req,res)=>{
     const facebook=Boolean(process.env.FACEBOOK_APP_ID&&process.env.FACEBOOK_APP_SECRET&&process.env.FACEBOOK_GRAPH_VERSION);
     const identityPepperReady=Boolean(process.env.HUMAN_IDENTITY_PEPPER);
     const reviewKeyReady=Boolean(process.env.HUMAN_SIGNAL_REVIEW_KEY);
-    const providersReady=phone&&google&&facebook;
+    const providersReady=phone&&(google||facebook);
     json(res,200,{
       ok:true,
       mode:providersReady?"FULL_PROVIDER_READY":"GRACE",
@@ -1309,15 +1326,17 @@ const server=http.createServer(async (req,res)=>{
       const phone=normalizePhone(parsed.phone);
       const store=ensureHumanProofStore(loadHumanSignalNetwork());
       const profile=authHumanSignalProfile(req,store);
+      const phoneHash=hashIdentity("phone",phone,identityPepper());
+      enforceOtpRateLimit(req,phoneHash,"start");
       const verification=await phoneVerifyStart(phone);
-      profile.pendingPhoneHash=hashIdentity("phone",phone,identityPepper());
+      profile.pendingPhoneHash=phoneHash;
       profile.pendingPhoneProvider=verification.provider||"twilio";
       profile.pendingPhonePinId=verification.pinId||null;
       saveHumanSignalNetwork(store);
       json(res,200,{ok:true,status:"OTP_SENT"});
     }catch(error){
       const m=String(error?.message||error);
-      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:["PHONE_VERIFY_NOT_CONFIGURED"].includes(m)?409:["PHONE_CONSENT_REQUIRED","INVALID_E164_PHONE"].includes(m)?400:500;
+      const status=m==="OTP_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:["PHONE_VERIFY_NOT_CONFIGURED"].includes(m)?409:["PHONE_CONSENT_REQUIRED","INVALID_E164_PHONE"].includes(m)?400:500;
       json(res,status,{ok:false,error:m});
     }
     return;
@@ -1333,6 +1352,7 @@ const server=http.createServer(async (req,res)=>{
       const profile=authHumanSignalProfile(req,store);
       const phoneHash=hashIdentity("phone",phone,identityPepper());
       if(profile.pendingPhoneHash!==phoneHash) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
+      enforceOtpRateLimit(req,phoneHash,"check");
       await phoneVerifyCheck(profile,phone,String(parsed.code||""));
       profile.humanProofs.phone={verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString(),provider:profile.pendingPhoneProvider||"twilio"};
       delete profile.pendingPhoneHash;
@@ -1343,7 +1363,7 @@ const server=http.createServer(async (req,res)=>{
       json(res,200,{ok:true,proof:publicHumanProof(profile)});
     }catch(error){
       const m=String(error?.message||error);
-      const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="PHONE_VERIFY_NOT_CONFIGURED"?409:["PHONE_CODE_INVALID","PHONE_VERIFICATION_CONTEXT_MISMATCH","INVALID_E164_PHONE"].includes(m)?400:500;
+      const status=m==="OTP_RATE_LIMITED"?429:m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="PHONE_VERIFY_NOT_CONFIGURED"?409:["PHONE_CODE_INVALID","PHONE_VERIFICATION_CONTEXT_MISMATCH","INVALID_E164_PHONE"].includes(m)?400:500;
       json(res,status,{ok:false,error:m});
     }
     return;
