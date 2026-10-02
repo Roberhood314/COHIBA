@@ -1392,6 +1392,27 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/ads/config"){
+    const publisherId=String(process.env.ADSENSE_PUBLISHER_ID||"").trim();
+    const slotId=String(process.env.ADSENSE_SLOT_ID||"").trim();
+    json(res,200,{
+      ok:true,
+      provider:publisherId?"google-adsense":"unconfigured",
+      configured:Boolean(publisherId),
+      publisherId:publisherId||null,
+      slotId:slotId||null,
+      rewardedAds:{
+        enabled:process.env.ADSENSE_REWARDED_ENABLED==="true" && Boolean(publisherId),
+        rewardClass:"NON_MONETARY_SITE_UTILITY",
+        miningReward:false,
+        pendingCohReward:false
+      },
+      payoutManagedByProvider:true,
+      bankingDataStoredByCohiba:false
+    });
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/economy/status"){
     const mainnetRecord=loadLaunchRecord("mainnet-beta");
     const mainnetLive=Boolean(mainnetRecord?.locked&&mainnetRecord?.mint);
