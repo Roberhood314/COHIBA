@@ -87,7 +87,7 @@ async function loadMining(){
     const p=x.profile||{},rate=x.currentRate||{},s=x.session;
     $("#miningState").innerHTML=
       '<strong>'+esc(p.pioneer?"PIONEER COHORT":"COMMUNITY MINER")+'</strong>'+
-      '<p>Balance: <span class="verified">'+esc(p.signalPoints||0)+' SP</span></p>'+
+      '<p>Signal Points: <span class="verified">'+esc(p.signalPoints||0)+' SP</span> · Pending COH: <span class="verified">'+esc(p.pendingCoh||0)+'</span></p>'+
       '<p>Current rate: '+esc(rate.rate||0)+' SP/hour · base '+esc(rate.baseRate||0)+'</p>'+
       '<p class="note">Rate breakdown: Pioneer +'+esc(Math.round((rate.multipliers?.pioneer||0)*100))+'% · Trust +'+esc(Math.round((rate.multipliers?.trust||0)*100))+'% · Streak +'+esc(Math.round((rate.multipliers?.streak||0)*100))+'% · Contribution +'+esc(Math.round((rate.multipliers?.contribution||0)*100))+'% · Utility +'+esc(Math.round((rate.multipliers?.utility||0)*100))+'% · Growth +'+esc(Math.round((rate.multipliers?.growth||0)*100))+'% · Eligibility ×'+esc(rate.eligibilityFactor??1)+'</p>'+
       (s?'<p>Session: '+esc(s.status)+' · claimable '+esc(s.claimablePoints||0)+' SP<br><span class="note">Ends '+esc(s.endsAt)+'</span></p>':'<p class="note">No active mining session.</p>');
@@ -103,7 +103,12 @@ async function loadIdentity(){
       const r=await api("/api/human-signal/me");
       if(r.ok){
         const x=await r.json(),p=x.profile;
-        $("#identityState").innerHTML='<strong>'+esc(p.id)+'</strong><p class="note">Roles: '+esc((p.roles||[]).join(" · "))+'</p><p>Active days: '+esc(p.activeDays)+' · streak: '+esc(p.streak)+' · trust: '+esc(p.trustConnections)+'/5 · trust score: '+esc(p.trustScore)+'</p>';
+        $("#identityState").innerHTML='<strong>'+esc(p.id)+'</strong><p class="note">Roles: '+esc((p.roles||[]).join(" · "))+'</p><p>Human Proof: <strong>'+esc(p.humanProofTier||"UNVERIFIED")+'</strong> · Mainnet review: <strong>'+esc(p.mainnetReviewStatus||"PENDING")+'</strong> · Eligible: '+(p.mainnetEligible?"YES":"NO")+'</p><p>Active days: '+esc(p.activeDays)+' · streak: '+esc(p.streak)+' · trust: '+esc(p.trustConnections)+'/5 · trust score: '+esc(p.trustScore)+'</p>';
+        const cw=p.cohWallet||{},mn=p.mining||{};
+        $("#cohWalletState").innerHTML=cw.activated
+          ?'<strong>COH Wallet Active</strong><p class="proof">'+esc(cw.ownerAddress)+'</p><p>Pending COH: <span class="verified">'+esc(mn.pendingCoh||0)+'</span></p><p class="note">Custody '+esc(cw.custody)+' · '+esc(cw.phase)+' · not transferable before Mainnet.</p>'
+          :'<span class="note">COH Wallet not activated.</span>';
+        $("#activateCohWallet").disabled=Boolean(cw.activated);
         $("#dailySignal").disabled=false; $("#addTrust").disabled=false; $("#startMining").disabled=false; $("#sendOtp").disabled=false; $("#checkOtp").disabled=false; $("#verifyGoogle").disabled=false; $("#verifyFacebook").disabled=false;
       }else{authToken="";localStorage.removeItem("cohiba_human_signal_token");}
     }
@@ -153,6 +158,11 @@ $("#connectWallet").addEventListener("click",async()=>{
     authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
     await loadIdentity(); await loadMining(); await loadPioneer();
   }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
+});
+$("#activateCohWallet").addEventListener("click",async()=>{
+  const r=await api("/api/human-signal/wallet/activate",{method:"POST"}); const x=await r.json();
+  if(!r.ok) return $("#cohWalletState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
+  await loadIdentity(); await loadMining();
 });
 $("#dailySignal").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/session",{method:"POST"}); const x=await r.json();
