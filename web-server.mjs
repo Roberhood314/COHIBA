@@ -8,6 +8,7 @@ import { createV1, findMetadataPda, mplTokenMetadata, TokenStandard } from "@met
 import { keypairIdentity, percentAmount, publicKey as umiPublicKey } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { normalizeContribution, contributionDigest, contributionId, publicContribution, reputationTable } from "./lib/human-signal.mjs";
+import { createWalletChallenge, verifySolanaMessage, newSession, hashSessionToken, isSessionValid, profileIdForWallet, utcDay, nextStreak, deriveRoles, trustScore, MAX_TRUST_CONNECTIONS } from "./lib/human-signal-network.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
@@ -150,6 +151,54 @@ function saveLaunchRecord(network,record){
 
 const COMMUNITY_METRICS_FILE=path.join(DATA_DIR,"cohiba-community-metrics.json");
 const HUMAN_SIGNAL_FILE=path.join(DATA_DIR,"cohiba-human-signal.json");
+const HUMAN_SIGNAL_NETWORK_FILE=path.join(DATA_DIR,"cohiba-human-signal-network.json");
+
+function loadHumanSignalNetwork(){
+  try{
+    if(!fs.existsSync(HUMAN_SIGNAL_NETWORK_FILE)) return {schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null};
+    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_NETWORK_FILE,"utf8"));
+    if(!parsed || !Array.isArray(parsed.profiles) || !Array.isArray(parsed.challenges) || !Array.isArray(parsed.sessions)) throw new Error("INVALID_HUMAN_SIGNAL_NETWORK_STORE");
+    return parsed;
+  }catch{
+    return {schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null,storageRecovered:true};
+  }
+}
+
+function saveHumanSignalNetwork(store){
+  fs.mkdirSync(DATA_DIR,{recursive:true});
+  store.updatedAt=new Date().toISOString();
+  atomicWriteJson(HUMAN_SIGNAL_NETWORK_FILE,store);
+}
+
+function authHumanSignalProfile(req,store){
+  const auth=String(req.headers.authorization||"");
+  const token=auth.startsWith("Bearer ")?auth.slice(7):"";
+  if(!token) throw new Error("HUMAN_SIGNAL_AUTH_REQUIRED");
+  const hash=hashSessionToken(token);
+  const session=store.sessions.find(x=>x.tokenHash===hash);
+  if(!isSessionValid(session)) throw new Error("HUMAN_SIGNAL_SESSION_INVALID");
+  const profile=store.profiles.find(x=>x.id===session.profileId);
+  if(!profile) throw new Error("HUMAN_SIGNAL_PROFILE_NOT_FOUND");
+  return profile;
+}
+
+function publicHumanProfile(profile,contributions=[]){
+  return {
+    id:profile.id,
+    displayName:profile.displayName||profile.id,
+    walletVerified:true,
+    walletPublic:Boolean(profile.walletPublic),
+    wallet:profile.walletPublic?profile.wallet:null,
+    activeDays:Number(profile.activeDays||0),
+    streak:Number(profile.streak||0),
+    lastActiveDay:profile.lastActiveDay||null,
+    trustConnections:(profile.trustConnections||[]).length,
+    trustScore:trustScore(profile),
+    roles:deriveRoles(profile,contributions),
+    createdAt:profile.createdAt
+  };
+}
+
 
 function loadHumanSignal(){
   try{
@@ -532,6 +581,147 @@ const server=http.createServer(async (req,res)=>{
   }
 
 
+  if(req.method==="POST" && raw==="/api/human-signal/auth/challenge"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const challenge=createWalletChallenge(parsed.wallet,CANONICAL_PUBLIC_ORIGIN);
+      const store=loadHumanSignalNetwork();
+      store.challenges=store.challenges.filter(x=>!x.used && Date.parse(x.expiresAt)>Date.now()).slice(-1000);
+      store.challenges.push(challenge);
+      saveHumanSignalNetwork(store);
+      json(res,201,{ok:true,challenge:{challengeId:challenge.challengeId,wallet:challenge.wallet,message:challenge.message,expiresAt:challenge.expiresAt}});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/auth/verify"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const store=loadHumanSignalNetwork();
+      const challenge=store.challenges.find(x=>x.challengeId===String(parsed.challengeId||""));
+      if(!challenge || challenge.used || Date.parse(challenge.expiresAt)<=Date.now()) throw new Error("CHALLENGE_INVALID_OR_EXPIRED");
+      if(!verifySolanaMessage(challenge.wallet,challenge.message,String(parsed.signature||""))) throw new Error("SIGNATURE_INVALID");
+      challenge.used=true;
+      const id=profileIdForWallet(challenge.wallet);
+      let profile=store.profiles.find(x=>x.id===id);
+      if(!profile){
+        profile={id,wallet:challenge.wallet,walletPublic:false,displayName:id,createdAt:new Date().toISOString(),activeDays:0,streak:0,lastActiveDay:null,trustConnections:[],reviewCount:0};
+        store.profiles.push(profile);
+      }
+      const session=newSession(id);
+      store.sessions=store.sessions.filter(x=>isSessionValid(x)).slice(-5000);
+      store.sessions.push(session.record);
+      saveHumanSignalNetwork(store);
+      const contributions=loadHumanSignal().records;
+      json(res,200,{ok:true,token:session.token,expiresAt:session.record.expiresAt,profile:publicHumanProfile(profile,contributions)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/me"){
+    try{
+      const store=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,store);
+      const contributions=loadHumanSignal().records;
+      json(res,200,{ok:true,profile:publicHumanProfile(profile,contributions)});
+    }catch(error){
+      json(res,401,{ok:false,error:String(error?.message||error)});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/session"){
+    try{
+      requireHumanSignalOrigin(req);
+      const store=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,store);
+      const today=utcDay();
+      if(profile.lastActiveDay!==today){
+        profile.streak=nextStreak(profile.lastActiveDay,profile.streak,today);
+        profile.activeDays=Number(profile.activeDays||0)+1;
+        profile.lastActiveDay=today;
+        saveHumanSignalNetwork(store);
+      }
+      const contributions=loadHumanSignal().records;
+      json(res,200,{ok:true,alreadyActiveToday:profile.lastActiveDay===today,profile:publicHumanProfile(profile,contributions)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:401;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="POST" && raw==="/api/human-signal/trust"){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";
+      for await(const chunk of req){
+        body+=chunk;
+        if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");
+      }
+      const parsed=body?JSON.parse(body):{};
+      const store=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,store);
+      const targetId=String(parsed.targetProfileId||"").trim();
+      const target=store.profiles.find(x=>x.id===targetId);
+      if(!target) throw new Error("TARGET_PROFILE_NOT_FOUND");
+      if(target.id===profile.id) throw new Error("SELF_TRUST_NOT_ALLOWED");
+      profile.trustConnections=Array.isArray(profile.trustConnections)?profile.trustConnections:[];
+      if(!profile.trustConnections.includes(target.id)){
+        if(profile.trustConnections.length>=MAX_TRUST_CONNECTIONS) throw new Error("TRUST_CONNECTION_LIMIT");
+        profile.trustConnections.push(target.id);
+        saveHumanSignalNetwork(store);
+      }
+      const contributions=loadHumanSignal().records;
+      json(res,200,{ok:true,profile:publicHumanProfile(profile,contributions)});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=message==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:message==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/human-signal/network"){
+    const store=loadHumanSignalNetwork();
+    const contributions=loadHumanSignal().records;
+    const profiles=store.profiles.map(p=>publicHumanProfile(p,contributions));
+    json(res,200,{
+      ok:true,
+      protocol:"COHIBA Human Signal",
+      version:"0.2",
+      identityModel:"SOLANA_WALLET_SIGNATURE",
+      tokenEmission:false,
+      consensusClaimed:false,
+      profileCount:profiles.length,
+      activeToday:profiles.filter(x=>x.lastActiveDay===utcDay()).length,
+      trustEdges:store.profiles.reduce((n,p)=>n+(p.trustConnections||[]).length,0),
+      profiles:profiles.slice(0,100)
+    });
+    return;
+  }
+
   if(req.method==="POST" && raw==="/api/human-signal/contributions"){
     try{
       requireHumanSignalOrigin(req);
@@ -544,6 +734,11 @@ const server=http.createServer(async (req,res)=>{
       const proofHash=contributionDigest(normalized);
       const id=contributionId(proofHash);
       const store=loadHumanSignal();
+      let linkedProfileId=null;
+      try{
+        const networkStore=loadHumanSignalNetwork();
+        linkedProfileId=authHumanSignalProfile(req,networkStore).id;
+      }catch{}
       const existing=store.records.find(x=>x.proofHash===proofHash);
       if(existing){
         json(res,409,{ok:false,error:"DUPLICATE_CONTRIBUTION",record:publicContribution(existing)});
@@ -553,6 +748,7 @@ const server=http.createServer(async (req,res)=>{
         ...normalized,
         id,
         proofHash,
+        profileId:linkedProfileId,
         status:"SUBMITTED",
         submittedAt:new Date().toISOString(),
         reviewedAt:null,
