@@ -61,6 +61,34 @@ async function loadHumanProof(){
     await loadProviderReadiness();
   }catch(err){$("#humanProofState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 }
+async function loadAdsConfig(){
+  try{
+    const r=await fetch("/api/ads/config"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"ADS_CONFIG_FAILED");
+    const state=$("#adRevenueState");
+    if(!x.configured){
+      state.innerHTML='<span class="note">ADS_PROVIDER_PENDING — Google AdSense publisher account not connected yet.</span>';
+      return;
+    }
+    state.innerHTML='<strong>Google AdSense connected</strong><p class="note">Revenue payout is managed by Google. COHIBA stores no bank credentials. Ads do not affect Pending COH.</p>';
+    if(!document.querySelector('script[data-cohiba-adsense]')){
+      const sc=document.createElement("script");
+      sc.async=true;
+      sc.crossOrigin="anonymous";
+      sc.dataset.cohibaAdsense="1";
+      sc.src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client="+encodeURIComponent(x.publisherId);
+      document.head.appendChild(sc);
+    }
+    if(x.slotId){
+      const box=$("#cohibaAdSlot");
+      box.innerHTML='<ins class="adsbygoogle" style="display:block" data-ad-client="'+esc(x.publisherId)+'" data-ad-slot="'+esc(x.slotId)+'" data-ad-format="auto" data-full-width-responsive="true"></ins>';
+      try{(window.adsbygoogle=window.adsbygoogle||[]).push({});}catch{}
+    }
+  }catch(err){
+    $("#adRevenueState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';
+  }
+}
+
 async function loadEconomy(){
   try{
     const r=await fetch("/api/economy/status"),x=await r.json();
@@ -213,5 +241,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadEconomy(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
+load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();
