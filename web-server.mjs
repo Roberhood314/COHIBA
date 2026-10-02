@@ -2235,6 +2235,56 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/node/self-test"){
+    try{
+      const startedAt=Date.now();
+      const profileId="SELFTEST";
+      const job=createNodeJob(profileId,{now:startedAt,nonce:"cohiba-production-self-test"});
+      const publicJob=publicNodeJob(job);
+
+      // Reproduce the shipped agent's deterministic calculation without touching persistent user data.
+      const canonical=JSON.stringify({
+        protocol:"COHIBA_NODE",
+        version:"0.1",
+        type:"DATA_INTEGRITY_V1",
+        nonce:String(publicJob.payload?.nonce||""),
+        chunks:(Array.isArray(publicJob.payload?.chunks)?publicJob.payload.chunks:[]).map(x=>String(x))
+      });
+      const agentResult=crypto.createHash("sha256").update(canonical,"utf8").digest("hex");
+      const checked=verifyNodeJob(job,agentResult,startedAt+1);
+
+      const fakeProfile={resourceProof:{heartbeats:[],jobs:[],storageProofs:[],networkJobs:[]}};
+      const before=resourceContributionScore(fakeProfile,startedAt);
+      if(checked.ok){
+        fakeProfile.resourceProof.jobs.push({
+          jobId:job.id,
+          type:job.type,
+          verified:true,
+          verifiedAt:new Date(startedAt+1).toISOString()
+        });
+      }
+      const after=resourceContributionScore(fakeProfile,startedAt+1);
+
+      json(res,200,{
+        ok:checked.ok && after.score>before.score,
+        mode:"EPHEMERAL_PRODUCTION_SELF_TEST",
+        persistentDataModified:false,
+        protocolVersion:job.protocolVersion,
+        jobType:job.type,
+        publicPayloadOnly:!("expectedResult" in publicJob),
+        verificationPassed:checked.ok,
+        resourceScoreBefore:before.score,
+        resourceScoreAfter:after.score,
+        usefulWorkBefore:before.components.usefulWork,
+        usefulWorkAfter:after.components.usefulWork,
+        durationMs:Date.now()-startedAt
+      });
+    }catch{
+      json(res,500,{ok:false,error:"NODE_SELF_TEST_FAILED"});
+    }
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/human-signal/resource/status"){
     try{
       const network=ensureHumanProofStore(loadHumanSignalNetwork());
