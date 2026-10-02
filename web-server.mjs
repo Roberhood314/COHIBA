@@ -1587,7 +1587,7 @@ const server=http.createServer(async (req,res)=>{
       const phoneHash=hashIdentity("phone",phone,identityPepper());
       enforceOtpRateLimit(req,phoneHash,"start");
       const network=ensureHumanProofStore(loadHumanSignalNetwork());
-      if(network.profiles.some(p=>p.humanProofs?.phone?.identityHash===phoneHash)) throw new Error("PHONE_ALREADY_REGISTERED");
+      const existingProfile=network.profiles.find(p=>p.humanProofs?.phone?.identityHash===phoneHash)||null;
       const verification=await phoneVerifyStart(phone);
       const store=loadAccountOnboarding();
       store.records=store.records.filter(x=>Date.parse(x.expiresAt)>Date.now() && !x.usedAt).slice(-2000);
@@ -1601,7 +1601,8 @@ const server=http.createServer(async (req,res)=>{
         expiresAt:new Date(Date.now()+20*60*1000).toISOString(),
         tokenHash:null,
         tokenExpiresAt:null,
-        displayName:null,
+        displayName:existingProfile?.displayName||null,
+        existingProfileId:existingProfile?.id||null,
         usedAt:null
       };
       store.records.push(record); saveAccountOnboarding(store);
@@ -1652,19 +1653,64 @@ const server=http.createServer(async (req,res)=>{
       let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>2048) throw new Error("REQUEST_TOO_LARGE");}
       const parsed=body?JSON.parse(body):{};
       const token=String(parsed.onboardingToken||"");
-      const displayName=cleanDisplayName(parsed.displayName);
-      const store=loadAccountOnboarding();
-      const record=store.records.find(x=>x.tokenHash===onboardingTokenHash(token));
+      const onboardingStore=loadAccountOnboarding();
+      const record=onboardingStore.records.find(x=>x.tokenHash===onboardingTokenHash(token));
       if(!record || record.status!=="PHONE_VERIFIED" || Date.parse(record.tokenExpiresAt)<=Date.now() || record.usedAt) throw new Error("ONBOARDING_TOKEN_INVALID");
-      const network=loadHumanSignalNetwork();
-      const lower=displayName.toLocaleLowerCase("vi");
-      if(network.profiles.some(p=>String(p.displayName||"").toLocaleLowerCase("vi")===lower)) throw new Error("DISPLAY_NAME_TAKEN");
-      if(store.records.some(x=>x.id!==record.id && !x.usedAt && String(x.displayName||"").toLocaleLowerCase("vi")===lower)) throw new Error("DISPLAY_NAME_TAKEN");
-      record.displayName=displayName;
-      record.status="PROFILE_READY";
-      record.profileReadyAt=new Date().toISOString();
-      saveAccountOnboarding(store);
-      json(res,200,{ok:true,status:"PROFILE_READY",displayName,onboardingToken:token});
+
+      const network=ensureHumanProofStore(loadHumanSignalNetwork());
+      let profile=record.existingProfileId?network.profiles.find(x=>x.id===record.existingProfileId):network.profiles.find(x=>x.humanProofs?.phone?.identityHash===record.phoneHash);
+      let created=false;
+      if(!profile){
+        const displayName=cleanDisplayName(parsed.displayName);
+        const lower=displayName.toLocaleLowerCase("vi");
+        if(network.profiles.some(p=>String(p.displayName||"").toLocaleLowerCase("vi")===lower)) throw new Error("DISPLAY_NAME_TAKEN");
+        const id="COH-"+record.phoneHash.slice(0,12).toUpperCase();
+        profile={
+          id,
+          wallet:null,
+          walletPublic:false,
+          displayName,
+          createdAt:new Date().toISOString(),
+          activeDays:0,
+          streak:0,
+          lastActiveDay:null,
+          trustConnections:[],
+          reviewCount:0,
+          signalPoints:0,
+          pendingCoh:0,
+          mainnetReviewStatus:"PENDING",
+          humanProofs:{
+            phone:{verified:true,identityHash:record.phoneHash,verifiedAt:record.phoneVerifiedAt||new Date().toISOString(),provider:record.provider||"infobip"}
+          },
+          accountType:"PHONE_MINING"
+        };
+        network.profiles.push(profile);
+        created=true;
+      }else{
+        profile.humanProofs=profile.humanProofs&&typeof profile.humanProofs==="object"?profile.humanProofs:{};
+        profile.humanProofs.phone={verified:true,identityHash:record.phoneHash,verifiedAt:record.phoneVerifiedAt||new Date().toISOString(),provider:record.provider||"infobip"};
+      }
+
+      const session=newSession(profile.id);
+      network.sessions=network.sessions.filter(x=>isSessionValid(x)).slice(-5000);
+      network.sessions.push(session.record);
+      saveHumanSignalNetwork(network);
+
+      record.displayName=profile.displayName;
+      record.status="ACCOUNT_READY";
+      record.usedAt=new Date().toISOString();
+      record.profileId=profile.id;
+      saveAccountOnboarding(onboardingStore);
+      emitHsc(created?"PHONE_ACCOUNT_CREATED":"PHONE_ACCOUNT_LOGIN",profile.id,profile.id,{phoneVerified:true});
+
+      json(res,200,{
+        ok:true,
+        status:"ACCOUNT_READY",
+        created,
+        token:session.token,
+        expiresAt:session.record.expiresAt,
+        profile:publicHumanProfile(profile,loadHumanSignal().records)
+      });
     }catch(error){
       const m=String(error?.message||error);
       const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:
