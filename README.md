@@ -38,7 +38,7 @@ Mainnet is disabled by default. It requires all of the following on Railway:
 - `ALLOW_MAINNET=true`
 - `SYSTEM_WALLET_SECRET_JSON` configured as a Railway secret
 - `COHIBA_MAINNET_LAUNCH_KEY` configured as a separate strong secret
-- explicit `MAINNET COHIBA` arming in the console
+- explicit owner approval phrase `APPROVE MAINNET COHIBA`
 
 Never commit seed phrases, private keys, wallet JSON files or exchange credentials.
 
@@ -222,10 +222,10 @@ See [docs/SIGNAL_MINING.md](docs/SIGNAL_MINING.md).
 
 ### Human Proof v0.1 — multi-signal person verification
 
-Human Signal supports a privacy-minimized multi-proof onboarding model:
+Human Signal supports a privacy-minimized multi-proof onboarding model. Production SMS phone verification is Infobip-first:
 
 - Solana wallet signature;
-- phone ownership via SMS OTP;
+- phone ownership via Infobip 2FA SMS OTP;
 - Google/Gmail account control via OAuth/OpenID Connect;
 - Facebook account control via OAuth;
 - optional anti-bot challenge signal.
