@@ -1,110 +1,105 @@
 (()=>{"use strict";
 const $=s=>document.querySelector(s);
+let onboardingId=sessionStorage.getItem("cohiba_onboarding_id")||"";
+let onboardingToken=sessionStorage.getItem("cohiba_onboarding_token")||"";
+let verifiedPhone=sessionStorage.getItem("cohiba_verified_phone")||"";
+let authToken=localStorage.getItem("cohiba_human_signal_token")||"";
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const token=localStorage.getItem("cohiba_human_signal_token")||"";
-let profileLoading=false;
-async function api(path){
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),8000);
-  try{
-    return await fetch(path,{
-      headers:token?{authorization:"Bearer "+token}:{},
-      cache:"no-store",
-      signal:controller.signal
-    });
-  }finally{
-    clearTimeout(timeout);
-  }
+function setStep(n){
+ ["stepPhone","stepOtp","stepProfile"].forEach((id,i)=>$("#"+id).classList.toggle("hidden",i!==n-1));
+ [1,2,3].forEach(i=>{const b=$("#stepBadge"+i);b.classList.toggle("active",i===n);b.classList.toggle("done",i<n)});
 }
-function yes(v){return v?'<span class="ok">✓ Đạt</span>':'<span class="bad">Chưa đạt</span>'}
-function fmt(v){const n=Number(v||0);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:8}):"0"}
-function shortDate(v){if(!v)return "—";try{return new Date(v).toLocaleString("vi-VN")}catch{return String(v)}}
-
-async function loadProfile(){
-  if(profileLoading) return;
-  if(!token){$("#loginRequired").style.display="block";$("#dashboard").style.display="none";return}
-  profileLoading=true;
-  const refresh=$("#refreshProfile");
-  if(refresh){refresh.disabled=true;refresh.textContent="Đang tải…";}
-  try{
-    const r=await api("/api/human-signal/dashboard"),x=await r.json();
-    if(!r.ok) throw new Error(x.error||"PROFILE_LOAD_FAILED");
-    $("#loginRequired").style.display="none";$("#dashboard").style.display="block";
-    const p=x.profile||{},m=x.mining||{},proof=x.humanProof||{},acc=x.accountStatus||{},mn=x.mainnet||{},cw=p.cohWallet||{},rate=m.currentRate||{};
-    $("#pendingCoh").textContent=fmt(m.pendingCoh);
-    $("#signalPoints").textContent=fmt(m.signalPoints);
-    $("#activeDays").textContent=fmt(acc.activeDays);
-    $("#trustCount").textContent=fmt(acc.trustConnections);
-    $("#topStatus").innerHTML=
-      '<span class="pill">'+esc(p.id||"—")+'</span>'+
-      '<span class="pill '+(p.humanProofTier==="HUMAN_VERIFIED"?"ok":"muted")+'">'+esc(p.humanProofTier||"UNVERIFIED")+'</span>'+
-      '<span class="pill '+(mn.eligible?"ok":"muted")+'">'+(mn.eligible?"MAINNET ELIGIBLE":"MAINNET "+esc(mn.reviewStatus||"PENDING"))+'</span>'+
-      '<span class="pill">'+(m.activeSession?'<span class="ok">MINING ACTIVE</span>':'MINING IDLE')+'</span>';
-
-    $("#identityBox").innerHTML=
-      '<p><strong>Profile ID</strong><br><span class="wallet">'+esc(p.id||"—")+'</span></p>'+
-      '<p><strong>Vai trò</strong><br>'+esc((p.roles||[]).join(" · ")||acc.networkRole||"SIGNALER")+'</p>'+
-      '<p><strong>Tham gia từ</strong><br>'+esc(shortDate(acc.memberSince))+'</p>'+
-      '<p><strong>Streak</strong> '+esc(acc.streak||0)+' ngày</p>';
-
-    $("#walletBox").innerHTML=cw.activated
-      ?'<p class="ok"><strong>COH Wallet Active</strong></p><p class="wallet">'+esc(cw.ownerAddress)+'</p><p class="muted">Non-custodial · Solana · '+esc(cw.phase||"PRE_MAINNET")+'</p><p>COHIBA không giữ private key và không thể khôi phục ví.</p>'
-      :'<p class="bad">COH Wallet chưa kích hoạt.</p><a class="button" href="/human-signal.html#mining">Kích hoạt ví</a>';
-
-    const c=proof.confidence||{};
-    $("#proofBox").innerHTML=
-      '<p><strong>'+esc(c.tier||"UNVERIFIED")+'</strong> · '+esc(c.score||0)+'/100</p>'+
-      '<p>Điện thoại: '+yes(proof.phone?.verified)+'</p>'+
-      '<p>Google: '+yes(proof.google?.verified)+'</p>'+
-      '<p>Facebook: '+yes(proof.facebook?.verified)+'</p>'+
-      '<p>Anti-bot: '+yes(proof.antiBot)+'</p>';
-
-    $("#mainnetBox").innerHTML=
-      '<p><strong>Review:</strong> '+esc(mn.reviewStatus||"PENDING")+'</p>'+
-      '<p><strong>Eligibility:</strong> '+yes(mn.eligible)+'</p>'+
-      '<p><strong>Distribution:</strong> '+esc(mn.distributionStatus||"NOT_ELIGIBLE")+'</p>'+
-      '<p class="muted">'+esc(mn.note||"")+'</p>';
-
-    $("#checklist").innerHTML=(x.checklist||[]).map(a=>
-      '<div class="check"><span>'+esc(a.label)+(a.required?' <span class="muted">· bắt buộc</span>':'')+'</span><strong>'+(a.done?'<span class="ok">✓</span>':'<span class="bad">○</span>')+'</strong></div>'
-    ).join("")||'<p class="empty">Chưa có checklist.</p>';
-
-    const active=m.activeSession;
-    $("#miningBox").innerHTML=active
-      ?'<p class="ok"><strong>Phiên mining đang hoạt động</strong></p><p>Claimable hiện tại: <strong>'+esc(fmt(active.claimablePoints))+'</strong></p><p>Kết thúc: '+esc(shortDate(active.endsAt))+'</p><a class="button" href="/human-signal.html#mining">Mở mining</a>'
-      :'<p class="muted">Chưa có phiên mining đang hoạt động.</p><a class="button" href="/human-signal.html#mining">KHAI THÁC COH NGAY</a>';
-    $("#miningTech").innerHTML=
-      '<p>Rate: '+esc(fmt(rate.rate))+' SP/hour · Base: '+esc(fmt(rate.baseRate))+'</p>'+
-      '<p>Eligibility factor: '+esc(rate.eligibilityFactor??0)+' · Session count: '+esc(m.sessionCount||0)+'</p>'+
-      '<p class="muted">Pending COH là provisional off-chain trước Mainnet, không phải COH SPL on-chain.</p>';
-
-    const rows=(m.sessions||[]).map(s=>'<tr><td>'+esc(s.id)+'</td><td>'+esc(s.status)+'</td><td>'+esc(shortDate(s.startedAt))+'</td><td>'+esc(shortDate(s.endsAt))+'</td><td>'+esc(fmt(s.claimedPoints))+'</td><td>'+esc(fmt(s.rateSnapshot?.rate))+'</td></tr>').join("");
-    $("#historyBox").innerHTML=rows
-      ?'<table><thead><tr><th>Session</th><th>Trạng thái</th><th>Bắt đầu</th><th>Kết thúc</th><th>Đã claim</th><th>Rate</th></tr></thead><tbody>'+rows+'</tbody></table>'
-      :'<p class="empty">Chưa có lịch sử mining.</p>';
-
-    $("#networkBox").innerHTML=
-      '<p>Verified contributions: <strong>'+esc(acc.verifiedContributions||0)+'</strong></p>'+
-      '<p>Trust connections: <strong>'+esc(acc.trustConnections||0)+'</strong></p>'+
-      '<p>Active days: <strong>'+esc(acc.activeDays||0)+'</strong></p>';
-
-    const ps=x.pioneer||{};
-    $("#pioneerBox").innerHTML=
-      '<p><strong>'+esc(ps.eligibility?.status||"—")+'</strong></p>'+
-      '<p>Referral code: <span class="wallet">'+esc(acc.referralCode||ps.referralCode||"—")+'</span></p>'+
-      '<p>Invited by: '+esc(acc.invitedBy||"—")+'</p>'+
-      '<p>Verified referrals: '+esc(ps.verifiedReferrals||0)+'</p>';
-  }catch(err){
-    const message=err?.name==="AbortError"?"Kết nối chậm. Hãy thử làm mới hồ sơ.":String(err?.message||err);
-    $("#loginRequired").style.display="block";
-    $("#loginRequired").innerHTML='<h2>Không tải được hồ sơ</h2><p class="bad">'+esc(message)+'</p><button id="retryProfile" class="button" type="button">Thử lại</button> <a class="button ghost" href="/human-signal.html#mining">Mở Human Signal</a>';
-    $("#dashboard").style.display="none";
-    $("#retryProfile")?.addEventListener("click",loadProfile,{once:true});
-  }finally{
-    profileLoading=false;
-    if(refresh){refresh.disabled=false;refresh.textContent="Làm mới";}
-  }
+async function post(path,payload,timeout=12000){
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
+ try{
+   const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload),cache:"no-store",signal:c.signal});
+   const x=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(x.error||("HTTP_"+r.status));
+   return x;
+ }finally{clearTimeout(t)}
 }
-$("#refreshProfile").addEventListener("click",loadProfile);
-loadProfile();
+function friendly(err){
+ const m=String(err?.message||err);
+ const map={
+  INVALID_E164_PHONE:"Số điện thoại chưa đúng. Hãy nhập 0901234567 hoặc +84901234567.",
+  PHONE_CONSENT_REQUIRED:"Bạn cần đồng ý nhận SMS OTP.",
+  OTP_RATE_LIMITED:"Bạn đã yêu cầu OTP quá nhiều lần. Hãy thử lại sau ít phút.",
+  PHONE_VERIFY_SEND_FAILED:"Nhà cung cấp SMS chưa gửi được OTP. Hãy thử lại.",
+  PHONE_CODE_INVALID:"Mã OTP không đúng hoặc đã hết hạn.",
+  ONBOARDING_EXPIRED:"Phiên xác minh đã hết hạn. Hãy gửi OTP lại.",
+  ONBOARDING_TOKEN_INVALID:"Phiên tạo tài khoản đã hết hạn. Hãy xác minh số điện thoại lại.",
+  DISPLAY_NAME_TAKEN:"Tên tài khoản này đã được dùng.",
+  DISPLAY_NAME_LENGTH:"Tên tài khoản cần từ 3 đến 32 ký tự.",
+  DISPLAY_NAME_INVALID:"Tên tài khoản chứa ký tự không hợp lệ."
+ };
+ return map[m]||m;
+}
+async function loadAccount(){
+ if(!authToken)return false;
+ try{
+  const r=await fetch("/api/human-signal/dashboard",{headers:{authorization:"Bearer "+authToken},cache:"no-store"});
+  const x=await r.json();
+  if(!r.ok)throw new Error(x.error||"AUTH_FAILED");
+  $("#stepPhone").classList.add("hidden");$("#stepOtp").classList.add("hidden");$("#stepProfile").classList.add("hidden");
+  $("#accountReady").classList.remove("hidden");
+  [1,2,3].forEach(i=>{$("#stepBadge"+i).classList.remove("active");$("#stepBadge"+i).classList.add("done")});
+  $("#accountName").textContent=x.profile?.displayName||x.profile?.id||"—";
+  $("#profileId").textContent=x.profile?.id||"—";
+  $("#pendingCoh").textContent=Number(x.mining?.pendingCoh||0).toLocaleString(undefined,{maximumFractionDigits:8});
+  $("#miningStatus").textContent=x.mining?.activeSession?"ACTIVE":"IDLE";
+  return true;
+ }catch{
+  localStorage.removeItem("cohiba_human_signal_token");authToken="";return false;
+ }
+}
+$("#sendOtp").addEventListener("click",async()=>{
+ const phone=$("#phone").value.trim(),consent=$("#consent").checked;
+ $("#sendOtp").disabled=true;$("#phoneState").textContent="Đang gửi OTP…";
+ try{
+  const x=await post("/api/account/onboarding/phone/start",{phone,consent});
+  onboardingId=x.onboardingId;verifiedPhone=phone;
+  sessionStorage.setItem("cohiba_onboarding_id",onboardingId);
+  sessionStorage.setItem("cohiba_verified_phone",verifiedPhone);
+  $("#otpState").textContent="OTP đã gửi. Kiểm tra SMS và nhập mã.";
+  setStep(2);
+ }catch(err){$("#phoneState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>'}
+ finally{$("#sendOtp").disabled=false}
+});
+$("#verifyOtp").addEventListener("click",async()=>{
+ const code=$("#otp").value.trim();
+ $("#verifyOtp").disabled=true;$("#otpState").textContent="Đang xác minh…";
+ try{
+  const x=await post("/api/account/onboarding/phone/check",{phone:verifiedPhone,code,onboardingId});
+  onboardingToken=x.onboardingToken;
+  sessionStorage.setItem("cohiba_onboarding_token",onboardingToken);
+  $("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>';
+  setStep(3);
+ }catch(err){$("#otpState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>'}
+ finally{$("#verifyOtp").disabled=false}
+});
+$("#backPhone").addEventListener("click",()=>{
+ onboardingId="";onboardingToken="";verifiedPhone="";
+ sessionStorage.removeItem("cohiba_onboarding_id");sessionStorage.removeItem("cohiba_onboarding_token");sessionStorage.removeItem("cohiba_verified_phone");
+ setStep(1);
+});
+$("#createAccount").addEventListener("click",async()=>{
+ const displayName=$("#displayName").value.trim();
+ $("#createAccount").disabled=true;$("#profileState").textContent="Đang tạo hồ sơ…";
+ try{
+  const x=await post("/api/account/onboarding/profile",{displayName,onboardingToken});
+  authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);
+  sessionStorage.removeItem("cohiba_onboarding_id");sessionStorage.removeItem("cohiba_onboarding_token");sessionStorage.removeItem("cohiba_verified_phone");
+  await loadAccount();
+ }catch(err){$("#profileState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>'}
+ finally{$("#createAccount").disabled=false}
+});
+$("#logout").addEventListener("click",()=>{
+ localStorage.removeItem("cohiba_human_signal_token");authToken="";location.reload();
+});
+(async()=>{
+ if(await loadAccount())return;
+ if(onboardingToken){setStep(3);$("#profileState").innerHTML='<span class="ok">Số điện thoại đã xác minh ✓</span>'}
+ else if(onboardingId&&verifiedPhone){setStep(2)}
+ else setStep(1);
+})();
 })();
