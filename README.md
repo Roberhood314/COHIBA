@@ -137,6 +137,25 @@ The pre-Mainnet governance/security pack is maintained in:
 
 The canonical registry is deliberately null for identifiers that do not yet exist or have not been independently verified. Mainnet mint, treasury vault and liquidity pool values must never be replaced with placeholders that resemble real addresses.
 
+
+## External readiness & Mainnet go/no-go
+
+The remaining pre-Mainnet external and operational gates are tracked in:
+
+- [Dependency Risk Register](security/DEPENDENCY_RISK_REGISTER.md)
+- [External Audit Intake](audit/EXTERNAL_AUDIT_INTAKE.md)
+- [External Counsel Intake](legal/EXTERNAL_COUNSEL_INTAKE.md)
+- [Treasury Activation Checklist](treasury/TREASURY_ACTIVATION_CHECKLIST.md)
+- [Pre-Mainnet Go / No-Go Matrix](launch/PRE_MAINNET_GO_NO_GO.md)
+
+Public work items:
+- Independent security audit: GitHub Issue #10
+- External legal counsel review: GitHub Issue #11
+- Treasury multisig activation: GitHub Issue #12
+- Backup/restore + incident tabletop drills: GitHub Issue #13
+
+Internal CI/security readiness is green, but Mainnet remains **NO-GO** until all external/operational blockers carry verifiable evidence.
+
 ## Open Review campaign
 
 **COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET** is open.
