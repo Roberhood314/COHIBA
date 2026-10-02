@@ -7,6 +7,29 @@ async function api(path,opts={}){
   if(authToken) headers.authorization="Bearer "+authToken;
   return fetch(path,{...opts,headers});
 }
+async function loadPioneer(){
+  try{
+    const rr=await fetch("/api/human-signal/readiness"),ready=await rr.json();
+    $("#readinessState").innerHTML=
+      '<p>Mining mode: <strong>'+esc(ready.miningHumanProofMode||"grace")+'</strong></p>'+
+      '<p class="note">Phone '+(ready.providers?.phone?"✓":"—")+' · Google '+(ready.providers?.google?"✓":"—")+' · Facebook '+(ready.providers?.facebook?"✓":"—")+' · Identity pepper '+(ready.providers?.pepper?"✓":"—")+'</p>'+
+      ((ready.missing||[]).length?'<p class="rejected">External configuration pending: '+esc((ready.missing||[]).join(", "))+'</p>':'<p class="verified">Verification infrastructure ready.</p>');
+  }catch{}
+  if(!authToken) return;
+  try{
+    const r=await api("/api/human-signal/pioneer"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"PIONEER_STATUS_FAILED");
+    const s=x.support||{},e=s.eligibility||{},rate=x.miningRate||{};
+    $("#pioneerState").innerHTML=
+      '<strong>'+(e.status?esc(e.status):"—")+'</strong>'+
+      '<p>Mining eligibility factor: '+esc(rate.eligibilityFactor??e.factor??0)+' · current rate '+esc(rate.rate||0)+' SP/h</p>'+
+      '<p class="note">Human Proof: '+esc(e.humanProofTier||"UNVERIFIED")+' · verified referrals '+esc(s.verifiedReferrals||0)+' · referral boost '+esc(Math.round((s.referralBoost||0)*100))+'%</p>';
+    $("#pioneerChecklist").innerHTML=(s.checklist||[]).map(c=>'<div class="record">'+(c.done?'<span class="verified">✓</span>':'<span>○</span>')+' '+esc(c.label)+(c.required?' <span class="badge">required</span>':'')+'</div>').join("");
+    $("#pioneerMissions").innerHTML=(s.missions||[]).map(m=>'<div class="record"><strong>'+esc(m.title)+'</strong> '+(m.complete?'<span class="verified">✓</span>':'')+'<p class="note">'+esc(m.description)+' · '+esc(m.progress)+'/'+esc(m.target)+'</p></div>').join("");
+    $("#referralCode").textContent=s.referralCode||"—";
+    $("#applyReferral").disabled=false;
+  }catch(err){$("#pioneerState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
+}
 async function loadHumanProof(){
   if(!authToken){
     $("#sendOtp").disabled=true; $("#checkOtp").disabled=true; $("#verifyGoogle").disabled=true; $("#verifyFacebook").disabled=true;
@@ -71,7 +94,7 @@ $("#signalForm").addEventListener("submit",async e=>{
   const payload=Object.fromEntries(fd.entries());
   const box=$("#result"); box.innerHTML='<p class="note">Creating deterministic proof…</p>';
   try{
-    const r=await fetch("/api/human-signal/contributions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+    const r=await api("/api/human-signal/contributions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
     const x=await r.json();
     if(!r.ok) throw new Error(x.error||"SUBMISSION_FAILED");
     box.innerHTML='<div class="record"><strong>Proof created</strong><p>'+esc(x.record.id)+'</p><p class="proof">'+esc(x.record.proofHash)+'</p><p class="note">Status: '+esc(x.record.status)+' · Off-chain proof v1</p></div>';
@@ -94,7 +117,7 @@ $("#connectWallet").addEventListener("click",async()=>{
     r=await fetch("/api/human-signal/auth/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({challengeId:x.challenge.challengeId,signature})});
     x=await r.json(); if(!r.ok) throw new Error(x.error||"VERIFY_FAILED");
     authToken=x.token; localStorage.setItem("cohiba_human_signal_token",authToken);
-    await loadIdentity(); await loadMining();
+    await loadIdentity(); await loadMining(); await loadPioneer();
   }catch(err){$("#identityState").innerHTML='<p class="rejected">'+esc(err.message)+'</p>';}
 });
 $("#dailySignal").addEventListener("click",async()=>{
@@ -123,6 +146,13 @@ $("#verifyFacebook").addEventListener("click",async()=>{
   if(!r.ok) return $("#humanProofState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
   location.href=x.authUrl;
 });
+$("#applyReferral").addEventListener("click",async()=>{
+  const code=$("#referralInput").value.trim();
+  const r=await api("/api/human-signal/referral/apply",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code})});
+  const x=await r.json();
+  if(!r.ok) return $("#pioneerState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
+  $("#referralInput").value=""; await loadPioneer();
+});
 $("#startMining").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/mining/start",{method:"POST"}); const x=await r.json();
   if(!r.ok) return $("#miningState").innerHTML='<p class="rejected">'+esc(x.error)+'</p>';
@@ -139,5 +169,5 @@ $("#addTrust").addEventListener("click",async()=>{
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
 });
-load(); loadIdentity(); loadMining(); loadHumanProof();
+load(); loadIdentity(); loadMining(); loadHumanProof(); loadPioneer();
 })();
