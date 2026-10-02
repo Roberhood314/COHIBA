@@ -708,10 +708,15 @@ function saveHumanSignal(store){
   atomicWriteJson(HUMAN_SIGNAL_FILE,store);
 }
 
+function allowedHumanSignalOrigins(){
+  const origins=new Set([PUBLIC_BASE_URL.replace(/\/$/,"")]);
+  const railway=String(process.env.RAILWAY_PUBLIC_DOMAIN||"").trim();
+  if(railway) origins.add("https://"+railway.replace(/^https?:\/\//,"").replace(/\/$/,""));
+  return origins;
+}
 function requireHumanSignalOrigin(req){
-  const expected=PUBLIC_BASE_URL.replace(/\/$/,"");
-  const origin=String(req.headers.origin||"");
-  if(origin!==expected) throw new Error("HUMAN_SIGNAL_ORIGIN_INVALID");
+  const origin=String(req.headers.origin||"").replace(/\/$/,"");
+  if(!allowedHumanSignalOrigins().has(origin)) throw new Error("HUMAN_SIGNAL_ORIGIN_INVALID");
 }
 
 function requireHumanSignalReviewKey(req){
