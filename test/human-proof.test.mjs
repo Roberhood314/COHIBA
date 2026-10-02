@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {hashIdentity,normalizePhone,humanConfidence,newOauthState,isOauthStateValid} from "../lib/human-proof.mjs";
 
-test("phone normalization accepts E.164 only",()=>{
+test("phone normalization accepts E.164 and Vietnam local formats",()=>{
   assert.equal(normalizePhone("+84901234567"),"+84901234567");
-  assert.throws(()=>normalizePhone("0901234567"),/INVALID_E164_PHONE/);
+  assert.equal(normalizePhone("0901234567"),"+84901234567");
+  assert.equal(normalizePhone("84901234567"),"+84901234567");
 });
 
 test("identity hash is deterministic and peppered",()=>{
