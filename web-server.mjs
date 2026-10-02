@@ -10,6 +10,7 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "dist");
+const DATA_DIR = process.env.COHIBA_DATA_DIR || DATA_DIR;
 const port = Number(process.env.PORT || 8080);
 const DESTINATION = new PublicKey("pTEH7pYratL14VFPQ9i5JMvPYDCpCQ773cHQZ3DdW3t");
 const DECIMALS = 9;
@@ -87,7 +88,7 @@ function requireMainnetOrigin(req){
   if(origin!==CANONICAL_PUBLIC_ORIGIN) throw new Error("MAINNET_ORIGIN_INVALID");
 }
 function loadOrCreateDevnetPayer(){
-  const dir="/data";
+  const dir=DATA_DIR;
   const file=path.join(dir,"devnet-payer.json");
 
   try{
@@ -116,7 +117,7 @@ function launchRecordPath(network){
     network==="mainnet-beta"?"mainnet":
     network==="devnet-rehearsal"?"devnet-rehearsal":
     "devnet";
-  return path.join("/data",`cohiba-${safe}-launch.json`);
+  return path.join(DATA_DIR,`cohiba-${safe}-launch.json`);
 }
 
 function loadLaunchRecord(network){
@@ -141,12 +142,12 @@ function atomicWriteJson(file,value){
 }
 
 function saveLaunchRecord(network,record){
-  fs.mkdirSync("/data",{recursive:true});
+  fs.mkdirSync(DATA_DIR,{recursive:true});
   atomicWriteJson(launchRecordPath(network),record);
 }
 
 
-const COMMUNITY_METRICS_FILE=path.join("/data","cohiba-community-metrics.json");
+const COMMUNITY_METRICS_FILE=path.join(DATA_DIR,"cohiba-community-metrics.json");
 const COMMUNITY_SOURCES=new Set(["direct","x","solana-discord","reddit","github","security-outreach","creator-outreach","other"]);
 const COMMUNITY_EVENTS=new Set([
   "home_view","community_view","community_x_click","community_github_click",
@@ -166,7 +167,7 @@ function loadCommunityMetrics(){
 function saveCommunityEvent(event,source="direct"){
   if(!COMMUNITY_EVENTS.has(event)) throw new Error("UNSUPPORTED_COMMUNITY_EVENT");
   if(!COMMUNITY_SOURCES.has(source)) source="other";
-  fs.mkdirSync("/data",{recursive:true});
+  fs.mkdirSync(DATA_DIR,{recursive:true});
   const metrics=loadCommunityMetrics();
   const day=new Date().toISOString().slice(0,10);
   metrics.totals=metrics.totals||{};
@@ -303,11 +304,11 @@ function launchLockPath(network){
     network==="mainnet-beta"?"mainnet":
     network==="devnet-rehearsal"?"devnet-rehearsal":
     "devnet";
-  return path.join("/data",`cohiba-${safe}-launch.lock`);
+  return path.join(DATA_DIR,`cohiba-${safe}-launch.lock`);
 }
 
 function acquirePersistentLaunchLock(network){
-  fs.mkdirSync("/data",{recursive:true});
+  fs.mkdirSync(DATA_DIR,{recursive:true});
   const file=launchLockPath(network);
   const payload={
     network,
