@@ -1161,6 +1161,82 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/human-signal/dashboard"){
+    try{
+      const networkStore=ensureHumanProofStore(loadHumanSignalNetwork());
+      const profile=authHumanSignalProfile(req,networkStore);
+      networkStore.miningSessions=Array.isArray(networkStore.miningSessions)?networkStore.miningSessions:[];
+      const contributionStore=loadHumanSignal();
+      const proof=publicHumanProof(profile);
+      const publicProfile=publicHumanProfile(profile,contributionStore.records);
+      const providers=humanProofProvidersReady();
+      const enforce=process.env.MINING_HUMAN_PROOF_MODE==="enforced" && providers.ready;
+      const pioneer=publicPioneerSupport(profile,{providersReady:providers.ready,enforceHumanProof:enforce});
+      const sessions=networkStore.miningSessions
+        .filter(x=>x.profileId===profile.id)
+        .slice()
+        .reverse()
+        .slice(0,20)
+        .map(x=>publicMiningSession(x));
+      const active=sessions.find(x=>x.status==="ACTIVE")||null;
+      const rate=miningRateForProfile(profile,networkStore,contributionStore);
+      const reviewStatus=String(profile.mainnetReviewStatus||"PENDING");
+      const walletActive=Boolean(profile.cohWallet?.ownerAddress);
+      const humanVerified=proof.confidence.tier==="HUMAN_VERIFIED";
+      const mainnetEligible=humanVerified && walletActive && reviewStatus==="APPROVED";
+      const verifiedContribs=contributionStore.records.filter(x=>x.profileId===profile.id && x.status==="VERIFIED").length;
+      const checklist=[
+        {id:"wallet",label:"Ví Solana đã xác minh",done:Boolean(profile.wallet),required:true},
+        {id:"coh_wallet",label:"COH Wallet đã kích hoạt",done:walletActive,required:true},
+        {id:"phone",label:"Số điện thoại đã xác minh",done:Boolean(proof.phone?.verified),required:true},
+        {id:"social",label:"Google hoặc Facebook đã xác minh",done:Boolean(proof.google?.verified||proof.facebook?.verified),required:true},
+        {id:"human",label:"Đạt HUMAN_VERIFIED",done:humanVerified,required:true},
+        {id:"review",label:"Mainnet Review được phê duyệt",done:reviewStatus==="APPROVED",required:true}
+      ];
+      json(res,200,{
+        ok:true,
+        network:"COHIBA_HUMAN_SIGNAL",
+        profile:publicProfile,
+        humanProof:proof,
+        pioneer,
+        accountStatus:{
+          networkRole:(publicProfile.roles||[])[0]||"SIGNALER",
+          memberSince:profile.createdAt,
+          activeDays:Number(profile.activeDays||0),
+          streak:Number(profile.streak||0),
+          trustConnections:(profile.trustConnections||[]).length,
+          verifiedContributions:verifiedContribs,
+          referralCode:profile.referralCode||null,
+          invitedBy:profile.invitedBy||null
+        },
+        mining:{
+          signalPoints:Number(profile.signalPoints||0),
+          pendingCoh:Number(profile.pendingCoh||0),
+          pendingCohClass:"PROVISIONAL_OFFCHAIN",
+          currentRate:rate,
+          activeSession:active,
+          sessions,
+          sessionCount:networkStore.miningSessions.filter(x=>x.profileId===profile.id).length
+        },
+        mainnet:{
+          reviewStatus,
+          eligible:mainnetEligible,
+          distributionStatus:mainnetEligible?"ELIGIBLE_WAITING_MAINNET":"NOT_ELIGIBLE",
+          tokenAccount:profile.cohWallet?.tokenAccount||null,
+          note:mainnetEligible
+            ?"Profile meets current eligibility gates. On-chain distribution still waits for official Mainnet and distribution activation."
+            :"Complete all required verification and review gates before Mainnet eligibility."
+        },
+        checklist
+      });
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID"].includes(message)?401:400;
+      json(res,status,{ok:false,error:message});
+    }
+    return;
+  }
+
   if(req.method==="GET" && raw==="/api/human-signal/me"){
     try{
       const store=loadHumanSignalNetwork();
