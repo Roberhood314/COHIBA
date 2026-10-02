@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.8",
+  "schemaVersion": "1.9",
   "project": {
     "name": "COHIBA",
     "symbol": "COH",
@@ -168,7 +168,7 @@
   },
   "humanSignal": {
     "name": "COHIBA Human Signal Protocol",
-    "version": "0.3",
+    "version": "0.4",
     "status": "MVP_IMPLEMENTED",
     "publicPage": "https://cohibameme.site/human-signal.html",
     "registryApi": "https://cohibameme.site/api/human-signal/contributions",
@@ -218,6 +218,26 @@
       "algorithm": "R = B(N) × [1 + P + T + S + C + U]",
       "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/SIGNAL_MINING.md",
       "networkApi": "https://cohibameme.site/api/human-signal/mining/network"
+    },
+    "humanProof": {
+      "version": "0.1",
+      "model": "MULTI_SIGNAL_CONFIDENCE",
+      "factors": [
+        "SOLANA_WALLET",
+        "PHONE_OTP",
+        "GOOGLE_OAUTH",
+        "FACEBOOK_OAUTH",
+        "ANTI_BOT_OPTIONAL"
+      ],
+      "humanVerifiedThreshold": 70,
+      "requiredForHumanVerified": [
+        "PHONE_OTP",
+        "GOOGLE_OR_FACEBOOK"
+      ],
+      "globalUniquenessGuaranteed": false,
+      "piiPublic": false,
+      "identityStorage": "HMAC_SHA256_HASHED_PROVIDER_IDENTIFIERS",
+      "spec": "https://github.com/Roberhood314/COHIBA/blob/main/docs/HUMAN_PROOF.md"
     }
   }
 }
