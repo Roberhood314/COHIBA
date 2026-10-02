@@ -69,6 +69,26 @@ main{width:min(1180px,calc(100% - 28px));margin:auto;padding:24px 0 80px}.top{di
 </section>
 
 <section class="card" style="margin-top:14px">
+<h2>Mời bạn bè & Security Circle</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:0">
+  <div>
+    <h3>Liên kết giới thiệu</h3>
+    <p class="notice">Boost referral chỉ được tính khi người được mời đạt HUMAN_VERIFIED.</p>
+    <div class="mini"><small>Invite link của bạn</small><b id="inviteLink" style="font-size:13px;word-break:break-all">—</b></div>
+    <div class="actions"><button id="copyInvite" class="btn primary" type="button">SAO CHÉP LINK MỜI</button></div>
+    <p class="notice">Verified referrals: <strong id="verifiedReferrals">0</strong> · Referral boost: <strong id="referralBoost">+0%</strong></p>
+  </div>
+  <div>
+    <h3>Vòng tròn bảo mật</h3>
+    <p class="notice">Tối đa 5 Human Signal profiles đáng tin cậy. Mỗi kết nối hợp lệ +8%, tối đa +40% tốc độ mining.</p>
+    <div class="mini"><small>Security Circle</small><b id="securityCircleCount">0 / 5</b></div>
+    <input id="securityProfileId" placeholder="HUMAN-XXXXXXXXXXXX" style="width:100%;margin-top:10px;padding:12px;border-radius:9px;border:1px solid var(--line);background:#090604;color:var(--text);font:inherit">
+    <div class="actions"><button id="addSecurityCircle" class="btn ghost" type="button">THÊM VÀO VÒNG TRÒN</button></div>
+  </div>
+</div>
+</section>
+
+<section class="card" style="margin-top:14px">
 <h2>Làm sao để tăng tốc độ khai thác?</h2>
 <div class="how">
 <article><h3>Pioneer</h3><p>Người dùng tiên phong nhận bonus cao hơn, sau đó bonus giảm dần theo thời gian hoạt động.</p></article>
