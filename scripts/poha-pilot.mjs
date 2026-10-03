@@ -1,0 +1,25 @@
+// Independent draft-board pilot: ephemeral keys, no network, no account or token writes.
+import crypto from 'node:crypto';
+import {bindAgent,createSignedDelegation,revokeSignedRecord,inspectAction} from '../lib/poha-v1.mjs';
+import {signProof,publicKeyBase64,payloadDigest} from '../sdk/human-signal-node.mjs';
+const now=new Date(),expiry=new Date(now.getTime()+60000).toISOString();
+const human=crypto.generateKeyPairSync('ed25519'),agent=crypto.generateKeyPairSync('ed25519');
+const principalKey=publicKeyBase64(human.privateKey),agentKey=publicKeyBase64(agent.privateKey);
+const context={principalId:'HUMAN-AAAAAAAAAAAA',principalKey,audience:'https://draft-board.example',identityAssurance:'PHONE_VERIFIED'};
+const base=()=>({version:'1',principalId:context.principalId,audience:context.audience,nonce:crypto.randomBytes(24).toString('base64url'),issuedAt:now.toISOString(),expiresAt:expiry});
+const store={},bindingPayload={...base(),principalKey,agentKey,name:'Draft Assistant'};
+const binding=bindAgent(store,context,{payload:bindingPayload,principalSignature:signProof('AGENT_BINDING',bindingPayload,human.privateKey),agentSignature:signProof('AGENT_BINDING',bindingPayload,agent.privateKey)},now);
+const delegationPayload={...base(),principalKey,bindingId:binding.id,agentKey,scopes:['DRAFT_APP_ACTION'],resource:'draft:article-1',approvalRequired:false};
+const delegation=createSignedDelegation(store,context,{payload:delegationPayload,signature:signProof('DELEGATION',delegationPayload,human.privateKey)},now);
+const draft=Buffer.from('A draft created for the principal.','utf8');
+const action={...base(),performer:'AGENT',signerKey:agentKey,delegationId:delegation.id,action:'DRAFT_APP_ACTION',resource:'draft:article-1',payloadHash:payloadDigest(draft)};
+const proof={payload:action,signature:signProof('ACTION',action,agent.privateKey)};
+const expected={audience:context.audience,action:action.action,resource:action.resource,payloadHash:payloadDigest(draft),requireApproval:false};
+const outputs={};
+outputs.agent=inspectAction(store,context,proof,expected,now);
+outputs.approvalRequired=inspectAction(store,context,proof,{...expected,requireApproval:true},now);
+const direct={...action,nonce:crypto.randomBytes(24).toString('base64url'),performer:'HUMAN',signerKey:principalKey,delegationId:''};
+outputs.human=inspectAction(store,context,{payload:direct,signature:signProof('ACTION',direct,human.privateKey)},expected,now);
+revokeSignedRecord(store,context,{type:'DELEGATION',id:delegation.id},now);
+outputs.revoked=inspectAction(store,context,proof,expected,now);
+console.log(JSON.stringify({pilot:'Draft Board',mode:'INSPECT',executionEnabled:false,identityEvidence:'Simulated fresh unique phone evidence; not a real user verification',results:Object.fromEntries(Object.entries(outputs).map(([name,r])=>[name,{actorClass:r.actorClass,decision:r.decision,executionAuthorized:r.executionAuthorized,reasonCodes:r.reasonCodes}]))},null,2));
