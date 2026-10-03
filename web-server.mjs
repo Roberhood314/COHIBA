@@ -1885,7 +1885,8 @@ const server=http.createServer(async (req,res)=>{
       }
 
       const session=newSession(profile.id);
-      network.sessions=network.sessions.filter(x=>isSessionValid(x)).slice(-5000);
+      // OTP recovery replaces credentials: revoke previous sessions for this profile.
+      network.sessions=network.sessions.filter(x=>x.profileId!==profile.id && isSessionValid(x)).slice(-5000);
       network.sessions.push(session.record);
       saveHumanSignalNetwork(network);
 
