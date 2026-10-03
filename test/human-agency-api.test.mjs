@@ -69,9 +69,27 @@ test('agency HTTP API enforces sessions, origin, isolation and persistence', {ti
     assert.equal(relogged.status,200);
     assert.equal((await account('logout',{},relogged.data.token)).status,200);
     assert.equal((await api('',{token:relogged.data.token})).status,401);
+    // Verified OTP recovery must revoke every previous session for this account only.
+    const recoveryToken='fixture-approved-otp-token';
+    const onboardingFile=path.join(dir,'cohiba-account-onboarding.json');
+    await writeFile(onboardingFile,JSON.stringify({records:[{status:'PHONE_VERIFIED',tokenHash:crypto.createHash('sha256').update(recoveryToken).digest('hex'),tokenExpiresAt:new Date(Date.now()+60000).toISOString(),phoneHash,existingProfileId:bob}]}));
+    const recovered=await account('onboarding/profile',{onboardingToken:recoveryToken,password:'RecoveredPassword123'});
+    assert.equal(recovered.status,200);assert.equal(recovered.data.created,false);
+    assert.equal((await api('',{token:sessions[1].token})).status,401);
+    assert.equal((await api('',{token:sessions[0].token})).status,200);
+    assert.equal((await api('',{token:recovered.data.token})).status,200);
+    assert.equal((await account('login',{phone:'0901234567',password:'NewPassword123'})).status,401);
+    assert.equal((await account('onboarding/profile',{onboardingToken:recoveryToken,password:'RecoveredPassword123'})).status,400);
+    const persisted=JSON.parse(await readFile(path.join(dir,'cohiba-human-signal-network.json'),'utf8'));
+    assert.equal(persisted.sessions.filter(s=>s.profileId===bob).length,1);
+    const signupToken='fixture-new-account-otp';
+    await writeFile(onboardingFile,JSON.stringify({records:[{status:'PHONE_VERIFIED',tokenHash:crypto.createHash('sha256').update(signupToken).digest('hex'),tokenExpiresAt:new Date(Date.now()+60000).toISOString(),phoneHash:hashIdentity('phone','+84907654321','test-identity-pepper')}]}));
+    const signup=await account('onboarding/profile',{onboardingToken:signupToken,displayName:'New Human',password:'SignupPassword123'});
+    assert.equal(signup.status,200);assert.equal(signup.data.created,true);
+    assert.equal((await account('login',{phone:'0907654321',password:'SignupPassword123'})).status,200);
     const audited=JSON.parse(await readFile(file,'utf8'));
     assert.equal(verifyEventChain(audited.events).valid,true);
-    assert.deepEqual(audited.events.slice(3).map(e=>e.type),['ACCOUNT_LOGIN','ACCOUNT_PASSWORD_UPDATED','ACCOUNT_LOGIN','ACCOUNT_LOGOUT']);
+    assert.deepEqual(audited.events.slice(3).map(e=>e.type),['ACCOUNT_LOGIN','ACCOUNT_PASSWORD_UPDATED','ACCOUNT_LOGIN','ACCOUNT_LOGOUT','PROFILE_VERIFIED','PROFILE_VERIFIED','ACCOUNT_LOGIN']);
     await writeFile(file,'invalid JSON');
     assert.equal((await api('/agents',{method:'POST',body:{name:'Another Agent'}})).status,503);
     assert.equal(await readFile(file,'utf8'),'invalid JSON');

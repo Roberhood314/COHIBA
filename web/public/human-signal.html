@@ -16,6 +16,10 @@
   <div id="accountStep3" style="display:none">
     <label>Tên tài khoản</label>
     <input id="onboardName" placeholder="Tên hiển thị của bạn" maxlength="32">
+    <label for="onboardPassword">Mật khẩu COH</label>
+    <input id="onboardPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 8 ký tự, gồm chữ và số">
+    <label for="onboardPasswordConfirm">Nhập lại mật khẩu</label>
+    <input id="onboardPasswordConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password">
     <button id="onboardCreateProfile" type="button">TẠO TÀI KHOẢN</button>
   </div>
   <div id="accountOnboardingState" class="record"><span class="note">Chưa bắt đầu.</span></div>
@@ -51,4 +55,4 @@
 <div id="agencyState" class="record" aria-live="polite">Kết nối và xác minh ví để quản lý tác nhân.</div>
 <form id="agentForm"><label for="agentName">Tên tác nhân AI</label><input id="agentName" minlength="3" maxlength="80" required placeholder="Ví dụ: COHIBA Research Assistant"><button type="submit">Đăng ký tác nhân</button></form>
 <form id="delegationForm"><label for="agencyAgent">Chọn tác nhân</label><select id="agencyAgent" required></select><label for="agencyScope">Quyền được cấp</label><select id="agencyScope"><option value="READ_PUBLIC_SIGNALS">Đọc tín hiệu công khai</option><option value="DRAFT_CONTRIBUTION">Soạn bản nháp đóng góp</option><option value="DRAFT_APP_ACTION">Soạn bản nháp thao tác ứng dụng</option></select><label for="agencyHours">Thời hạn</label><select id="agencyHours"><option value="1">1 giờ</option><option value="24">24 giờ</option><option value="168">7 ngày</option></select><button type="submit">Cấp quyền có thời hạn</button></form>
-<div id="agencyDelegations"></div></section><section class="card" style="margin-top:16px"><h2>Recent signals</h2><div id="records"><span class="note">Loading…</span></div></section></main><script src="/human-signal.js?v=human-agency-20261003"></script></body></html>
+<div id="agencyDelegations"></div></section><section class="card" style="margin-top:16px"><h2>Recent signals</h2><div id="records"><span class="note">Loading…</span></div></section></main><script src="/human-signal.js?v=account-integrity-20261003"></script></body></html>

@@ -30,3 +30,13 @@ test("developer app registry and utility actions dedupe",()=>{
   const y=recordAppUtility(s,{appId:app.id,profileId:"HUMAN-BBBBBBBBBBBB",action:"ITEM_CREATED",proofRef:"proof-1"});
   assert.equal(x.duplicate,false); assert.equal(y.duplicate,true); assert.equal(app.utilityActions,1);
 });
+
+test('every literal server audit event is accepted by the core',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const source=await readFile(new URL('../web-server.mjs',import.meta.url),'utf8');
+  const types=[...new Set([...source.matchAll(/emitHsc\("([A-Z_]+)"/g)].map(match=>match[1]))];
+  assert.ok(types.length>10);
+  const store={events:[]};
+  for(const type of types) assert.doesNotThrow(()=>appendCoreEvent(store,{type,actor:'TEST',subject:'TEST'}),type);
+  assert.equal(verifyEventChain(store.events).valid,true);
+});

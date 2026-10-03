@@ -254,15 +254,23 @@ $("#onboardCheckOtp")?.addEventListener("click",async()=>{
 });
 $("#onboardCreateProfile")?.addEventListener("click",async()=>{
   const displayName=$("#onboardName").value.trim();
+  const password=$("#onboardPassword").value;
+  const button=$("#onboardCreateProfile");button.disabled=true;
   setOnboardingState('<span class="note">Đang tạo tài khoản…</span>');
   try{
-    const r=await fetch("/api/account/onboarding/profile",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({displayName,onboardingToken})});
+    if(password!==$("#onboardPasswordConfirm").value) throw new Error("Mật khẩu nhập lại chưa khớp.");
+    if(password.length<8 || password.length>128 || !/[\p{L}]/u.test(password) || !/\d/.test(password)) throw new Error("Mật khẩu cần 8–128 ký tự, gồm chữ và số.");
+    const r=await fetch("/api/account/onboarding/profile",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({displayName,password,onboardingToken})});
     const x=await r.json();if(!r.ok)throw new Error(x.error||"PROFILE_CREATE_FAILED");
     if(x.token){authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);}
+    onboardingId="";onboardingToken="";
+    localStorage.removeItem("cohiba_onboarding_id");localStorage.removeItem("cohiba_onboarding_token");
+    $("#onboardPassword").value="";$("#onboardPasswordConfirm").value="";
     setOnboardingState('<span class="verified">Tài khoản đã tạo và số điện thoại đã xác minh ✓ Bây giờ hãy kết nối ví COH.</span>');
     $("#accountStep3").style.display="none";
     $("#connectWallet").scrollIntoView({behavior:"smooth",block:"center"});
   }catch(err){setOnboardingState('<span class="rejected">'+esc(err.message)+'</span>');}
+  finally{button.disabled=false;}
 });
 $("#connectWallet").addEventListener("click",async()=>{
   try{
