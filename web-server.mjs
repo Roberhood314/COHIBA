@@ -16,6 +16,7 @@ import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } fro
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { bindAgent, createSignedDelegation, revokeSignedRecord, inspectAction } from "./lib/poha-v1.mjs";
 import { registerAgent, grantDelegation, revokeDelegation, agencyForOwner } from "./lib/human-agency.mjs";
 import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
 
@@ -311,9 +312,12 @@ async function anchorHscStateDevnet(){
     explorer:"https://explorer.solana.com/tx/"+signature+"?cluster=devnet",
     anchoredAt:new Date().toISOString()
   };
-  core.anchors.push(anchorRecord);
-  appendCoreEvent(core,{type:"STATE_ROOT_ANCHORED",actor:"SYSTEM",subject:anchorRecord.id,data:{network:"devnet",stateRoot:state.stateRoot,signature}});
-  saveHumanSignalCore(core);
+  const latestCore=loadHumanSignalCore();
+  if(latestCore.storageRecovered || !verifyEventChain(latestCore.events||[]).valid)throw new Error("HSC_ANCHOR_STORAGE_UNAVAILABLE");
+  latestCore.anchors=Array.isArray(latestCore.anchors)?latestCore.anchors:[];
+  latestCore.anchors.push(anchorRecord);
+  appendCoreEvent(latestCore,{type:"STATE_ROOT_ANCHORED",actor:"SYSTEM",subject:anchorRecord.id,data:{network:"devnet",stateRoot:state.stateRoot,signature}});
+  saveHumanSignalCore(latestCore);
   return anchorRecord;
 }
 
@@ -1536,6 +1540,59 @@ const server=http.createServer(async (req,res)=>{
         ["HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED","HSC_DEVNET_ANCHOR_LOCKED","DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"].includes(m)?409:
         500;
       json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/v1/protocol"){
+    json(res,200,{ok:true,protocol:"Human Signal PoHA",version:"1",milestone:"SIGNED_INSPECTION",algorithm:"Ed25519",canonicalization:"HS_RESTRICTED_JSON_V1",executionEnabled:false,actionNonceConsumption:false,policyVersion:"PHONE_BOUND_DRAFT_V1",developerLab:"/poha-lab.html"});
+    return;
+  }
+
+  if(["/api/v1/agency","/api/v1/agents/register","/api/v1/delegations","/api/v1/revocations","/api/v1/actions/inspect"].includes(raw)){
+    try{
+      const isRead=raw==="/api/v1/agency" && req.method==="GET";
+      if(!isRead && (raw==="/api/v1/agency" || req.method!=="POST")){json(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});return;}
+      requireHumanSignalOrigin(req);
+      let body="";
+      for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>16384)throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      if(!parsed || typeof parsed!=="object" || Array.isArray(parsed))throw new Error("INVALID_SCHEMA");
+      // Resolve authoritative identity and core only after the asynchronous body read.
+      const network=loadHumanSignalNetwork();
+      if(network.storageRecovered)throw new Error("POHA_STORAGE_UNAVAILABLE");
+      const profile=authHumanSignalProfile(req,network);
+      if(!profile.wallet)throw new Error("AGENCY_WALLET_REQUIRED");
+      const phone=profile.humanProofs?.phone;
+      const freshPhone=phone?.verified===true && typeof phone.identityHash==="string" && phone.identityHash.length>=32 && Number.isFinite(Date.parse(phone.verifiedAt)) && Date.parse(phone.verifiedAt)<=Date.now() && Date.now()-Date.parse(phone.verifiedAt)<30*86400000;
+      const uniquePhone=freshPhone && network.profiles.filter(p=>p.humanProofs?.phone?.verified===true && p.humanProofs.phone.identityHash===phone.identityHash).length===1;
+      const context={principalId:profile.id,principalKey:Buffer.from(new PublicKey(profile.wallet).toBytes()).toString("base64"),audience:new URL(PUBLIC_BASE_URL).origin,identityAssurance:uniquePhone?"PHONE_VERIFIED":"NONE"};
+      const core=loadHumanSignalCore();
+      if(core.storageRecovered || !verifyEventChain(core.events||[]).valid)throw new Error("POHA_STORAGE_UNAVAILABLE");
+      if(isRead){
+        json(res,200,{ok:true,version:"1",audience:context.audience,identityAssurance:context.identityAssurance,executionEnabled:false,
+          agents:(core.pohaAgents||[]).filter(r=>r.payload.principalId===profile.id),
+          delegations:(core.pohaDelegations||[]).filter(r=>r.payload.principalId===profile.id)});return;
+      }
+      if(raw.endsWith("/inspect")){
+        // Caller-supplied expected context is diagnostic only; no execution receipt is issued.
+        const expected=parsed.expected;
+        if(!expected || typeof expected!=="object" || Array.isArray(expected) || typeof expected.requireApproval!=="boolean")throw new Error("INVALID_EXPECTED_CONTEXT");
+        const result=inspectAction(core,context,parsed.proof,expected);
+        json(res,200,{ok:true,result});return;
+      }
+      let record,type,changed=true;
+      if(raw.endsWith("/register")){record=bindAgent(core,context,parsed);type="AGENT_REGISTERED";}
+      else if(raw.endsWith("/delegations")){record=createSignedDelegation(core,context,parsed);type="DELEGATION_GRANTED";}
+      else{const output=revokeSignedRecord(core,context,parsed);record=output.record;changed=output.changed;type=parsed.type==="AGENT"?"AGENT_REVOKED":"DELEGATION_REVOKED";}
+      if(changed){appendCoreEvent(core,{type,actor:profile.id,subject:record.id,data:{protocolVersion:"1",proofClass:"ED25519_SIGNED",record}});saveHumanSignalCore(core);}
+      json(res,raw.endsWith("/revocations")?200:201,{ok:true,record,executionEnabled:false});
+    }catch(error){
+      const message=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","HUMAN_SIGNAL_PROFILE_NOT_FOUND"].includes(message)?401:
+        ["HUMAN_SIGNAL_ORIGIN_INVALID","AGENCY_WALLET_REQUIRED"].includes(message)?403:
+        message==="POHA_STORAGE_UNAVAILABLE"?503:message==="REQUEST_TOO_LARGE"?413:400;
+      json(res,status,{ok:false,error:message});
     }
     return;
   }

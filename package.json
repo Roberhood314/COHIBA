@@ -23,7 +23,8 @@
     "verify:all": "npm run test && npm run verify:security && npm run verify:evolution && npm run typecheck",
     "verify:ops": "node scripts/run-operational-drills.mjs",
     "node:agent": "node scripts/cohiba-node-agent.mjs",
-    "verify:evolution": "node scripts/verify-evolution-policy.mjs"
+    "verify:evolution": "node scripts/verify-evolution-policy.mjs",
+    "poha:pilot": "node scripts/poha-pilot.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
