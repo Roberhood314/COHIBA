@@ -182,6 +182,7 @@ async function loadMining(){
   }
 }
 async function loadIdentity(){
+  await loadAgency();
   try{
     if(authToken){
       const r=await api("/api/human-signal/me");
@@ -362,6 +363,40 @@ $("#addTrust").addEventListener("click",async()=>{
   const r=await api("/api/human-signal/trust",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({targetProfileId})}); const x=await r.json();
   if(!r.ok) return $("#identityState").innerHTML+='<p class="rejected">'+esc(x.error)+'</p>';
   $("#targetProfileId").value=""; await loadIdentity();
+});
+async function loadAgency(){
+  const enabled=Boolean(authToken);
+  $("#agentForm button").disabled=!enabled; $("#delegationForm button").disabled=true;
+  if(!enabled){$("#agencyState").textContent="Kết nối và xác minh ví để quản lý tác nhân.";$("#agencyAgent").innerHTML="";$("#agencyDelegations").innerHTML="";return;}
+  try{
+    const r=await api("/api/hsc/agency"),x=await r.json();
+    if(!r.ok) throw new Error(x.error||"AGENCY_LOAD_FAILED");
+    $("#agencyState").textContent=x.agents.length+" tác nhân · quyền được ghi nhận trong Human Signal.";
+    $("#agencyAgent").innerHTML=x.agents.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join("");
+    $("#delegationForm button").disabled=!x.agents.length;
+    const names=new Map(x.agents.map(a=>[a.id,a.name]));
+    $("#agencyDelegations").innerHTML=x.delegations.slice().reverse().map(d=>'<div class="record"><strong>'+esc(names.get(d.agentId)||d.agentId)+'</strong> · '+esc(d.status)+'<p>'+esc(d.scopes.join(", "))+'</p><p class="note">Hết hạn: '+esc(new Date(d.expiresAt).toLocaleString())+'</p>'+(d.status==="ACTIVE"?'<button type="button" data-revoke="'+esc(d.id)+'">Thu hồi quyền</button>':'')+'</div>').join("");
+  }catch(err){$("#agencyState").textContent=err.message;$("#agencyAgent").innerHTML="";$("#agencyDelegations").innerHTML="";$("#agentForm button").disabled=true;}
+}
+async function agencyWrite(path,body){
+  const r=await api(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}),x=await r.json();
+  if(!r.ok) throw new Error(x.error||"AGENCY_UPDATE_FAILED");
+  await loadAgency();
+}
+$("#agentForm").addEventListener("submit",async e=>{
+  e.preventDefault(); const button=e.currentTarget.querySelector("button");button.disabled=true;
+  try{await agencyWrite("/api/hsc/agency/agents",{name:$("#agentName").value});$("#agentName").value="";}
+  catch(err){$("#agencyState").textContent=err.message;}finally{button.disabled=!authToken;}
+});
+$("#delegationForm").addEventListener("submit",async e=>{
+  e.preventDefault();const button=e.currentTarget.querySelector("button");button.disabled=true;
+  try{await agencyWrite("/api/hsc/agency/grant",{agentId:$("#agencyAgent").value,scopes:[$("#agencyScope").value],expiresAt:new Date(Date.now()+Number($("#agencyHours").value)*3600000).toISOString()});}
+  catch(err){$("#agencyState").textContent=err.message;}finally{button.disabled=!authToken||!$("#agencyAgent").value;}
+});
+$("#agencyDelegations").addEventListener("click",async e=>{
+  const button=e.target.closest("button[data-revoke]");if(!button)return;button.disabled=true;
+  try{await agencyWrite("/api/hsc/agency/revoke",{delegationId:button.dataset.revoke});}
+  catch(err){$("#agencyState").textContent=err.message;button.disabled=false;}
 });
 restoreOnboardingUi(); load(); loadIdentity(); loadAdsConfig(); loadEconomy(); loadMining(); syncQuickMiningUi(); loadHumanProof(); loadProviderReadiness(); loadPioneer();
 })();

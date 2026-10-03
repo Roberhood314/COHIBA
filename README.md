@@ -262,3 +262,9 @@ Public endpoints:
 Devnet anchoring requires `ALLOW_HSC_DEVNET_ANCHOR=true` and a separate Human Signal review key. This mechanism does not authorize or trigger COH Mainnet launch.
 
 Architecture: [docs/HUMAN_SIGNAL_CORE.md](docs/HUMAN_SIGNAL_CORE.md)
+
+### Human Agency v0.1 — human-controlled permission registry
+
+Wallet-linked profiles can register AI agents, grant limited draft/read permissions for up to seven days, and revoke grants from the Human Signal page. Owner-only APIs and HSC events record consent; agency records are included in the state root. This is an off-chain permission registry; external AI execution and agent authentication are not enabled.
+
+See [Human Agency](docs/HUMAN_AGENCY.md).
