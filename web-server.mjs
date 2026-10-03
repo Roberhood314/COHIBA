@@ -16,6 +16,7 @@ import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } fro
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { registerAgent, grantDelegation, revokeDelegation, agencyForOwner } from "./lib/human-agency.mjs";
 import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1534,6 +1535,47 @@ const server=http.createServer(async (req,res)=>{
         m==="HUMAN_SIGNAL_REVIEW_KEY_INVALID"?403:
         ["HUMAN_SIGNAL_REVIEW_KEY_NOT_CONFIGURED","HSC_DEVNET_ANCHOR_LOCKED","DEVNET_SYSTEM_WALLET_NEEDS_FUNDING"].includes(m)?409:
         500;
+      json(res,status,{ok:false,error:m});
+    }
+    return;
+  }
+
+  if(raw==="/api/hsc/agency" || ["/api/hsc/agency/agents","/api/hsc/agency/grant","/api/hsc/agency/revoke"].includes(raw)){
+    try{
+      const isRead=raw==="/api/hsc/agency" && req.method==="GET";
+      const isWrite=raw!=="/api/hsc/agency" && req.method==="POST";
+      if(!isRead && !isWrite){json(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});return;}
+      if(isWrite) requireHumanSignalOrigin(req);
+      const network=loadHumanSignalNetwork();
+      const profile=authHumanSignalProfile(req,network);
+      if(!profile.wallet) throw new Error("AGENCY_WALLET_REQUIRED");
+      if(isRead){json(res,200,{ok:true,...agencyForOwner(loadHumanSignalCore(),profile.id)});return;}
+      let body=""; for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>4096) throw new Error("REQUEST_TOO_LARGE");}
+      const parsed=body?JSON.parse(body):{};
+      if(!parsed || typeof parsed!=="object" || Array.isArray(parsed)) throw new Error("INVALID_AGENCY_REQUEST");
+      // Load after reading the body so concurrent requests cannot overwrite newer grants.
+      const core=loadHumanSignalCore();
+      if(core.storageRecovered || !verifyEventChain(core.events||[]).valid) throw new Error("AGENCY_STORAGE_UNAVAILABLE");
+      let record,changed=true,type;
+      if(raw.endsWith("/agents")){
+        record=registerAgent(core,profile.id,parsed);type="AGENT_REGISTERED";
+      }else if(raw.endsWith("/grant")){
+        record=grantDelegation(core,profile.id,parsed);type="DELEGATION_GRANTED";
+      }else{
+        const out=revokeDelegation(core,profile.id,parsed.delegationId);
+        record=out.delegation;changed=out.changed;type="DELEGATION_REVOKED";
+      }
+      if(changed){
+        appendCoreEvent(core,{type,actor:profile.id,subject:record.id,data:record});
+        saveHumanSignalCore(core);
+      }
+      json(res,raw.endsWith("/revoke")?200:201,{ok:true,record,...agencyForOwner(core,profile.id)});
+    }catch(error){
+      const m=String(error?.message||error);
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","HUMAN_SIGNAL_PROFILE_NOT_FOUND"].includes(m)?401:
+        ["HUMAN_SIGNAL_ORIGIN_INVALID","AGENCY_WALLET_REQUIRED"].includes(m)?403:
+        ["AGENT_NOT_FOUND","DELEGATION_NOT_FOUND"].includes(m)?404:
+        m==="REQUEST_TOO_LARGE"?413:m==="AGENCY_STORAGE_UNAVAILABLE"?503:400;
       json(res,status,{ok:false,error:m});
     }
     return;

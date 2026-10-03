@@ -62,16 +62,21 @@ function friendly(err){
   PASSWORD_LENGTH:"Mật khẩu phải có từ 8 đến 128 ký tự.",
   PASSWORD_COMPLEXITY:"Mật khẩu phải có ít nhất một chữ và một số.",
   PHONE_OR_PASSWORD_INVALID:"Số điện thoại hoặc mật khẩu không đúng.",
+  INVALID_CORE_EVENT_TYPE:"Máy chủ chưa hoàn tất đăng nhập. Vui lòng thử lại sau ít phút.",
+  AbortError:"Kết nối bị chậm. Vui lòng thử lại.",
   LOGIN_RATE_LIMITED:"Đăng nhập sai quá nhiều lần. Hãy thử lại sau 15 phút."
  };
- return map[m]||m;
+ return err?.name==="AbortError"?"Kết nối bị chậm. Vui lòng thử lại.":map[m]||m;
 }
 async function loadAccount(){
  if(!authToken)return false;
  try{
   const r=await fetch("/api/human-signal/dashboard",{headers:{authorization:"Bearer "+authToken},cache:"no-store"});
   const x=await r.json();
-  if(!r.ok)throw new Error(x.error||"AUTH_FAILED");
+  if(!r.ok){
+    if(r.status===401){localStorage.removeItem("cohiba_human_signal_token");authToken="";}
+    throw new Error(x.error||"Không tải được hồ sơ. Vui lòng thử lại.");
+  }
   $("#stepPhone").classList.add("hidden");$("#stepOtp").classList.add("hidden");$("#stepProfile").classList.add("hidden");
   $("#loginCard").classList.add("hidden");$("#registerFlow").classList.add("hidden");$("#accountTabs").classList.add("hidden");
   $("#accountReady").classList.remove("hidden");
@@ -81,8 +86,9 @@ async function loadAccount(){
   $("#pendingCoh").textContent=Number(x.mining?.pendingCoh||0).toLocaleString(undefined,{maximumFractionDigits:8});
   $("#miningStatus").textContent=x.mining?.activeSession?"ACTIVE":"IDLE";
   return true;
- }catch{
-  localStorage.removeItem("cohiba_human_signal_token");authToken="";return false;
+ }catch(err){
+  $("#loginState").textContent=friendly(err);
+  return false;
  }
 }
 $("#sendOtp").addEventListener("click",async()=>{
@@ -159,7 +165,7 @@ $("#loginButton").addEventListener("click",async()=>{
    const x=await post("/api/account/login",{phone,password});
    authToken=x.token;localStorage.setItem("cohiba_human_signal_token",authToken);
    $("#loginPassword").value="";
-   await loadAccount();
+   if(!await loadAccount())throw new Error("Đã xác thực tài khoản nhưng chưa tải được hồ sơ. Vui lòng tải lại trang.");
  }catch(err){
    $("#loginState").innerHTML='<span class="bad">'+esc(friendly(err))+'</span>';
  }finally{$("#loginButton").disabled=false}
