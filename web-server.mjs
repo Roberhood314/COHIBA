@@ -1,3 +1,4 @@
+import {allowedHumanSignalOrigins as configuredHumanOrigins,requireHumanSignalOrigin as validateHumanOrigin} from "./lib/human-signal-origin.mjs";
 import {agencyGraph} from "./lib/agency-graph.mjs";
 import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
 import {AccountStateDatabase, transactionalResponse} from "./lib/account-state-postgres.mjs";
@@ -796,15 +797,9 @@ function saveHumanSignal(store){
 }
 
 function allowedHumanSignalOrigins(){
-  const origins=new Set([PUBLIC_BASE_URL.replace(/\/$/,"")]);
-  const railway=String(process.env.RAILWAY_PUBLIC_DOMAIN||"").trim();
-  if(railway) origins.add("https://"+railway.replace(/^https?:\/\//,"").replace(/\/$/,""));
-  return origins;
+  return configuredHumanOrigins({canonical:CANONICAL_PUBLIC_ORIGIN,publicBase:PUBLIC_BASE_URL,railwayDomain:process.env.RAILWAY_PUBLIC_DOMAIN,extraOrigins:String(process.env.HUMAN_SIGNAL_ALLOWED_ORIGINS||"" ).split(",").map(value=>value.trim()).filter(Boolean)});
 }
-function requireHumanSignalOrigin(req){
-  const origin=String(req.headers.origin||"").replace(/\/$/,"");
-  if(!allowedHumanSignalOrigins().has(origin)) throw new Error("HUMAN_SIGNAL_ORIGIN_INVALID");
-}
+function requireHumanSignalOrigin(req){validateHumanOrigin(req,allowedHumanSignalOrigins());}
 
 function requireHumanSignalReviewKey(req){
   const configured=process.env.HUMAN_SIGNAL_REVIEW_KEY;

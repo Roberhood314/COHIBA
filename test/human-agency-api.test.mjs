@@ -21,7 +21,7 @@ test('agency HTTP API enforces sessions, origin, isolation and persistence', {ti
   const credential={scheme:'scrypt-v1',salt:salt.toString('base64'),hash:crypto.scryptSync(password,salt,64).toString('base64')};
   const phoneHash=hashIdentity('phone','+84901234567','test-identity-pepper');
   await writeFile(path.join(dir,'cohiba-human-signal-network.json'),JSON.stringify({profiles:[{id:alice,wallet:'wallet-a'},{id:bob,wallet:'wallet-b',humanProofs:{phone:{verified:true,identityHash:phoneHash}},passwordCredential:credential},{id:phone}],challenges:[],sessions:sessions.map(s=>s.record)}));
-  const child=spawn(process.execPath,['web-server.mjs'],{env:{...process.env,HUMAN_SIGNAL_DATABASE_URL:'',ALLOW_POHA_AUTHORIZATION:'false',HS_PILOT_PUBLIC_KEY:'',HS_PILOT_AUDIENCE:'',HS_BACKUP_BUCKET:'',HUMAN_IDENTITY_PEPPER:'test-identity-pepper',PORT:String(port),PUBLIC_BASE_URL:'https://cohibameme.site',COHIBA_DATA_DIR:dir,AUTO_MAINNET_LAUNCH:'false',ALLOW_MAINNET:'false',ALLOW_HSC_DEVNET_ANCHOR:'false',INFOBIP_API_KEY:'',SYSTEM_WALLET_SECRET_JSON:''},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['web-server.mjs'],{env:{...process.env,HUMAN_SIGNAL_DATABASE_URL:'',ALLOW_POHA_AUTHORIZATION:'false',HS_PILOT_PUBLIC_KEY:'',HS_PILOT_AUDIENCE:'',HS_BACKUP_BUCKET:'',HUMAN_IDENTITY_PEPPER:'test-identity-pepper',PORT:String(port),PUBLIC_BASE_URL:'https://cohiba-web-live-production.up.railway.app',COHIBA_DATA_DIR:dir,AUTO_MAINNET_LAUNCH:'false',ALLOW_MAINNET:'false',ALLOW_HSC_DEVNET_ANCHOR:'false',INFOBIP_API_KEY:'',SYSTEM_WALLET_SECRET_JSON:''},stdio:['ignore','pipe','pipe']});
   try{
     await new Promise((resolve,reject)=>{
       let output='';const timer=setTimeout(()=>reject(new Error('server start timeout')),10000);
