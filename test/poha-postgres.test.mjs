@@ -143,7 +143,17 @@ test('PoHA disclosure integration releases exact local bytes only after authorit
    {facts:{ageBand:'30-44'},model:policy.model,task:policy.purpose},
    {facts:{dietaryNeeds:['vegetarian']},model:policy.model,task:policy.purpose}
   ]);
-  const backup=await db.exportBackup();const ledger=backup.tables.hs_state_documents.find(r=>r.id==='disclosure:'+f.context.principalId);
+  // A second profile bound to the same owner key must not reset the budget.
+  const aliasContext={...f.context,principalId:'HUMAN-'+crypto.randomBytes(6).toString('hex').toUpperCase()};
+  const aliasBindingPayload={...f.binding,principalId:aliasContext.principalId,nonce:nonce()};
+  const aliasBinding=await db.mutate(aliasContext,'AGENT',{payload:aliasBindingPayload,principalSignature:signProof('AGENT_BINDING',aliasBindingPayload,f.human.privateKey),agentSignature:signProof('AGENT_BINDING',aliasBindingPayload,f.agent.privateKey)});
+  const aliasDelegationPayload={...delegationPayload,principalId:aliasContext.principalId,bindingId:aliasBinding.id,nonce:nonce()};
+  const aliasDelegation=await db.mutate(aliasContext,'DELEGATION',{payload:aliasDelegationPayload,signature:signProof('DELEGATION',aliasDelegationPayload,f.human.privateKey)});
+  const aliasAction={...ordinary.request.proof.payload,principalId:aliasContext.principalId,delegationId:aliasDelegation.id,nonce:nonce()};
+  const aliasRequest={...ordinary.request,proof:{payload:aliasAction,signature:signProof('ACTION',aliasAction,f.agent.privateKey)}};
+  const aliasRaw=Buffer.from(JSON.stringify(aliasRequest));
+  assert.equal((await db.authorize(f.auth(aliasRaw),aliasRaw,aliasRequest,()=>aliasContext)).reasonCodes[0],'DISCLOSURE_BUDGET_EXCEEDED');
+  const backup=await db.exportBackup();const ledger=backup.tables.hs_state_documents.find(r=>r.id==='disclosure-key:'+f.principalKey);
   assert.equal(ledger.document.counts[grantId(grantPayload)],2);assert.ok(!JSON.stringify(ledger).includes('vegetarian'));
   const restoredEngine=new PGlite();
   const restored=new PohaDatabase({pool:{connect:async()=>({query:(sql,args)=>sql.includes('pg_advisory_xact_lock')?Promise.resolve({rows:[]}):(!args&&sql.includes('CREATE TABLE')?restoredEngine.exec(sql).then(()=>({rows:[]})):restoredEngine.query(sql,args)),release(){}}),end:()=>restoredEngine.close()}});
