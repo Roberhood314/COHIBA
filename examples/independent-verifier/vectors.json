@@ -1,0 +1,551 @@
+{
+  "version": "HS_PUBLIC_TEST_VECTORS_1",
+  "synthetic": true,
+  "warning": "Public synthetic keys. Historical clock for inspection only; never production admission.",
+  "cases": [
+    {
+      "name": "human",
+      "input": {
+        "proof": {
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "performer": "HUMAN",
+            "signerKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "delegationId": "",
+            "action": "DRAFT_APP_ACTION",
+            "resource": "draft:independent",
+            "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48"
+          },
+          "signature": "6mTvxceDVPWlrVjpxG5TEOa0hscMcE8P62vjNsvrQoCYg9va4R0+bTKxOTS/N2qrYkHSaIQHbtUZjTm7hAVKCA=="
+        },
+        "binding": {
+          "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "name": "PUBLIC SYNTHETIC AGENT"
+          },
+          "principalSignature": "jNCGrHdUe4pUr+/tunWhbo6ePtsEbawB1M5PF5MD2VZt0uDTGjxRJ3o2ouDn+PM1/BznFHA6gDiuF3kGluRTAg==",
+          "agentSignature": "gvvS7YbWdfIppjCHveuO7Oi2zbmNRxdHVlCJ2dGLF02FbakTSH1jgxc0kjGAV8RytEg9b8d+Ny75JIedCUgiCQ=="
+        },
+        "delegation": {
+          "id": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AgICAgICAgICAgICAgICAgICAgICAgIC",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "bindingId": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+            "scopes": [
+              "DRAFT_APP_ACTION"
+            ],
+            "resource": "draft:independent",
+            "approvalRequired": false
+          },
+          "signature": "iZ9A9CiP7frygtopwCjvwuOw7wlKJ7P0U3znxEPmc/U5ENg1Rl5kpFT8brSYIP4z1nLb1e3kf3UkV8yfGHRxCA=="
+        },
+        "status": {
+          "payload": {
+            "version": "HS_AUTHORITY_STATUS_EXPERIMENT_1",
+            "issuer": "synthetic-issuer",
+            "audience": "https://independent.example",
+            "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+            "actionDigest": "69732ff911657b590b07a694851cc0565b6a219fb37929c2041155b53c0f2d98",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "identityAssurance": "PHONE_VERIFIED",
+            "assuranceExpiresAt": "2026-10-04T15:31:00.000Z",
+            "credentialEpoch": 1,
+            "principalRevoked": false,
+            "records": [],
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:30:20.000Z"
+          },
+          "signature": "bL5PvyXktp2wpgQ+K+jCuSPlUod7M7wZj3dz8o7Q04R7OcFd+1Din8oxENOGFrMBIcByk2YSmcQ5NUUCRgBaCA=="
+        },
+        "expected": {
+          "audience": "https://independent.example",
+          "action": "DRAFT_APP_ACTION",
+          "resource": "draft:independent",
+          "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48",
+          "requireApproval": false,
+          "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+        },
+        "trust": {
+          "synthetic-issuer": {
+            "publicKey": "0RD8nEdoNA3D+5AlGNZZUFd5Pry7hK1ArgcPSjQm19E=",
+            "acceptedAssurances": [
+              "PHONE_VERIFIED"
+            ]
+          }
+        },
+        "now": 1791127800000
+      },
+      "expected": {
+        "actorClass": "VERIFIED_HUMAN",
+        "decision": "ALLOW",
+        "executionAuthorized": false
+      }
+    },
+    {
+      "name": "agent",
+      "input": {
+        "proof": {
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "performer": "AGENT",
+            "signerKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "delegationId": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+            "action": "DRAFT_APP_ACTION",
+            "resource": "draft:independent",
+            "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48"
+          },
+          "signature": "9w5Q621LhkL5ccfn66oWHnNI0y33ZCeJSwVZtHnjhISzmlN5zRg7aAq+Sx2E5E8ybH81rAsincLE1sY8y5MHDg=="
+        },
+        "binding": {
+          "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "name": "PUBLIC SYNTHETIC AGENT"
+          },
+          "principalSignature": "jNCGrHdUe4pUr+/tunWhbo6ePtsEbawB1M5PF5MD2VZt0uDTGjxRJ3o2ouDn+PM1/BznFHA6gDiuF3kGluRTAg==",
+          "agentSignature": "gvvS7YbWdfIppjCHveuO7Oi2zbmNRxdHVlCJ2dGLF02FbakTSH1jgxc0kjGAV8RytEg9b8d+Ny75JIedCUgiCQ=="
+        },
+        "delegation": {
+          "id": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AgICAgICAgICAgICAgICAgICAgICAgIC",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "bindingId": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+            "scopes": [
+              "DRAFT_APP_ACTION"
+            ],
+            "resource": "draft:independent",
+            "approvalRequired": false
+          },
+          "signature": "iZ9A9CiP7frygtopwCjvwuOw7wlKJ7P0U3znxEPmc/U5ENg1Rl5kpFT8brSYIP4z1nLb1e3kf3UkV8yfGHRxCA=="
+        },
+        "status": {
+          "payload": {
+            "version": "HS_AUTHORITY_STATUS_EXPERIMENT_1",
+            "issuer": "synthetic-issuer",
+            "audience": "https://independent.example",
+            "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+            "actionDigest": "07addc425f886f27bf7b4ca7b02ddac564c803eb986b44b878ae5c2f002f5dfa",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "identityAssurance": "PHONE_VERIFIED",
+            "assuranceExpiresAt": "2026-10-04T15:31:00.000Z",
+            "credentialEpoch": 1,
+            "principalRevoked": false,
+            "records": [
+              {
+                "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+                "revoked": false
+              },
+              {
+                "id": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+                "revoked": false
+              }
+            ],
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:30:20.000Z"
+          },
+          "signature": "xuGN1rpEQuQ3qwcWoWJ38TzE/qwPvUy9lQbvxp2zdVvOmXGzn7r24pcb8+6rMJa275SWnA2zSfIXm+DFjR+IDg=="
+        },
+        "expected": {
+          "audience": "https://independent.example",
+          "action": "DRAFT_APP_ACTION",
+          "resource": "draft:independent",
+          "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48",
+          "requireApproval": false,
+          "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+        },
+        "trust": {
+          "synthetic-issuer": {
+            "publicKey": "0RD8nEdoNA3D+5AlGNZZUFd5Pry7hK1ArgcPSjQm19E=",
+            "acceptedAssurances": [
+              "PHONE_VERIFIED"
+            ]
+          }
+        },
+        "now": 1791127800000
+      },
+      "expected": {
+        "actorClass": "AUTHORIZED_AGENT",
+        "decision": "ALLOW",
+        "executionAuthorized": false
+      }
+    },
+    {
+      "name": "approval-required",
+      "input": {
+        "proof": {
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "performer": "AGENT",
+            "signerKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "delegationId": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+            "action": "DRAFT_APP_ACTION",
+            "resource": "draft:independent",
+            "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48"
+          },
+          "signature": "cbCfFdzuaY2+76VgxuhUpuRuJlgBD9FnW8r9Jffd1yqpXqA+wS4CUY8/eVJkx94wPcDAxTFPTbh0Gm2pzOu0AA=="
+        },
+        "binding": {
+          "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "name": "PUBLIC SYNTHETIC AGENT"
+          },
+          "principalSignature": "jNCGrHdUe4pUr+/tunWhbo6ePtsEbawB1M5PF5MD2VZt0uDTGjxRJ3o2ouDn+PM1/BznFHA6gDiuF3kGluRTAg==",
+          "agentSignature": "gvvS7YbWdfIppjCHveuO7Oi2zbmNRxdHVlCJ2dGLF02FbakTSH1jgxc0kjGAV8RytEg9b8d+Ny75JIedCUgiCQ=="
+        },
+        "delegation": {
+          "id": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AgICAgICAgICAgICAgICAgICAgICAgIC",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "bindingId": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+            "scopes": [
+              "DRAFT_APP_ACTION"
+            ],
+            "resource": "draft:independent",
+            "approvalRequired": true
+          },
+          "signature": "pB41E+NZtVLsFdut+Lp6zy9D6bVD92XE5G+proP7kXvngcSvEJGe/BiBrdIIK+NoSIL0qb4nHjXWa7+lMUpwCg=="
+        },
+        "status": {
+          "payload": {
+            "version": "HS_AUTHORITY_STATUS_EXPERIMENT_1",
+            "issuer": "synthetic-issuer",
+            "audience": "https://independent.example",
+            "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+            "actionDigest": "8487d2adfe11e12db5092080a4e0bcdab4a56f0b86b08d6ee1241eac204fbaca",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "identityAssurance": "PHONE_VERIFIED",
+            "assuranceExpiresAt": "2026-10-04T15:31:00.000Z",
+            "credentialEpoch": 1,
+            "principalRevoked": false,
+            "records": [
+              {
+                "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+                "revoked": false
+              },
+              {
+                "id": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+                "revoked": false
+              }
+            ],
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:30:20.000Z"
+          },
+          "signature": "Z2QNGdt1vSLBL2/OtbLOKAgC7yl6HHRqmdaA/t97ySzAnm/62ExXfPysQYGGOKARxWg7sF5TvMFtUNimhYhGDw=="
+        },
+        "expected": {
+          "audience": "https://independent.example",
+          "action": "DRAFT_APP_ACTION",
+          "resource": "draft:independent",
+          "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48",
+          "requireApproval": false,
+          "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+        },
+        "trust": {
+          "synthetic-issuer": {
+            "publicKey": "0RD8nEdoNA3D+5AlGNZZUFd5Pry7hK1ArgcPSjQm19E=",
+            "acceptedAssurances": [
+              "PHONE_VERIFIED"
+            ]
+          }
+        },
+        "now": 1791127800000
+      },
+      "expected": {
+        "actorClass": "HUMAN_APPROVAL_REQUIRED",
+        "decision": "REQUIRE_APPROVAL",
+        "executionAuthorized": false
+      }
+    },
+    {
+      "name": "approved",
+      "input": {
+        "proof": {
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "performer": "AGENT",
+            "signerKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "delegationId": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+            "action": "DRAFT_APP_ACTION",
+            "resource": "draft:independent",
+            "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48"
+          },
+          "signature": "cbCfFdzuaY2+76VgxuhUpuRuJlgBD9FnW8r9Jffd1yqpXqA+wS4CUY8/eVJkx94wPcDAxTFPTbh0Gm2pzOu0AA==",
+          "approval": {
+            "payload": {
+              "version": "1",
+              "principalId": "HUMAN-AAAAAAAAAAAA",
+              "audience": "https://independent.example",
+              "nonce": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+              "issuedAt": "2026-10-04T15:29:59.000Z",
+              "expiresAt": "2026-10-04T15:31:00.000Z",
+              "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+              "actionDigest": "8487d2adfe11e12db5092080a4e0bcdab4a56f0b86b08d6ee1241eac204fbaca"
+            },
+            "signature": "0IE0cPUNisbVYIlrQbeaqX6L9upOUg37uIVoAtkUVNbSW1ytMi5vHfee/GlFuYFlBXEx54+7foWx5V6HYIsZDA=="
+          }
+        },
+        "binding": {
+          "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "name": "PUBLIC SYNTHETIC AGENT"
+          },
+          "principalSignature": "jNCGrHdUe4pUr+/tunWhbo6ePtsEbawB1M5PF5MD2VZt0uDTGjxRJ3o2ouDn+PM1/BznFHA6gDiuF3kGluRTAg==",
+          "agentSignature": "gvvS7YbWdfIppjCHveuO7Oi2zbmNRxdHVlCJ2dGLF02FbakTSH1jgxc0kjGAV8RytEg9b8d+Ny75JIedCUgiCQ=="
+        },
+        "delegation": {
+          "id": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AgICAgICAgICAgICAgICAgICAgICAgIC",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "bindingId": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+            "scopes": [
+              "DRAFT_APP_ACTION"
+            ],
+            "resource": "draft:independent",
+            "approvalRequired": true
+          },
+          "signature": "pB41E+NZtVLsFdut+Lp6zy9D6bVD92XE5G+proP7kXvngcSvEJGe/BiBrdIIK+NoSIL0qb4nHjXWa7+lMUpwCg=="
+        },
+        "status": {
+          "payload": {
+            "version": "HS_AUTHORITY_STATUS_EXPERIMENT_1",
+            "issuer": "synthetic-issuer",
+            "audience": "https://independent.example",
+            "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+            "actionDigest": "8487d2adfe11e12db5092080a4e0bcdab4a56f0b86b08d6ee1241eac204fbaca",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "identityAssurance": "PHONE_VERIFIED",
+            "assuranceExpiresAt": "2026-10-04T15:31:00.000Z",
+            "credentialEpoch": 1,
+            "principalRevoked": false,
+            "records": [
+              {
+                "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+                "revoked": false
+              },
+              {
+                "id": "DELEGATION-47b321e969a4ac967b3ef2210d65b09a8f41d02740ad92f8cb14ff266784a9bb",
+                "revoked": false
+              }
+            ],
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:30:20.000Z"
+          },
+          "signature": "Z2QNGdt1vSLBL2/OtbLOKAgC7yl6HHRqmdaA/t97ySzAnm/62ExXfPysQYGGOKARxWg7sF5TvMFtUNimhYhGDw=="
+        },
+        "expected": {
+          "audience": "https://independent.example",
+          "action": "DRAFT_APP_ACTION",
+          "resource": "draft:independent",
+          "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48",
+          "requireApproval": false,
+          "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+        },
+        "trust": {
+          "synthetic-issuer": {
+            "publicKey": "0RD8nEdoNA3D+5AlGNZZUFd5Pry7hK1ArgcPSjQm19E=",
+            "acceptedAssurances": [
+              "PHONE_VERIFIED"
+            ]
+          }
+        },
+        "now": 1791127800000
+      },
+      "expected": {
+        "actorClass": "AUTHORIZED_AGENT",
+        "decision": "ALLOW",
+        "executionAuthorized": false
+      }
+    },
+    {
+      "name": "revoked",
+      "input": {
+        "proof": {
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "performer": "AGENT",
+            "signerKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "delegationId": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+            "action": "DRAFT_APP_ACTION",
+            "resource": "draft:independent",
+            "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48"
+          },
+          "signature": "9w5Q621LhkL5ccfn66oWHnNI0y33ZCeJSwVZtHnjhISzmlN5zRg7aAq+Sx2E5E8ybH81rAsincLE1sY8y5MHDg=="
+        },
+        "binding": {
+          "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "name": "PUBLIC SYNTHETIC AGENT"
+          },
+          "principalSignature": "jNCGrHdUe4pUr+/tunWhbo6ePtsEbawB1M5PF5MD2VZt0uDTGjxRJ3o2ouDn+PM1/BznFHA6gDiuF3kGluRTAg==",
+          "agentSignature": "gvvS7YbWdfIppjCHveuO7Oi2zbmNRxdHVlCJ2dGLF02FbakTSH1jgxc0kjGAV8RytEg9b8d+Ny75JIedCUgiCQ=="
+        },
+        "delegation": {
+          "id": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+          "payload": {
+            "version": "1",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "audience": "https://independent.example",
+            "nonce": "AgICAgICAgICAgICAgICAgICAgICAgIC",
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:31:00.000Z",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "agentKey": "/lDkqobfFzTcCyissZmn5UZGuU2Oar4EH3U9Vhbd9qQ=",
+            "bindingId": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+            "scopes": [
+              "DRAFT_APP_ACTION"
+            ],
+            "resource": "draft:independent",
+            "approvalRequired": false
+          },
+          "signature": "iZ9A9CiP7frygtopwCjvwuOw7wlKJ7P0U3znxEPmc/U5ENg1Rl5kpFT8brSYIP4z1nLb1e3kf3UkV8yfGHRxCA=="
+        },
+        "status": {
+          "payload": {
+            "version": "HS_AUTHORITY_STATUS_EXPERIMENT_1",
+            "issuer": "synthetic-issuer",
+            "audience": "https://independent.example",
+            "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ",
+            "actionDigest": "07addc425f886f27bf7b4ca7b02ddac564c803eb986b44b878ae5c2f002f5dfa",
+            "principalId": "HUMAN-AAAAAAAAAAAA",
+            "principalKey": "uCzJLU1F9jLIF7ORa98YMomM6pUyK3bOMoNU9Fn0PQM=",
+            "identityAssurance": "PHONE_VERIFIED",
+            "assuranceExpiresAt": "2026-10-04T15:31:00.000Z",
+            "credentialEpoch": 1,
+            "principalRevoked": false,
+            "records": [
+              {
+                "id": "AGENT-16f67fa99abc3a0f914c2a2f6f5bc98776583bc97086586ca632f9647c5fd69b",
+                "revoked": true
+              },
+              {
+                "id": "DELEGATION-452610fb27653ea726968b7239f17e59214cde0f538d4feae01733f64bbbbec5",
+                "revoked": false
+              }
+            ],
+            "issuedAt": "2026-10-04T15:29:59.000Z",
+            "expiresAt": "2026-10-04T15:30:20.000Z"
+          },
+          "signature": "khCHYdbVmVGVwuDf/4QWzP3lV+1B1pMn2SQWANL9YBWfJTmk6tUD83wG1DJiw8fJ8Od4xB98gbY1CpT9Rl6+CA=="
+        },
+        "expected": {
+          "audience": "https://independent.example",
+          "action": "DRAFT_APP_ACTION",
+          "resource": "draft:independent",
+          "payloadHash": "407ec9ebc99e7a9d453c9684c906a7af41770907ea7d81123fa9415fe3be5b48",
+          "requireApproval": false,
+          "challenge": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+        },
+        "trust": {
+          "synthetic-issuer": {
+            "publicKey": "0RD8nEdoNA3D+5AlGNZZUFd5Pry7hK1ArgcPSjQm19E=",
+            "acceptedAssurances": [
+              "PHONE_VERIFIED"
+            ]
+          }
+        },
+        "now": 1791127800000
+      },
+      "expected": {
+        "actorClass": "UNVERIFIED",
+        "decision": "DENY",
+        "executionAuthorized": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@human-signal/authority-verifier",
+  "version": "0.1.0-experimental.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./postgres": "./postgres-adapter.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {}
+}
