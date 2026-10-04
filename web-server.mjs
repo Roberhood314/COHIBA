@@ -3,7 +3,8 @@ import {agencyGraph} from "./lib/agency-graph.mjs";
 import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
 import {AccountStateDatabase, transactionalResponse} from "./lib/account-state-postgres.mjs";
 import { BackupWorker } from "./lib/backup-worker.mjs";
-import { PohaDatabase } from "./lib/poha-postgres.mjs";
+import { PohaDatabase, serviceSigningBytes } from "./lib/poha-postgres.mjs";
+import { DISCLOSURE_POLICY_VERSION } from "./lib/poha-disclosure.mjs";
 import { readJson, writeJson } from "./lib/durable-json.mjs";
 import http from "node:http";
 import fs from "node:fs";
@@ -264,6 +265,7 @@ function readAccountState(file,fallback,validate){
   return readJson(file,fallback,validate);
 }
 let pohaDatabase=null;
+let disclosurePilot=null;
 let backupWorker=null;
 let checkpointWorker=null;
 const pohaDatabaseRequired=Boolean(process.env.HUMAN_SIGNAL_DATABASE_URL);
@@ -1555,6 +1557,29 @@ async function handleRequest(req,res){
       const result=await pohaDatabase.authorize(auth,Buffer.from(body),request,resolvePohaPrincipal);
       json(res,200,{ok:true,result});
     }catch(error){const code=String(error.message);const allowed=["SERVICE_AUTH_INVALID","SERVICE_REQUEST_REPLAY","INVALID_PRINCIPAL","IDENTITY_CHANGED_RETRY","PROOF_EXPIRED_RETRY","PRINCIPAL_REVOKED","APPROVAL_REPLAY","REQUEST_TOO_LARGE","POHA_AUTHORIZATION_UNAVAILABLE"];const safe=allowed.includes(code)?code:"POHA_STORAGE_UNAVAILABLE";json(res,safe.startsWith("SERVICE_")?401:safe==="REQUEST_TOO_LARGE"?413:["POHA_STORAGE_UNAVAILABLE","POHA_AUTHORIZATION_UNAVAILABLE"].includes(safe)?503:400,{ok:false,error:safe});}return;
+  }
+
+  if(raw==="/api/v1/disclosure/pilot"){
+    try{
+      requireHumanSignalOrigin(req);
+      if(!pohaDatabase || !disclosurePilot || process.env.ALLOW_POHA_AUTHORIZATION!=="true")throw Error("DISCLOSURE_PILOT_UNAVAILABLE");
+      if(req.method==="GET"){
+        authHumanSignalProfile(req,loadHumanSignalNetwork());
+        json(res,200,{ok:true,service:{id:disclosurePilot.id,audience:CANONICAL_PUBLIC_ORIGIN,disclosurePolicy:disclosurePilot.policy},transport:"BROWSER_MOCK_ONLY"});return;
+      }
+      if(req.method!=="POST"){json(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});return;}
+      let body="";for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>12000)throw Error("REQUEST_TOO_LARGE");}
+      const request=JSON.parse(body);
+      const profile=authHumanSignalProfile(req,loadHumanSignalNetwork());
+      if(request?.proof?.payload?.principalId!==profile.id)throw Error("DISCLOSURE_OWNER_MISMATCH");
+      const auth={id:disclosurePilot.id,time:new Date().toISOString(),nonce:crypto.randomBytes(24).toString("base64url")};
+      auth.signature=crypto.sign(null,serviceSigningBytes(auth.id,auth.time,auth.nonce,Buffer.from(body)),disclosurePilot.key).toString("base64");
+      const result=await pohaDatabase.authorize(auth,Buffer.from(body),request,resolvePohaPrincipal);
+      json(res,200,{ok:true,result,transport:"BROWSER_MOCK_ONLY"});
+    }catch(error){
+      const code=String(error.message),safe=["HUMAN_SIGNAL_ORIGIN_INVALID","HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","DISCLOSURE_PILOT_UNAVAILABLE","DISCLOSURE_OWNER_MISMATCH","REQUEST_TOO_LARGE","PRINCIPAL_REVOKED","APPROVAL_REPLAY"].includes(code)?code:"DISCLOSURE_VERIFICATION_UNAVAILABLE";
+      json(res,safe==="HUMAN_SIGNAL_ORIGIN_INVALID"||safe==="DISCLOSURE_OWNER_MISMATCH"?403:safe.startsWith("HUMAN_SIGNAL_")?401:safe==="REQUEST_TOO_LARGE"?413:safe.endsWith("UNAVAILABLE")?503:400,{ok:false,error:safe});
+    }return;
   }
 
   if(req.method==="GET" && raw==="/api/v1/protocol"){
@@ -3286,6 +3311,13 @@ if(pohaDatabaseRequired){
     }
     const core=accountDatabase?await accountDatabase.transaction(()=>loadHumanSignalCore()):loadHumanSignalCore();if(core.storageRecovered||!verifyEventChain(core.events||[]).valid)throw new Error("INVALID_CORE");await database.importLegacy(core);
     if(process.env.HS_PILOT_PUBLIC_KEY && process.env.HS_PILOT_AUDIENCE)await database.enrollService({id:"draft-board",publicKey:process.env.HS_PILOT_PUBLIC_KEY,audience:process.env.HS_PILOT_AUDIENCE,scopes:["DRAFT_APP_ACTION"],resourcePrefix:"draft:",requireApproval:false});
+    if(process.env.ALLOW_POHA_AUTHORIZATION==="true"){
+      // Separate per-process service key: never returned to the browser or reused across replicas.
+      const keys=crypto.generateKeyPairSync("ed25519");
+      const pilot={id:"disclosure-pilot-"+crypto.randomBytes(8).toString("hex"),key:keys.privateKey,policy:{version:DISCLOSURE_POLICY_VERSION,endpoint:"mock://wellness/v1",model:"mock-wellness-v1",purpose:"GENERAL_WELLNESS",maxBytes:4096}};
+      await database.enrollService({id:pilot.id,publicKey:keys.publicKey.export({format:"der",type:"spki"}).subarray(-32).toString("base64"),audience:CANONICAL_PUBLIC_ORIGIN,scopes:["DRAFT_APP_ACTION"],resourcePrefix:"draft:disclosure-",requireApproval:false,disclosurePolicy:pilot.policy});
+      disclosurePilot=pilot;
+    }
     pohaDatabase=database;
     checkpointWorker=new CheckpointWorker({database,accounts:accountDatabase,readComposite:hscCompositeStore});checkpointWorker.start();
     if(process.env.HS_BACKUP_BUCKET && process.env.HS_BACKUP_ENDPOINT && process.env.HS_BACKUP_ACCESS_KEY && process.env.HS_BACKUP_SECRET_KEY){

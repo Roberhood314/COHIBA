@@ -1,0 +1,46 @@
+{
+  "prototype": "Human Signal local disclosure gateway",
+  "identityEvidence": "SYNTHETIC_FIXTURE_ONLY",
+  "networkRequests": 0,
+  "pohaHumanVerification": false,
+  "localVaultFields": [
+    "name",
+    "email",
+    "phone",
+    "gps",
+    "ageYears",
+    "activityBand",
+    "dietaryNeeds"
+  ],
+  "ordinaryPermission": "ALLOW",
+  "sensitiveWithoutConsent": "HUMAN_APPROVAL_REQUIRED",
+  "sensitiveWithExactConsent": "ALLOW",
+  "attacksBlocked": {
+    "unapproved_identity": "INVALID_FIELDS",
+    "hidden_prompt": "INVALID_SCHEMA",
+    "action_replay": "ACTION_REPLAY",
+    "revoked_grant": "GRANT_REVOKED"
+  },
+  "exactOutboundRequests": [
+    {
+      "facts": {
+        "activityBand": "moderate",
+        "ageBand": "30-44"
+      },
+      "model": "mock-wellness-v1",
+      "task": "GENERAL_WELLNESS"
+    },
+    {
+      "facts": {
+        "dietaryNeeds": [
+          "vegetarian"
+        ]
+      },
+      "model": "mock-wellness-v1",
+      "task": "GENERAL_WELLNESS"
+    }
+  ],
+  "modelResponseExecutedAsTools": false,
+  "tor": false,
+  "zkAPI": false
+}
