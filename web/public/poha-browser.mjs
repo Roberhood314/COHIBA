@@ -12,5 +12,5 @@ export const timing=(lifetime=60000)=>({version:'1',nonce:nonce(),issuedAt:new D
 export async function createAgent(){
  const pair=await crypto.subtle.generateKey({name:'Ed25519'},false,['sign','verify']);
  const publicKey=base64(new Uint8Array(await crypto.subtle.exportKey('raw',pair.publicKey)));
- return {publicKey,sign:async(kind,payload)=>base64(new Uint8Array(await crypto.subtle.sign('Ed25519',pair.privateKey,signingBytes(kind,payload))))};
+ return {publicKey,signBytes:async bytes=>base64(new Uint8Array(await crypto.subtle.sign('Ed25519',pair.privateKey,bytes))),sign:async(kind,payload)=>base64(new Uint8Array(await crypto.subtle.sign('Ed25519',pair.privateKey,signingBytes(kind,payload))))};
 }
