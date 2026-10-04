@@ -42,6 +42,7 @@ const launchAttempts = new Map();
 const apiRateWindows = new Map();
 const otpRateWindows = new Map();
 const loginRateWindows = new Map();
+const providerFetch=(url,options={})=>fetch(url,{...options,signal:options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000)});
 
 function rateLimitApi(req){
   const key=requestIp(req);
@@ -481,7 +482,7 @@ async function ensureInfobip2faConfig(){
   cfg.senderId=process.env.INFOBIP_SENDER_ID||cfg.senderId||"Infobip 2FA";
 
   if(!cfg.applicationId){
-    const r=await fetch(base+"/2fa/2/applications",{
+    const r=await providerFetch(base+"/2fa/2/applications",{
       method:"POST",headers,
       body:JSON.stringify({
         name:"COHIBA Human Verification",
@@ -505,7 +506,7 @@ async function ensureInfobip2faConfig(){
 
   if(cfg.applicationId && cfg.rateLimitVersion!=="10-per-day-v1"){
     try{
-      const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId),{
+      const r=await providerFetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId),{
         method:"PUT",
         headers,
         body:JSON.stringify({
@@ -532,7 +533,7 @@ async function ensureInfobip2faConfig(){
   }
 
   if(!cfg.messageId){
-    const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId)+"/messages",{
+    const r=await providerFetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId)+"/messages",{
       method:"POST",headers,
       body:JSON.stringify({
         pinType:"NUMERIC",
@@ -557,7 +558,7 @@ async function ensureInfobip2faConfig(){
 
 async function infobipVerifyStart(phone){
   const cfg=await ensureInfobip2faConfig();
-  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin",{
+  const r=await providerFetch(infobipBaseUrl()+"/2fa/2/pin",{
     method:"POST",
     headers:infobipHeaders(),
     body:JSON.stringify({
@@ -584,7 +585,7 @@ async function infobipVerifyStart(phone){
 
 async function infobipVerifyCheck(pinId,code){
   if(!pinId) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
-  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin/"+encodeURIComponent(pinId)+"/verify",{
+  const r=await providerFetch(infobipBaseUrl()+"/2fa/2/pin/"+encodeURIComponent(pinId)+"/verify",{
     method:"POST",
     headers:infobipHeaders(),
     body:JSON.stringify({pin:String(code||"")})
@@ -612,7 +613,7 @@ async function twilioVerifyStart(phone){
   const service=process.env.TWILIO_VERIFY_SERVICE_SID;
   if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
   const body=new URLSearchParams({To:phone,Channel:"sms"});
-  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/Verifications`,{
+  const r=await providerFetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/Verifications`,{
     method:"POST",
     headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
     body
@@ -628,7 +629,7 @@ async function twilioVerifyCheck(phone,code){
   const service=process.env.TWILIO_VERIFY_SERVICE_SID;
   if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
   const body=new URLSearchParams({To:phone,Code:String(code||"")});
-  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/VerificationCheck`,{
+  const r=await providerFetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/VerificationCheck`,{
     method:"POST",
     headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
     body
@@ -654,13 +655,13 @@ async function googleExchange(code){
   const id=process.env.GOOGLE_CLIENT_ID, secret=process.env.GOOGLE_CLIENT_SECRET;
   if(!id||!secret) throw new Error("GOOGLE_OAUTH_NOT_CONFIGURED");
   const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/google/callback";
-  const tr=await fetch("https://oauth2.googleapis.com/token",{
+  const tr=await providerFetch("https://oauth2.googleapis.com/token",{
     method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},
     body:new URLSearchParams({code,client_id:id,client_secret:secret,redirect_uri:redirect,grant_type:"authorization_code"})
   });
   const tx=await tr.json().catch(()=>({}));
   if(!tr.ok||!tx.access_token) throw new Error("GOOGLE_TOKEN_EXCHANGE_FAILED");
-  const ur=await fetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{authorization:"Bearer "+tx.access_token}});
+  const ur=await providerFetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{authorization:"Bearer "+tx.access_token}});
   const u=await ur.json().catch(()=>({}));
   if(!ur.ok||!u.sub) throw new Error("GOOGLE_USERINFO_FAILED");
   return {sub:String(u.sub),emailVerified:Boolean(u.email_verified)};
@@ -690,7 +691,7 @@ async function humanProofProviderHealth(){
     out.phone.provider=out.phone.configured?"twilio":null;
     if(out.phone.configured){
       try{
-        const r=await fetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
+        const r=await providerFetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
           headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64")}
         });
         out.phone.reachable=r.ok;
@@ -728,10 +729,10 @@ async function facebookExchange(code){
   if(!id||!secret||!version) throw new Error("FACEBOOK_OAUTH_NOT_CONFIGURED");
   const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/facebook/callback";
   const tq=new URLSearchParams({client_id:id,client_secret:secret,redirect_uri:redirect,code});
-  const tr=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/oauth/access_token?${tq.toString()}`);
+  const tr=await providerFetch(`https://graph.facebook.com/${encodeURIComponent(version)}/oauth/access_token?${tq.toString()}`);
   const tx=await tr.json().catch(()=>({}));
   if(!tr.ok||!tx.access_token) throw new Error("FACEBOOK_TOKEN_EXCHANGE_FAILED");
-  const ur=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/me?fields=id&access_token=${encodeURIComponent(tx.access_token)}`);
+  const ur=await providerFetch(`https://graph.facebook.com/${encodeURIComponent(version)}/me?fields=id&access_token=${encodeURIComponent(tx.access_token)}`);
   const u=await ur.json().catch(()=>({}));
   if(!ur.ok||!u.id) throw new Error("FACEBOOK_USERINFO_FAILED");
   return {sub:String(u.id)};
