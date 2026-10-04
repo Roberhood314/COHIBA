@@ -7,3 +7,5 @@ CREATE TABLE IF NOT EXISTS hs_services (id text PRIMARY KEY, document jsonb NOT 
 CREATE TABLE IF NOT EXISTS hs_service_nonces (service_id text NOT NULL REFERENCES hs_services(id), nonce text NOT NULL, expires_at timestamptz NOT NULL, PRIMARY KEY(service_id,nonce));
 CREATE TABLE IF NOT EXISTS hs_audit (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, event jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS hs_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS hs_state_documents (id text PRIMARY KEY, document jsonb NOT NULL, revision bigint NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS hs_state_roots (id text PRIMARY KEY, document jsonb NOT NULL);
