@@ -39,10 +39,18 @@ test('PostgreSQL authorizes exact external actions once and serializes concurren
   const results=await Promise.all(Array.from({length:8},()=>db.authorize(f.auth(raw),raw,request,resolve)));
   assert.equal(results.filter(r=>r.executionAuthorized).length,1);assert.equal(results.filter(r=>r.reasonCodes.includes('ACTION_REPLAY')).length,7);
   const repeatedAuth=f.auth(raw);await db.authorize(repeatedAuth,raw,request,resolve);await assert.rejects(db.authorize(repeatedAuth,raw,request,resolve),/SERVICE_REQUEST_REPLAY/);
-  const short={...action,nonce:crypto.randomBytes(24).toString('base64url'),expiresAt:new Date(Date.now()+20).toISOString()};
-  const shortRequest={...request,proof:{payload:short,signature:signProof('ACTION',short,f.agent.privateKey)}};const shortRaw=Buffer.from(JSON.stringify(shortRequest));
-  const blocked=db.transaction(f.context.principalId,()=>new Promise(resolve=>setTimeout(resolve,60)));
-  const afterWait=db.authorize(f.auth(shortRaw),shortRaw,shortRequest,resolve);await blocked;assert.equal((await afterWait).decision,'DENY');
+  // Independent pg connections can acquire locks out of invocation order.
+  // Wait for the blocker to HOLD the lock before enqueueing authorization.
+  let entered,unlock;const locked=new Promise(r=>entered=r),release=new Promise(r=>unlock=r);
+  const blocked=db.transaction(f.context.principalId,async()=>{entered();await release;});await locked;
+  let afterWait;
+  try{
+   const short={...action,nonce:crypto.randomBytes(24).toString('base64url'),expiresAt:new Date(Date.now()+30).toISOString()};
+   const shortRequest={...request,proof:{payload:short,signature:signProof('ACTION',short,f.agent.privateKey)}};const shortRaw=Buffer.from(JSON.stringify(shortRequest));
+   afterWait=db.authorize(f.auth(shortRaw),shortRaw,shortRequest,resolve);
+   while(Date.now()<=Date.parse(short.expiresAt))await new Promise(r=>setTimeout(r,10));
+  }finally{unlock();await blocked;}
+  assert.equal((await afterWait).decision,'DENY');
   // A new nonce remains valid only until authoritative revocation commits.
   await db.mutate(f.context,'REVOKE',{type:'DELEGATION',id:delegation.id});
   action.nonce=crypto.randomBytes(24).toString('base64url');request.proof.signature=signProof('ACTION',action,f.agent.privateKey);const revokedRaw=Buffer.from(JSON.stringify(request));
