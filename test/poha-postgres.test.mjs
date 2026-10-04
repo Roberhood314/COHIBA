@@ -53,8 +53,14 @@ test('PostgreSQL authorizes exact external actions once and serializes concurren
 });
 
 test('PostgreSQL backup restores authorization and replay ledger into an empty database',{timeout:60000},async()=>{
- const original=await database();const cloneEngine=new PGlite();
- const clone=new PohaDatabase({pool:{connect:async()=>({query:(sql,args)=>sql.includes('pg_advisory_xact_lock')?Promise.resolve({rows:[]}):(!args&&sql.includes('CREATE TABLE')?cloneEngine.exec(sql).then(()=>({rows:[]})):cloneEngine.query(sql,args)),release(){}}),end:()=>cloneEngine.close()}});
+ const original=await database();let clone,cleanup=async()=>{};
+ if(process.env.TEST_DATABASE_URL){
+  const admin=new pg.Pool({connectionString:process.env.TEST_DATABASE_URL}),name='hs_restore_'+crypto.randomBytes(6).toString('hex');
+  await admin.query('CREATE DATABASE '+name);const url=new URL(process.env.TEST_DATABASE_URL);url.pathname='/'+name;
+  clone=new PohaDatabase({connectionString:url.toString()});cleanup=async()=>{await admin.query('DROP DATABASE '+name);await admin.end();};
+ }else{
+  const cloneEngine=new PGlite();clone=new PohaDatabase({pool:{connect:async()=>({query:(sql,args)=>sql.includes('pg_advisory_xact_lock')?Promise.resolve({rows:[]}):(!args&&sql.includes('CREATE TABLE')?cloneEngine.exec(sql).then(()=>({rows:[]})):cloneEngine.query(sql,args)),release(){}}),end:()=>cloneEngine.close()}});
+ }
  try{
   await original.initialize();await clone.initialize();const f=fixture();
   await original.enrollService({id:f.serviceId,publicKey:publicKeyBase64(f.service.privateKey),audience:f.context.audience,scopes:['DRAFT_APP_ACTION'],resourcePrefix:'draft:',requireApproval:false});
@@ -62,7 +68,8 @@ test('PostgreSQL backup restores authorization and replay ledger into an empty d
   const action={...f.common(),performer:'HUMAN',signerKey:f.principalKey,delegationId:'',action:'DRAFT_APP_ACTION',resource:'draft:backup',payloadHash:payloadDigest(Buffer.from('Backup draft'))};
   const request={action:action.action,resource:action.resource,payloadBase64:Buffer.from('Backup draft').toString('base64'),proof:{payload:action,signature:signProof('ACTION',action,f.human.privateKey)}};
   const raw=Buffer.from(JSON.stringify(request));assert.equal((await original.authorize(f.auth(raw),raw,request,()=>f.context)).executionAuthorized,true);
-  const backup=await original.exportBackup();await clone.restoreBackup(backup);assert.deepEqual((await clone.exportBackup()).tables,backup.tables);assert.equal((await clone.authorize(f.auth(raw),raw,request,()=>f.context)).reasonCodes[0],'ACTION_REPLAY');await assert.rejects(clone.restoreBackup(backup),/RESTORE_DATABASE_NOT_EMPTY/);}finally{await original.close();await clone.close();}
+  const records=await original.listing(f.context.principalId);await original.mutate(f.context,'REVOKE',{type:'AGENT',id:records.pohaAgents[0].id});
+  const backup=await original.exportBackup();await clone.restoreBackup(backup);assert.ok((await clone.listing(f.context.principalId)).pohaAgents[0].revokedAt);assert.deepEqual((await clone.exportBackup()).tables,backup.tables);assert.equal((await clone.authorize(f.auth(raw),raw,request,()=>f.context)).reasonCodes[0],'ACTION_REPLAY');await assert.rejects(clone.restoreBackup(backup),/RESTORE_DATABASE_NOT_EMPTY/);}finally{await original.close();await clone.close();await cleanup();}
 });
 
 test('resumable JSON import discovers later records and never restores revoked authority',{timeout:60000},async()=>{

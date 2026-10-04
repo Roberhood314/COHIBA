@@ -1,7 +1,7 @@
 // Node SDK v0.1: signed proof construction and diagnostics. Private keys stay local.
 import crypto from 'node:crypto';
-import {signingBytes,payloadDigest} from '../lib/poha-v1.mjs';
-export {signingBytes,proofDigest,payloadDigest,POHA_SCOPES} from '../lib/poha-v1.mjs';
+import {signingBytes,payloadDigest} from './protocol.mjs';
+export {signingBytes,proofDigest,payloadDigest,POHA_SCOPES} from './protocol.mjs';
 export function signProof(kind,payload,privateKey){
   if(privateKey.asymmetricKeyType!=='ed25519')throw new Error('ED25519_KEY_REQUIRED');
   return crypto.sign(null,signingBytes(kind,payload),privateKey).toString('base64');
@@ -39,3 +39,17 @@ export function delegationPayload({principalId,principalKey,bindingId,agentKey,a
 export function actionPayload({principalId,signerKey,delegationId,audience,action,resource,payloadBytes,performer='AGENT'}){
  const now=new Date();return {version:'1',performer,principalId,signerKey,delegationId,audience,action,resource,payloadHash:payloadDigest(payloadBytes),nonce:crypto.randomBytes(24).toString('base64url'),issuedAt:now.toISOString(),expiresAt:new Date(now.getTime()+60000).toISOString()};
 }
+
+export const SDK_VERSION='1.0.0';
+export function serviceSigningBytes(id,time,nonce,body){return Buffer.from(`HS/1/SERVICE\n${id}\n${time}\n${nonce}\n${crypto.createHash('sha256').update(body).digest('hex')}`);}
+export class HumanSignalServiceClient {
+ constructor({baseUrl,serviceId,privateKey}){this.baseUrl=new URL(baseUrl).origin;if(!this.baseUrl.startsWith('https://')&&!/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(this.baseUrl))throw Error('HTTPS_REQUIRED');if(privateKey.asymmetricKeyType!=='ed25519')throw Error('ED25519_KEY_REQUIRED');this.serviceId=serviceId;this.privateKey=privateKey;}
+ async authorize(request){
+  const raw=Buffer.from(JSON.stringify(request)),time=new Date().toISOString(),nonce=crypto.randomBytes(24).toString('base64url');
+  const signature=crypto.sign(null,serviceSigningBytes(this.serviceId,time,nonce,raw),this.privateKey).toString('base64');
+  // Do not retry a consumed authorization automatically.
+  const response=await fetch(this.baseUrl+'/api/v1/actions/authorize',{method:'POST',headers:{'content-type':'application/json','x-hs-service-id':this.serviceId,'x-hs-time':time,'x-hs-nonce':nonce,'x-hs-signature':signature},body:raw,signal:AbortSignal.timeout(10000)});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'AUTHORIZATION_FAILED');return result.result;
+ }
+}
+export {verifyCheckpoint,checkpointBytes} from './checkpoint.mjs';

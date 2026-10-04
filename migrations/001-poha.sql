@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS hs_audit (id bigint GENERATED ALWAYS AS IDENTITY PRIM
 CREATE TABLE IF NOT EXISTS hs_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS hs_state_documents (id text PRIMARY KEY, document jsonb NOT NULL, revision bigint NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS hs_state_roots (id text PRIMARY KEY, document jsonb NOT NULL);
+
+-- Ephemeral rate windows; intentionally excluded from durable trust backups.
+CREATE TABLE IF NOT EXISTS hs_rate_windows (key text NOT NULL, window_id bigint NOT NULL, count integer NOT NULL, PRIMARY KEY(key,window_id));

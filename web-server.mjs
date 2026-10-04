@@ -1,3 +1,5 @@
+import {DatabaseRateLimiter} from './lib/distributed-rate-limit.mjs';
+import {loadCheckpointSigner} from './lib/checkpoint-signing.mjs';
 import {allowedHumanSignalOrigins as configuredHumanOrigins,requireHumanSignalOrigin as validateHumanOrigin} from "./lib/human-signal-origin.mjs";
 import {agencyGraph} from "./lib/agency-graph.mjs";
 import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
@@ -266,6 +268,7 @@ function readAccountState(file,fallback,validate){
 let pohaDatabase=null;
 let backupWorker=null;
 let checkpointWorker=null;
+let sharedRateLimiter=null;
 const pohaDatabaseRequired=Boolean(process.env.HUMAN_SIGNAL_DATABASE_URL);
 function resolvePohaPrincipal(id,audience){
   const network=loadHumanSignalNetwork();
@@ -3191,14 +3194,21 @@ async function handleRequest(req,res){
 }
 
 const server=http.createServer((req,res)=>{
+  void dispatchRequest(req,res).catch(()=>{if(!res.headersSent)json(res,503,{ok:false,error:"SERVICE_UNAVAILABLE"});else res.destroy();});
+});
+async function dispatchRequest(req,res){
+  if(sharedRateLimiter && String(req.url).startsWith("/api/")){
+    if(!await sharedRateLimiter.allow(requestIp(req))){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
+    req.hsRateLimitChecked=true;
+  }
   if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status"].includes(req.url)){
     if(!accountDatabase){json(res,503,{ok:false,error:"ACCOUNT_STORAGE_UNAVAILABLE"});return;}
-    if(!rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
+    if(!req.hsRateLimitChecked && !rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
     req.hsRateLimitChecked=true;
     void transactionalResponse(accountDatabase,handleRequest,req,res);return;
   }
   void handleRequest(req,res).catch(()=>{if(!res.headersSent)json(res,503,{ok:false,error:"SERVICE_UNAVAILABLE"});else res.destroy();});
-});
+}
 
 async function maybeBootstrapInfobip2fa(){
   if(!(process.env.INFOBIP_API_KEY&&process.env.INFOBIP_BASE_URL)){
@@ -3287,7 +3297,8 @@ if(pohaDatabaseRequired){
     const core=accountDatabase?await accountDatabase.transaction(()=>loadHumanSignalCore()):loadHumanSignalCore();if(core.storageRecovered||!verifyEventChain(core.events||[]).valid)throw new Error("INVALID_CORE");await database.importLegacy(core);
     if(process.env.HS_PILOT_PUBLIC_KEY && process.env.HS_PILOT_AUDIENCE)await database.enrollService({id:"draft-board",publicKey:process.env.HS_PILOT_PUBLIC_KEY,audience:process.env.HS_PILOT_AUDIENCE,scopes:["DRAFT_APP_ACTION"],resourcePrefix:"draft:",requireApproval:false});
     pohaDatabase=database;
-    checkpointWorker=new CheckpointWorker({database,accounts:accountDatabase,readComposite:hscCompositeStore});checkpointWorker.start();
+    sharedRateLimiter=new DatabaseRateLimiter(database.pool);
+    checkpointWorker=new CheckpointWorker({database,accounts:accountDatabase,readComposite:hscCompositeStore,signer:loadCheckpointSigner(path.join(DATA_DIR,"checkpoint.secret.pem")),issuer:CANONICAL_PUBLIC_ORIGIN});checkpointWorker.start();
     if(process.env.HS_BACKUP_BUCKET && process.env.HS_BACKUP_ENDPOINT && process.env.HS_BACKUP_ACCESS_KEY && process.env.HS_BACKUP_SECRET_KEY){
       backupWorker=new BackupWorker({directory:DATA_DIR,database,excludeFiles:accountDatabase?[HUMAN_SIGNAL_NETWORK_FILE,ACCOUNT_ONBOARDING_FILE,HUMAN_SIGNAL_CORE_FILE,HUMAN_SIGNAL_FILE].map(file=>path.basename(file)):[],bucket:process.env.HS_BACKUP_BUCKET,endpoint:process.env.HS_BACKUP_ENDPOINT,region:process.env.HS_BACKUP_REGION||"auto",accessKeyId:process.env.HS_BACKUP_ACCESS_KEY,secretAccessKey:process.env.HS_BACKUP_SECRET_KEY});backupWorker.start();
     }

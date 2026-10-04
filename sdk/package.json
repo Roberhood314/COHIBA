@@ -1,0 +1,1 @@
+{"name":"@cohiba/human-signal","version":"1.0.0","type":"module","exports":"./human-signal-node.mjs","files":["*.mjs","README.md"],"engines":{"node":">=22"},"license":"UNLICENSED"}
