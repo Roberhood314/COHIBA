@@ -88,3 +88,23 @@ test('expired action and approval do not consume permission or send bytes',()=>r
  assert.equal(f.gateway.capturedRequests().length,0);
  assert.equal(f.gateway.execute({grant:f.grant,proposal:f.proposal,action:a}).sent,true);
 }));
+
+test('PoHA adapter snapshots inputs across awaits and rejects generic receipts',async()=>{
+ const {PohaDisclosureGateway,DISCLOSURE_POLICY_VERSION}=await import('../lib/poha-disclosure.mjs');
+ const f=fixture();try{
+  let entered,release;const waiting=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
+  const adapter=new PohaDisclosureGateway({localGateway:f.gateway,database:{async authorize(){entered();await gate;return {decision:'ALLOW',executionAuthorized:true,disclosurePolicyVersion:DISCLOSURE_POLICY_VERSION,disclosureRequestDigest:action.payload.requestDigest};}}});
+  const action=f.action(),input={grant:f.grant,proposal:structuredClone(f.proposal),action};
+  const manifest=adapter.preview(f.grant,f.proposal).manifest;
+  const request={payloadBase64:Buffer.from(JSON.stringify(manifest)).toString('base64'),proof:{payload:{signerKey:f.agentKey,nonce:action.payload.nonce}}};
+  const raw=Buffer.from(JSON.stringify(request));
+  const pending=adapter.execute({input,request,raw,auth:{},resolveContext:()=>{}});await waiting;
+  input.proposal.fields=['dietaryNeeds'];request.payloadBase64='e30=';raw.fill(0);release();
+  assert.equal((await pending).sent,true);
+  assert.deepEqual(JSON.parse(f.gateway.capturedRequests()[0]).facts,{activityBand:'moderate',ageBand:'30-44'});
+  const generic=new PohaDisclosureGateway({localGateway:f.gateway,database:{async authorize(){return {decision:'ALLOW',executionAuthorized:true,actorClass:'AUTHORIZED_AGENT'};}}});
+  const next=f.action(),p=generic.preview(f.grant,f.proposal).manifest;
+  const req={payloadBase64:Buffer.from(JSON.stringify(p)).toString('base64'),proof:{payload:{signerKey:f.agentKey,nonce:next.payload.nonce}}};
+  assert.equal((await generic.execute({input:{grant:f.grant,proposal:f.proposal,action:next},request:req,raw:Buffer.from(JSON.stringify(req)),auth:{},resolveContext:()=>{}})).sent,false);
+ }finally{f.clean();}
+});

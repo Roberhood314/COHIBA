@@ -1,6 +1,6 @@
 # Human Signal local disclosure MVP
 
-**Experimental, synthetic, local-only.** No remote provider, Tor, zkAPI, chain transaction or financial action. The model is an in-process byte-capture mock. Generated owner/Agent keys are ephemeral fixtures, not actual user verification. This feature does not modify PoHA v1 or production permissions.
+**Experimental, synthetic, local-only.** No remote provider, Tor, zkAPI, chain transaction or financial action. The model is an in-process byte-capture mock. Generated owner/Agent keys are ephemeral fixtures, not actual user verification. The integration preserves PoHA v1 signing schemas and scopes. Disclosure policy is opt-in per registered service; existing production services are not enabled automatically.
 
 Run from the repository root:
 
@@ -19,7 +19,7 @@ The gateway projects its private cloned vault. No user/model-provided prompt, he
 
 There is intentionally NO networking transport. A new live-provider transport would need separate design/review, pinned destination, redirects/DNS/TLS controls, credential management and OS network confinement. A library cannot stop a different process from exfiltrating files through an unrelated socket. This MVP verifies only its own reachable egress path; it is not an Agent sandbox.
 
-Disclosure outcomes live in `disclosureDecision`; they do not substitute for PoHA's four actor classes or establish Human Proof. A future integration must additionally obtain authoritative identity/delegation authorization from Human Signal before remote execution.
+Disclosure outcomes live in `disclosureDecision`; they do not substitute for PoHA's four actor classes or establish Human Proof. `PohaDisclosureGateway` now composes local consent with authoritative PoHA authorization for the mock. The identity assurance remains the existing PHONE_VERIFIED policy, not proof of a unique biological Human.
 
 ## Local durability
 
@@ -31,6 +31,20 @@ Nonce/quota consumption is committed before mock execution. An interrupted execu
 
 Finite vocabulary is data minimization, not proof against reidentification or covert channels. Rare dietary categories or combinations of coarse attributes may still identify someone. An owner can grant authority to an Agent without proving that owner is a unique biological Human. No actual model, external privacy provider, biometric check, ZK credential, portable authorization receipt or production privacy claim is implemented here.
 
-Tests cover minimization, exact sensitive approval, restart/revocation/replay, quota/expiry, injection-shaped inputs and inert model output, signatures/domains/agent substitution, corrupted state and lock contention. Next: review this local boundary, integrate real PoHA authorization, then build a separately confined live adapter with synthetic inputs. Real health data requires explicit Human review of outbound bytes and an independently evaluated privacy/utility tradeoff.
+Tests cover minimization, exact sensitive approval, restart/revocation/replay, quota/expiry, injection-shaped inputs and inert model output, signatures/domains/agent substitution, corrupted state and lock contention. Next: independently review this local boundary and PoHA integration, then build a separately confined live adapter with synthetic inputs. Real health data requires explicit Human review of outbound bytes and an independently evaluated privacy/utility tradeoff.
 
 Research rationale: `docs/protocol/PRIVATE_AGENCY_RESEARCH.md` on branch `codex/private-agency-research`.
+
+## PoHA integration (opt-in, mock only)
+
+Use `PohaDisclosureGateway({localGateway, database})` with a trusted in-process `PohaDatabase` and trusted identity resolver. `preview(grant, proposal)` provides a manifest containing the signed grant, sorted field names, request digest and byte count. Sign that manifest's exact bytes as a normal PoHA `DRAFT_APP_ACTION`, using the same Agent nonce as the local disclosure ACTION. The existing delegation must authorize the service audience and exact resource. Call `execute({input, auth, raw, request, resolveContext})`; raw must equal `Buffer.from(JSON.stringify(request))`.
+
+The verifier sees consent metadata and existing identity keys, not vault values or the model request. This is data minimization, not anonymous verification: low-entropy digests and field names remain sensitive. Never publish them. Enroll a dedicated service using `disclosurePolicy: {version: 'HS_LOCAL_DISCLOSURE_V1', endpoint: 'mock://wellness/v1', model: 'mock-wellness-v1', purpose: 'GENERAL_WELLNESS', maxBytes: 4096}`. Other destinations are rejected. Existing services have no disclosure policy; the wrapper refuses their generic receipts. There is no new HTTP route, provider credential or production activation.
+
+Sensitive fields need BOTH fresh PoHA APPROVAL (bound to action digest, which includes nonce and manifest hash) and local disclosure APPROVAL (bound to request digest and Agent nonce). They have different signing domains and cannot substitute for each other. The backend validates the signed grant against the authoritative principal key and Agent signer, current service policy, PoHA delegation, expiry and revocation. It cannot independently know the private request's actual values or byte count; the trusted local projection is the enforcement boundary for those claims.
+
+PostgreSQL counts are in `hs_state_documents` under `disclosure:<principalId>` and keyed by grant digest. Counts and PoHA action/approval nonce inserts commit in the same principal transaction; backup/restore already covers that table. No new migration or plaintext data storage. Local grants are revoked in the local ledger; authoritative Agent/delegation/principal revocation is checked by PoHA. There is no centralized disclosure-grant revocation API yet.
+
+After backend commit, local execution rechecks grant expiry, revocation, exact digest, approval, replay and quota. Inputs are snapshotted before awaiting authorization. A local rejection/crash after commit consumes the backend nonce and budget without releasing data; there is no automatic retry/refund. This is deliberately conservative, not distributed exactly-once execution. Revocation applies to future admission, not undoing already committed authorization. No live-provider send path is present.
+
+Integration verification: `node --test test/poha-postgres.test.mjs test/private-disclosure.test.mjs`. Tests exercise authoritative consent, mock byte projection, concurrent budget enforcement, replay, delegation revocation, local reset resistance, and restoration of quotas and nonce records. CI runs against native PostgreSQL; local tests use embedded PostgreSQL when TEST_DATABASE_URL is absent.
