@@ -1148,7 +1148,7 @@ async function handleRequest(req,res){
     return;
   }
 
-  if(raw.startsWith("/api/") && !rateLimitApi(req)){
+  if(raw.startsWith("/api/") && !req.hsRateLimitChecked && !rateLimitApi(req)){
     res.writeHead(429,{...headers,"content-type":"application/json; charset=utf-8","cache-control":"no-store","retry-after":"60"});
     res.end(JSON.stringify({ok:false,error:"RATE_LIMITED"}));
     return;
@@ -3197,6 +3197,8 @@ async function handleRequest(req,res){
 const server=http.createServer((req,res)=>{
   if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status"].includes(req.url)){
     if(!accountDatabase){json(res,503,{ok:false,error:"ACCOUNT_STORAGE_UNAVAILABLE"});return;}
+    if(!rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
+    req.hsRateLimitChecked=true;
     void transactionalResponse(accountDatabase,handleRequest,req,res);return;
   }
   void handleRequest(req,res).catch(()=>{if(!res.headersSent)json(res,503,{ok:false,error:"SERVICE_UNAVAILABLE"});else res.destroy();});

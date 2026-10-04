@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
-import {AccountStateDatabase} from '../lib/account-state-postgres.mjs';
+import {Readable} from 'node:stream';
+import {AccountStateDatabase,transactionalResponse} from '../lib/account-state-postgres.mjs';
 
 async function embedded(){
  const engine=new PGlite();let tail=Promise.resolve();
@@ -31,4 +32,14 @@ test('account migration is insert-only, transactional and preserves concurrent s
 test('invalid legacy source blocks migration without replacing existing documents',{timeout:60000},async()=>{
  const db=new AccountStateDatabase({pool:await embedded(),stores:{network:{validate:s=>Boolean(s&&Array.isArray(s.profiles)),readLegacy:()=>({profiles:[],storageRecovered:true})}}});
  try{await assert.rejects(db.initialize(),/ACCOUNT_MIGRATION_INVALID_SOURCE/);}finally{await db.close();}
+});
+test('response never exposes a session token before commit and uploads precede the state lock',async()=>{
+ const req=Readable.from([Buffer.from('{"password":"fixture"}')]);req.method='POST';
+ const writes=[];const res={writeHead(...args){writes.push(['headers',...args]);},end(...args){writes.push(['body',...args]);}};
+ let received='';
+ const database={async transaction(fn){assert.equal(req.readableEnded,true);await fn();assert.deepEqual(writes,[]);throw Error('commit failed');}};
+ await transactionalResponse(database,async(req,res)=>{for await(const b of req)received+=b;res.writeHead(200,{'content-type':'application/json'});res.end('{"token":"never-expose"}');},req,res);
+ assert.equal(received,'{"password":"fixture"}');assert.equal(writes[0][1],503);assert.ok(!JSON.stringify(writes).includes('never-expose'));
+ const large=Readable.from([Buffer.alloc(24577)]);large.method='POST';let locked=false;writes.length=0;
+ await transactionalResponse({transaction:async()=>{locked=true;}},()=>{},large,res);assert.equal(locked,false);assert.equal(writes[0][1],413);
 });
