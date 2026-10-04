@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import net from 'node:net';
+import {PublicKey} from '@solana/web3.js';
+import {newSession} from '../lib/human-signal-network.mjs';
+import {signProof,publicKeyBase64,agentBindingPayload,delegationPayload,actionPayload} from '../sdk/human-signal-node.mjs';
+const port=async()=>{const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');const p=s.address().port;await new Promise(r=>s.close(r));return p;};
+const start=async(script,env,text)=>{const child=spawn(process.execPath,[script],{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{let out='';const timer=setTimeout(()=>reject(Error('start timeout')),20000);child.stdout.on('data',c=>{out+=c;if(out.includes(text)){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(Error('server exited'));});});return child;};
+test('independent HTTP app verifies Human Signal authority and persists exactly one draft',{skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'hs-http-pilot-')),mainPort=await port(),appPort=await port();let main,app;
+ try{
+  const human=crypto.generateKeyPairSync('ed25519'),agent=crypto.generateKeyPairSync('ed25519'),service=crypto.generateKeyPairSync('ed25519');
+  const principalId='HUMAN-'+crypto.randomBytes(6).toString('hex').toUpperCase(),principalKey=publicKeyBase64(human.privateKey),agentKey=publicKeyBase64(agent.privateKey),session=newSession(principalId);
+  const mainDir=path.join(dir,'main'),appDir=path.join(dir,'app');await fs.mkdir(mainDir);await fs.mkdir(appDir);
+  await fs.writeFile(path.join(appDir,'service-key.pem'),service.privateKey.export({format:'pem',type:'pkcs8'}),{mode:0o600});
+  await fs.writeFile(path.join(mainDir,'cohiba-human-signal-network.json'),JSON.stringify({profiles:[{id:principalId,wallet:new PublicKey(Buffer.from(principalKey,'base64')).toBase58(),humanProofs:{phone:{verified:true,identityHash:crypto.randomBytes(32).toString('hex'),verifiedAt:new Date().toISOString()}}}],challenges:[],sessions:[session.record]}));
+  const audience='https://outside-app.example';
+  main=await start('web-server.mjs',{PORT:String(mainPort),COHIBA_DATA_DIR:mainDir,PUBLIC_BASE_URL:'https://cohibameme.site',HUMAN_SIGNAL_DATABASE_URL:process.env.TEST_DATABASE_URL,ALLOW_POHA_AUTHORIZATION:'true',HS_PILOT_PUBLIC_KEY:publicKeyBase64(service.privateKey),HS_PILOT_AUDIENCE:audience,INFOBIP_API_KEY:'',ALLOW_MAINNET:'false',AUTO_MAINNET_LAUNCH:'false'},'COHIBA web listening');
+  app=await start('examples/draft-board/server.mjs',{PORT:String(appPort),DRAFT_BOARD_DATA_DIR:appDir,DRAFT_BOARD_DATABASE_URL:process.env.TEST_DATABASE_URL,HUMAN_SIGNAL_API_URL:'http://127.0.0.1:'+mainPort},'Independent Draft Board listening');
+  const call=async(endpoint,body)=>{const r=await fetch('http://127.0.0.1:'+mainPort+'/api/v1/'+endpoint,{method:'POST',headers:{origin:'https://cohibameme.site',authorization:'Bearer '+session.token,'content-type':'application/json'},body:JSON.stringify(body)});const data=await r.json();assert.ok(r.ok,JSON.stringify(data));return data;};
+  const b=agentBindingPayload({principalId,principalKey,agentKey,audience,name:'Real HTTP Pilot'});
+  const binding=await call('agents/register',{payload:b,principalSignature:signProof('AGENT_BINDING',b,human.privateKey),agentSignature:signProof('AGENT_BINDING',b,agent.privateKey)});
+  const d=delegationPayload({principalId,principalKey,agentKey,audience,bindingId:binding.record.id,scopes:['DRAFT_APP_ACTION'],resource:'draft:article-1',expiresAt:b.expiresAt});
+  const grant=await call('delegations',{payload:d,signature:signProof('DELEGATION',d,human.privateKey)});
+  const text='Independent application contribution';
+  const a=actionPayload({principalId,signerKey:agentKey,delegationId:grant.record.id,audience,action:'DRAFT_APP_ACTION',resource:d.resource,payloadBytes:Buffer.from(text)});
+  const input={resource:d.resource,text,proof:{payload:a,signature:signProof('ACTION',a,agent.privateKey)}};
+  const submit=async input=>{const r=await fetch('http://127.0.0.1:'+appPort+'/drafts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});return {status:r.status,data:await r.json()};};
+  const altered=await submit({...input,text:'tampered'});assert.equal(altered.status,403);
+  const saved=await submit(input);assert.equal(saved.status,201);assert.equal(saved.data.result.actorClass,'AUTHORIZED_AGENT');assert.equal(saved.data.result.principalId,principalId);
+  assert.equal((await submit(input)).status,403);
+  await call('revocations',{type:'DELEGATION',id:grant.record.id});a.nonce=crypto.randomBytes(24).toString('base64url');input.proof.signature=signProof('ACTION',a,agent.privateKey);assert.equal((await submit(input)).data.result.reasonCodes[0],'DELEGATION_UNAVAILABLE');
+ }finally{for(const child of [app,main])if(child&&child.exitCode===null){child.kill();await once(child,'exit');}await fs.rm(dir,{recursive:true,force:true});}
+});

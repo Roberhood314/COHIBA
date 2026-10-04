@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS hs_principals (id text PRIMARY KEY, document jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS hs_agents (id text PRIMARY KEY, principal_id text NOT NULL REFERENCES hs_principals(id), nonce text NOT NULL, document jsonb NOT NULL, UNIQUE(principal_id,nonce));
+CREATE TABLE IF NOT EXISTS hs_delegations (id text PRIMARY KEY, principal_id text NOT NULL REFERENCES hs_principals(id), nonce text NOT NULL, document jsonb NOT NULL, UNIQUE(principal_id,nonce));
+CREATE TABLE IF NOT EXISTS hs_actions (digest text PRIMARY KEY, principal_id text NOT NULL REFERENCES hs_principals(id), signer_key text NOT NULL, nonce text NOT NULL, receipt jsonb NOT NULL, UNIQUE(signer_key,nonce));
+CREATE TABLE IF NOT EXISTS hs_approvals (principal_id text NOT NULL, nonce text NOT NULL, action_digest text NOT NULL, PRIMARY KEY(principal_id,nonce));
+CREATE TABLE IF NOT EXISTS hs_services (id text PRIMARY KEY, document jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS hs_service_nonces (service_id text NOT NULL REFERENCES hs_services(id), nonce text NOT NULL, expires_at timestamptz NOT NULL, PRIMARY KEY(service_id,nonce));
+CREATE TABLE IF NOT EXISTS hs_audit (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, event jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS hs_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());

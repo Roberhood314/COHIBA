@@ -1,3 +1,6 @@
+import { BackupWorker } from "./lib/backup-worker.mjs";
+import { PohaDatabase } from "./lib/poha-postgres.mjs";
+import { readJson, writeJson } from "./lib/durable-json.mjs";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +18,7 @@ import { resourceContributionScore, recordResourceHeartbeat } from "./lib/resour
 import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } from "./lib/node-jobs.mjs";
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
-import { appendCoreEvent, verifyEventChain, coreStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { appendCoreEvent, verifyEventChain, coreStateRoot, trustStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
 import { bindAgent, createSignedDelegation, revokeSignedRecord, inspectAction } from "./lib/poha-v1.mjs";
 import { registerAgent, grantDelegation, revokeDelegation, agencyForOwner } from "./lib/human-agency.mjs";
 import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
@@ -166,11 +169,7 @@ function loadLaunchRecord(network){
   }
 }
 
-function atomicWriteJson(file,value){
-  const tmp=file+".tmp-"+process.pid+"-"+Date.now();
-  fs.writeFileSync(tmp,JSON.stringify(value,null,2),{mode:0o600});
-  fs.renameSync(tmp,file);
-}
+function atomicWriteJson(file,value){writeJson(file,value);}
 
 function saveLaunchRecord(network,record){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -185,16 +184,7 @@ const HUMAN_SIGNAL_CORE_FILE=path.join(DATA_DIR,"cohiba-human-signal-core.json")
 const INFOBIP_2FA_FILE=path.join(DATA_DIR,"cohiba-infobip-2fa.json");
 const ACCOUNT_ONBOARDING_FILE=path.join(DATA_DIR,"cohiba-account-onboarding.json");
 
-function loadAccountOnboarding(){
-  try{
-    if(!fs.existsSync(ACCOUNT_ONBOARDING_FILE)) return {schemaVersion:"1.0",records:[],updatedAt:null};
-    const parsed=JSON.parse(fs.readFileSync(ACCOUNT_ONBOARDING_FILE,"utf8"));
-    parsed.records=Array.isArray(parsed.records)?parsed.records:[];
-    return parsed;
-  }catch{
-    return {schemaVersion:"1.0",records:[],updatedAt:null,storageRecovered:true};
-  }
-}
+function loadAccountOnboarding(){return readJson(ACCOUNT_ONBOARDING_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
 function saveAccountOnboarding(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
   store.updatedAt=new Date().toISOString();
@@ -249,23 +239,26 @@ function validOnboardingRecord(record){
   return Boolean(record && record.status==="PROFILE_READY" && record.tokenHash && Date.parse(record.tokenExpiresAt)>Date.now() && !record.usedAt);
 }
 
-function loadHumanSignalCore(){
-  try{
-    if(!fs.existsSync(HUMAN_SIGNAL_CORE_FILE)) return {schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null};
-    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_CORE_FILE,"utf8"));
-    parsed.events=Array.isArray(parsed.events)?parsed.events:[];
-    parsed.apps=Array.isArray(parsed.apps)?parsed.apps:[];
-    parsed.appUtility=Array.isArray(parsed.appUtility)?parsed.appUtility:[];
-    return parsed;
-  }catch{
-    return {schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null,storageRecovered:true};
-  }
-}
+function loadHumanSignalCore(){return readJson(HUMAN_SIGNAL_CORE_FILE,{schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null},s=>Array.isArray(s.events)&&Array.isArray(s.apps||[])&&Array.isArray(s.appUtility||[]));}
 
 function saveHumanSignalCore(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
   store.updatedAt=new Date().toISOString();
   atomicWriteJson(HUMAN_SIGNAL_CORE_FILE,store);
+}
+
+let pohaDatabase=null;
+let backupWorker=null;
+const pohaDatabaseRequired=Boolean(process.env.HUMAN_SIGNAL_DATABASE_URL);
+function resolvePohaPrincipal(id,audience){
+  const network=loadHumanSignalNetwork();
+  if(network.storageRecovered)return null;
+  const profile=network.profiles.find(p=>p.id===id);
+  if(!profile?.wallet)return null;
+  const phone=profile.humanProofs?.phone;
+  const valid=phone?.verified===true && /^[a-f0-9]{64}$/.test(phone.identityHash||"") && Number.isFinite(Date.parse(phone.verifiedAt)) && Date.parse(phone.verifiedAt)<=Date.now() && Date.now()-Date.parse(phone.verifiedAt)<30*86400000;
+  const unique=valid && network.profiles.filter(p=>p.humanProofs?.phone?.verified===true && p.humanProofs.phone.identityHash===phone.identityHash).length===1;
+  return {principalId:profile.id,principalKey:Buffer.from(new PublicKey(profile.wallet).toBytes()).toString("base64"),audience,identityAssurance:unique?"PHONE_VERIFIED":"NONE",assuranceExpiresAt:unique?new Date(Date.parse(phone.verifiedAt)+30*86400000).toISOString():null};
 }
 
 function hscCompositeStore(){
@@ -274,6 +267,7 @@ function hscCompositeStore(){
   const contrib=loadHumanSignal();
   return {
     ...core,
+    storageRecovered:Boolean(core.storageRecovered || net.storageRecovered || contrib.storageRecovered),
     profiles:net.profiles||[],
     contributions:contrib.records||[]
   };
@@ -281,16 +275,16 @@ function hscCompositeStore(){
 
 async function anchorHscStateDevnet(){
   if(process.env.ALLOW_HSC_DEVNET_ANCHOR!=="true") throw new Error("HSC_DEVNET_ANCHOR_LOCKED");
-  const connection=await ensureDevnetFunding(DEVNET_PAYER);
   const composite=hscCompositeStore();
-  const state=coreStateRoot(composite);
+  if(composite.storageRecovered || !verifyEventChain(composite.events||[]).valid || (pohaDatabaseRequired && !pohaDatabase))throw new Error("HSC_ANCHOR_STORAGE_UNAVAILABLE");
+  const state=trustStateRoot(pohaDatabase?{...composite,...await pohaDatabase.snapshot()}:composite);
   const core=loadHumanSignalCore();
   core.anchors=Array.isArray(core.anchors)?core.anchors:[];
   const existing=core.anchors.find(a=>a.network==="devnet"&&a.stateRoot===state.stateRoot);
   if(existing) return existing;
   const payload={
-    protocol:"COHIBA_HSC",
-    version:"0.1",
+    protocol:"HUMAN_SIGNAL_TRUST",
+    version:"HS_TRUST_STATE_V1",
     stateRoot:state.stateRoot,
     eventHead:verifyEventChain(composite.events||[]).head||null,
     createdAt:new Date().toISOString()
@@ -302,6 +296,7 @@ async function anchorHscStateDevnet(){
     programId:HSC_MEMO_PROGRAM,
     data
   }));
+  const connection=await ensureDevnetFunding(DEVNET_PAYER);
   const signature=await sendAndConfirmTransaction(connection,tx,[DEVNET_PAYER],{commitment:"confirmed"});
   const anchorRecord={
     id:"ANCHOR-"+state.stateRoot.slice(0,16).toUpperCase(),
@@ -329,16 +324,7 @@ function emitHsc(type,actor="SYSTEM",subject=null,data={}){
 }
 
 
-function loadHumanSignalNetwork(){
-  try{
-    if(!fs.existsSync(HUMAN_SIGNAL_NETWORK_FILE)) return {schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null};
-    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_NETWORK_FILE,"utf8"));
-    if(!parsed || !Array.isArray(parsed.profiles) || !Array.isArray(parsed.challenges) || !Array.isArray(parsed.sessions)) throw new Error("INVALID_HUMAN_SIGNAL_NETWORK_STORE");
-    return parsed;
-  }catch{
-    return {schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null,storageRecovered:true};
-  }
-}
+function loadHumanSignalNetwork(){return readJson(HUMAN_SIGNAL_NETWORK_FILE,{schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null},s=>Array.isArray(s.profiles)&&Array.isArray(s.challenges)&&Array.isArray(s.sessions));}
 
 function saveHumanSignalNetwork(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -785,16 +771,7 @@ function publicHumanProfile(profile,contributions=[]){
 }
 
 
-function loadHumanSignal(){
-  try{
-    if(!fs.existsSync(HUMAN_SIGNAL_FILE)) return {schemaVersion:"1.0",records:[],updatedAt:null};
-    const parsed=JSON.parse(fs.readFileSync(HUMAN_SIGNAL_FILE,"utf8"));
-    if(!parsed || !Array.isArray(parsed.records)) throw new Error("INVALID_HUMAN_SIGNAL_STORE");
-    return parsed;
-  }catch{
-    return {schemaVersion:"1.0",records:[],updatedAt:null,storageRecovered:true};
-  }
-}
+function loadHumanSignal(){return readJson(HUMAN_SIGNAL_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
 
 function saveHumanSignal(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -827,15 +804,7 @@ const COMMUNITY_EVENTS=new Set([
   "ambassador_view","ambassador_x_click","analytics_view","open_review_view"
 ]);
 
-function loadCommunityMetrics(){
-  try{
-    if(!fs.existsSync(COMMUNITY_METRICS_FILE)) return {schemaVersion:"1.0",totals:{},days:{},updatedAt:null};
-    const parsed=JSON.parse(fs.readFileSync(COMMUNITY_METRICS_FILE,"utf8"));
-    return parsed&&typeof parsed==="object"?parsed:{schemaVersion:"1.0",totals:{},days:{},updatedAt:null};
-  }catch{
-    return {schemaVersion:"1.0",totals:{},days:{},updatedAt:null,storageRecovered:true};
-  }
-}
+function loadCommunityMetrics(){return readJson(COMMUNITY_METRICS_FILE,{schemaVersion:"1.0",totals:{},days:{},updatedAt:null},s=>typeof s.totals==="object"&&typeof s.days==="object");}
 function saveCommunityEvent(event,source="direct"){
   if(!COMMUNITY_EVENTS.has(event)) throw new Error("UNSUPPORTED_COMMUNITY_EVENT");
   if(!COMMUNITY_SOURCES.has(source)) source="other";
@@ -1507,16 +1476,21 @@ const server=http.createServer(async (req,res)=>{
   }
 
   if(req.method==="GET" && raw==="/api/hsc/state-root"){
+    try{
     const composite=hscCompositeStore();
+    if(composite.storageRecovered || (pohaDatabaseRequired && !pohaDatabase))throw new Error("STATE_UNAVAILABLE");
     const integrity=verifyEventChain(composite.events||[]);
+    if(!integrity.valid)throw new Error("STATE_UNAVAILABLE");
     json(res,200,{
       ok:true,
       version:"0.1",
       eventChain:integrity,
       state:coreStateRoot(composite),
+      trustState:trustStateRoot(pohaDatabase?{...composite,...await pohaDatabase.snapshot()}:composite),
       anchoredOnSolana:false,
       note:"Current HSC root is deterministic off-chain application state. Solana anchoring is a later Devnet phase."
     });
+    }catch{json(res,503,{ok:false,error:"TRUST_STATE_UNAVAILABLE"});}
     return;
   }
 
@@ -1544,12 +1518,30 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
+  if(req.method==="GET" && raw==="/api/v1/status"){
+    try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");json(res,200,{ok:true,...await pohaDatabase.health(),executionEnabled:process.env.ALLOW_POHA_AUTHORIZATION==="true",trustRootVersion:"HS_TRUST_STATE_V1",backup:backupWorker?{enabled:true,lastSuccess:backupWorker.status.lastSuccess,lastError:backupWorker.status.lastError}:{enabled:false}});}
+    catch{json(res,503,{ok:false,ready:false,executionEnabled:false,error:"POHA_STORAGE_UNAVAILABLE"});}return;
+  }
+  if(req.method==="GET" && raw.startsWith("/api/v1/services/")){
+    try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");const service=await pohaDatabase.service(raw.slice("/api/v1/services/".length));if(!service){json(res,404,{ok:false,error:"SERVICE_NOT_FOUND"});return;}json(res,200,{ok:true,service});}catch{json(res,503,{ok:false,error:"POHA_STORAGE_UNAVAILABLE"});}return;
+  }
+  if(req.method==="POST" && raw==="/api/v1/actions/authorize"){
+    try{
+      if(!pohaDatabase || process.env.ALLOW_POHA_AUTHORIZATION!=="true")throw new Error("POHA_AUTHORIZATION_UNAVAILABLE");
+      let body="";for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body,"utf8")>24576)throw new Error("REQUEST_TOO_LARGE");}
+      const request=JSON.parse(body);
+      const auth={id:String(req.headers["x-hs-service-id"]||""),time:String(req.headers["x-hs-time"]||""),nonce:String(req.headers["x-hs-nonce"]||""),signature:String(req.headers["x-hs-signature"]||"")};
+      const result=await pohaDatabase.authorize(auth,Buffer.from(body),request,resolvePohaPrincipal);
+      json(res,200,{ok:true,result});
+    }catch(error){const code=String(error.message);const allowed=["SERVICE_AUTH_INVALID","SERVICE_REQUEST_REPLAY","INVALID_PRINCIPAL","IDENTITY_CHANGED_RETRY","PRINCIPAL_REVOKED","APPROVAL_REPLAY","REQUEST_TOO_LARGE","POHA_AUTHORIZATION_UNAVAILABLE"];const safe=allowed.includes(code)?code:"POHA_STORAGE_UNAVAILABLE";json(res,safe.startsWith("SERVICE_")?401:safe==="REQUEST_TOO_LARGE"?413:["POHA_STORAGE_UNAVAILABLE","POHA_AUTHORIZATION_UNAVAILABLE"].includes(safe)?503:400,{ok:false,error:safe});}return;
+  }
+
   if(req.method==="GET" && raw==="/api/v1/protocol"){
-    json(res,200,{ok:true,protocol:"Human Signal PoHA",version:"1",milestone:"SIGNED_INSPECTION",algorithm:"Ed25519",canonicalization:"HS_RESTRICTED_JSON_V1",executionEnabled:false,actionNonceConsumption:false,policyVersion:"PHONE_BOUND_DRAFT_V1",developerLab:"/poha-lab.html"});
+    json(res,200,{ok:true,protocol:"Human Signal PoHA",version:"1",milestone:pohaDatabase?"DURABLE_AUTHORIZATION":"SIGNED_INSPECTION",algorithm:"Ed25519",canonicalization:"HS_RESTRICTED_JSON_V1",executionEnabled:Boolean(pohaDatabase && process.env.ALLOW_POHA_AUTHORIZATION==="true"),actionNonceConsumption:Boolean(pohaDatabase),policyVersion:"PHONE_BOUND_DRAFT_V1",developerLab:"/poha-lab.html"});
     return;
   }
 
-  if(["/api/v1/agency","/api/v1/agents/register","/api/v1/delegations","/api/v1/revocations","/api/v1/actions/inspect"].includes(raw)){
+  if(["/api/v1/agency","/api/v1/identity/revoke","/api/v1/agents/register","/api/v1/delegations","/api/v1/revocations","/api/v1/actions/inspect"].includes(raw)){
     try{
       const isRead=raw==="/api/v1/agency" && req.method==="GET";
       if(!isRead && (raw==="/api/v1/agency" || req.method!=="POST")){json(res,405,{ok:false,error:"METHOD_NOT_ALLOWED"});return;}
@@ -1563,10 +1555,21 @@ const server=http.createServer(async (req,res)=>{
       if(network.storageRecovered)throw new Error("POHA_STORAGE_UNAVAILABLE");
       const profile=authHumanSignalProfile(req,network);
       if(!profile.wallet)throw new Error("AGENCY_WALLET_REQUIRED");
-      const phone=profile.humanProofs?.phone;
-      const freshPhone=phone?.verified===true && typeof phone.identityHash==="string" && phone.identityHash.length>=32 && Number.isFinite(Date.parse(phone.verifiedAt)) && Date.parse(phone.verifiedAt)<=Date.now() && Date.now()-Date.parse(phone.verifiedAt)<30*86400000;
-      const uniquePhone=freshPhone && network.profiles.filter(p=>p.humanProofs?.phone?.verified===true && p.humanProofs.phone.identityHash===phone.identityHash).length===1;
-      const context={principalId:profile.id,principalKey:Buffer.from(new PublicKey(profile.wallet).toBytes()).toString("base64"),audience:new URL(PUBLIC_BASE_URL).origin,identityAssurance:uniquePhone?"PHONE_VERIFIED":"NONE"};
+      let audience=new URL(PUBLIC_BASE_URL).origin;
+      if(parsed.payload?.audience && parsed.payload.audience!==audience){
+        if(!pohaDatabase || !(await pohaDatabase.pool.query('SELECT document FROM hs_services')).rows.some(r=>r.document.enabled && r.document.audience===parsed.payload.audience))throw new Error("AUDIENCE_MISMATCH");
+        audience=parsed.payload.audience;
+      }
+      const context=resolvePohaPrincipal(profile.id,audience);
+      if(!context)throw new Error("POHA_STORAGE_UNAVAILABLE");
+      if(pohaDatabaseRequired && !pohaDatabase)throw new Error("POHA_STORAGE_UNAVAILABLE");
+      if(pohaDatabase){
+        if(raw==="/api/v1/identity/revoke"){json(res,200,{ok:true,...await pohaDatabase.revokePrincipal(profile.id)});return;}
+        if(isRead){const records=await pohaDatabase.listing(profile.id);json(res,200,{ok:true,version:"1",audience,principalId:context.principalId,principalKey:context.principalKey,identityAssurance:context.identityAssurance,executionEnabled:process.env.ALLOW_POHA_AUTHORIZATION==="true",agents:records.pohaAgents,delegations:records.pohaDelegations});return;}
+        if(raw.endsWith("/inspect")){const expected=parsed.expected;if(!expected||typeof expected.requireApproval!=="boolean")throw new Error("INVALID_EXPECTED_CONTEXT");const inspectContext=resolvePohaPrincipal(profile.id,expected.audience);json(res,200,{ok:true,result:await pohaDatabase.inspect(inspectContext,parsed.proof,expected)});return;}
+        const kind=raw.endsWith("/register")?"AGENT":raw.endsWith("/delegations")?"DELEGATION":"REVOKE";
+        const record=await pohaDatabase.mutate(context,kind,parsed);json(res,kind==="REVOKE"?200:201,{ok:true,record});return;
+      }
       const core=loadHumanSignalCore();
       if(core.storageRecovered || !verifyEventChain(core.events||[]).valid)throw new Error("POHA_STORAGE_UNAVAILABLE");
       if(isRead){
@@ -1588,7 +1591,7 @@ const server=http.createServer(async (req,res)=>{
       if(changed){appendCoreEvent(core,{type,actor:profile.id,subject:record.id,data:{protocolVersion:"1",proofClass:"ED25519_SIGNED",record}});saveHumanSignalCore(core);}
       json(res,raw.endsWith("/revocations")?200:201,{ok:true,record,executionEnabled:false});
     }catch(error){
-      const message=String(error?.message||error);
+      const message=error.code?"POHA_STORAGE_UNAVAILABLE":String(error?.message||error);
       const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","HUMAN_SIGNAL_PROFILE_NOT_FOUND"].includes(message)?401:
         ["HUMAN_SIGNAL_ORIGIN_INVALID","AGENCY_WALLET_REQUIRED"].includes(message)?403:
         message==="POHA_STORAGE_UNAVAILABLE"?503:message==="REQUEST_TOO_LARGE"?413:400;
@@ -1632,7 +1635,7 @@ const server=http.createServer(async (req,res)=>{
       const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","HUMAN_SIGNAL_PROFILE_NOT_FOUND"].includes(m)?401:
         ["HUMAN_SIGNAL_ORIGIN_INVALID","AGENCY_WALLET_REQUIRED"].includes(m)?403:
         ["AGENT_NOT_FOUND","DELEGATION_NOT_FOUND"].includes(m)?404:
-        m==="REQUEST_TOO_LARGE"?413:m==="AGENCY_STORAGE_UNAVAILABLE"?503:400;
+        m==="REQUEST_TOO_LARGE"?413:["AGENCY_STORAGE_UNAVAILABLE","STORAGE_UNAVAILABLE","STORAGE_WRITE_CONFLICT"].includes(m)?503:400;
       json(res,status,{ok:false,error:m});
     }
     return;
@@ -3233,6 +3236,18 @@ server.headersTimeout=10000;
 server.keepAliveTimeout=5000;
 server.maxHeadersCount=64;
 server.maxRequestsPerSocket=100;
+
+if(pohaDatabaseRequired){
+  try{
+    const database=new PohaDatabase({connectionString:process.env.HUMAN_SIGNAL_DATABASE_URL});
+    await database.initialize();const core=loadHumanSignalCore();if(core.storageRecovered||!verifyEventChain(core.events||[]).valid)throw new Error("INVALID_CORE");await database.importLegacy(core);
+    if(process.env.HS_PILOT_PUBLIC_KEY && process.env.HS_PILOT_AUDIENCE)await database.enrollService({id:"draft-board",publicKey:process.env.HS_PILOT_PUBLIC_KEY,audience:process.env.HS_PILOT_AUDIENCE,scopes:["DRAFT_APP_ACTION"],resourcePrefix:"draft:",requireApproval:false});
+    pohaDatabase=database;
+    if(process.env.HS_BACKUP_BUCKET && process.env.HS_BACKUP_ENDPOINT && process.env.HS_BACKUP_ACCESS_KEY && process.env.HS_BACKUP_SECRET_KEY){
+      backupWorker=new BackupWorker({directory:DATA_DIR,database,bucket:process.env.HS_BACKUP_BUCKET,endpoint:process.env.HS_BACKUP_ENDPOINT,region:process.env.HS_BACKUP_REGION||"auto",accessKeyId:process.env.HS_BACKUP_ACCESS_KEY,secretAccessKey:process.env.HS_BACKUP_SECRET_KEY});backupWorker.start();
+    }
+  }catch{console.error("Human Signal PostgreSQL unavailable; PoHA routes fail closed.");}
+}
 
 server.listen(port,"0.0.0.0",()=>{
   console.log(`COHIBA web listening on :${port}`);
