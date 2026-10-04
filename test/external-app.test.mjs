@@ -8,23 +8,30 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import {PublicKey} from '@solana/web3.js';
+import {hashIdentity} from '../lib/human-proof.mjs';
 import {newSession} from '../lib/human-signal-network.mjs';
-import {signProof,publicKeyBase64,agentBindingPayload,delegationPayload,actionPayload} from '../sdk/human-signal-node.mjs';
+import {signProof,publicKeyBase64,agentBindingPayload,delegationPayload,actionPayload,proofDigest} from '../sdk/human-signal-node.mjs';
 const port=async()=>{const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');const p=s.address().port;await new Promise(r=>s.close(r));return p;};
 const start=async(script,env,text)=>{const child=spawn(process.execPath,[script],{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{let out='';const timer=setTimeout(()=>reject(Error('start timeout')),20000);child.stdout.on('data',c=>{out+=c;if(out.includes(text)){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(Error('server exited'));});});return child;};
-test('independent HTTP app verifies Human Signal authority and persists exactly one draft',{skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
+test('independent HTTP app verifies Human Signal authority and persists exactly one draft',{skip:!process.env.TEST_DATABASE_URL,timeout:90000},async()=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'hs-http-pilot-')),mainPort=await port(),appPort=await port();let main,app;
  try{
   const human=crypto.generateKeyPairSync('ed25519'),agent=crypto.generateKeyPairSync('ed25519'),service=crypto.generateKeyPairSync('ed25519');
   const principalId='HUMAN-'+crypto.randomBytes(6).toString('hex').toUpperCase(),principalKey=publicKeyBase64(human.privateKey),agentKey=publicKeyBase64(agent.privateKey),session=newSession(principalId);
+  const phone='+84901234567',pepper='isolated-native-test-pepper',password='BeforeMigration123',salt=crypto.randomBytes(16),phoneHash=hashIdentity('phone',phone,pepper);
+  const passwordCredential={scheme:'scrypt-v1',salt:salt.toString('base64'),hash:crypto.scryptSync(password,salt,64,{N:16384,r:8,p:1,maxmem:64*1024*1024}).toString('base64')};
+  const recoveryToken=crypto.randomBytes(32).toString('base64url');
   const mainDir=path.join(dir,'main'),appDir=path.join(dir,'app');await fs.mkdir(mainDir);await fs.mkdir(appDir);
   await fs.writeFile(path.join(appDir,'service-key.pem'),service.privateKey.export({format:'pem',type:'pkcs8'}),{mode:0o600});
-  await fs.writeFile(path.join(mainDir,'cohiba-human-signal-network.json'),JSON.stringify({profiles:[{id:principalId,wallet:new PublicKey(Buffer.from(principalKey,'base64')).toBase58(),humanProofs:{phone:{verified:true,identityHash:crypto.randomBytes(32).toString('hex'),verifiedAt:new Date().toISOString()}}}],challenges:[],sessions:[session.record]}));
+  await fs.writeFile(path.join(mainDir,'cohiba-human-signal-network.json'),JSON.stringify({profiles:[{id:principalId,wallet:new PublicKey(Buffer.from(principalKey,'base64')).toBase58(),passwordCredential,humanProofs:{phone:{verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString()}}}],challenges:[],sessions:[session.record]}));
+  await fs.writeFile(path.join(mainDir,'cohiba-account-onboarding.json'),JSON.stringify({records:[{status:'PHONE_VERIFIED',tokenHash:crypto.createHash('sha256').update(recoveryToken).digest('hex'),tokenExpiresAt:new Date(Date.now()+120000).toISOString(),phoneHash,existingProfileId:principalId}]}));
   const audience='https://outside-app.example';
-  main=await start('web-server.mjs',{PORT:String(mainPort),COHIBA_DATA_DIR:mainDir,PUBLIC_BASE_URL:'https://cohibameme.site',HUMAN_SIGNAL_DATABASE_URL:process.env.TEST_DATABASE_URL,HS_BACKUP_BUCKET:'',ALLOW_POHA_AUTHORIZATION:'true',HS_PILOT_PUBLIC_KEY:publicKeyBase64(service.privateKey),HS_PILOT_AUDIENCE:audience,INFOBIP_API_KEY:'',ALLOW_MAINNET:'false',AUTO_MAINNET_LAUNCH:'false'},'COHIBA web listening');
+  const mainEnv={PORT:String(mainPort),COHIBA_DATA_DIR:mainDir,PUBLIC_BASE_URL:'https://cohibameme.site',HUMAN_IDENTITY_PEPPER:pepper,HUMAN_SIGNAL_DATABASE_URL:process.env.TEST_DATABASE_URL,HS_ACCOUNT_STORAGE:'postgres',HS_BACKUP_BUCKET:'',ALLOW_POHA_AUTHORIZATION:'true',HS_PILOT_PUBLIC_KEY:publicKeyBase64(service.privateKey),HS_PILOT_AUDIENCE:audience,INFOBIP_API_KEY:'',ALLOW_MAINNET:'false',AUTO_MAINNET_LAUNCH:'false'};main=await start('web-server.mjs',mainEnv,'COHIBA web listening');
   app=await start('examples/draft-board/server.mjs',{PORT:String(appPort),DRAFT_BOARD_DATA_DIR:appDir,DRAFT_BOARD_DATABASE_URL:process.env.TEST_DATABASE_URL,HUMAN_SIGNAL_API_URL:'http://127.0.0.1:'+mainPort},'Independent Draft Board listening');
   const call=async(endpoint,body)=>{const r=await fetch('http://127.0.0.1:'+mainPort+'/api/v1/'+endpoint,{method:'POST',headers:{origin:'https://cohibameme.site',authorization:'Bearer '+session.token,'content-type':'application/json'},body:JSON.stringify(body)});const data=await r.json();assert.ok(r.ok,JSON.stringify(data));return data;};
+  const readiness=await (await fetch('http://127.0.0.1:'+mainPort+'/api/v1/status')).json();assert.equal(readiness.accountStorage,'POSTGRESQL');
   const b=agentBindingPayload({principalId,principalKey,agentKey,audience,name:'Real HTTP Pilot'});
+  await fs.writeFile(path.join(mainDir,'cohiba-human-signal-network.json'),'{broken historical file');
   const binding=await call('agents/register',{payload:b,principalSignature:signProof('AGENT_BINDING',b,human.privateKey),agentSignature:signProof('AGENT_BINDING',b,agent.privateKey)});
   const d=delegationPayload({principalId,principalKey,agentKey,audience,bindingId:binding.record.id,scopes:['DRAFT_APP_ACTION'],resource:'draft:article-1',expiresAt:b.expiresAt});
   const grant=await call('delegations',{payload:d,signature:signProof('DELEGATION',d,human.privateKey)});
@@ -35,6 +42,36 @@ test('independent HTTP app verifies Human Signal authority and persists exactly 
   const altered=await submit({...input,text:'tampered'});assert.equal(altered.status,403);
   const saved=await submit(input);assert.equal(saved.status,201);assert.equal(saved.data.result.actorClass,'AUTHORIZED_AGENT');assert.equal(saved.data.result.principalId,principalId);
   assert.equal((await submit(input)).status,403);
+  const humanAction=actionPayload({principalId,signerKey:principalKey,delegationId:'',audience,action:'DRAFT_APP_ACTION',resource:d.resource,payloadBytes:Buffer.from(text),performer:'HUMAN'});
+  const direct=await submit({...input,proof:{payload:humanAction,signature:signProof('ACTION',humanAction,human.privateKey)}});assert.equal(direct.status,201);assert.equal(direct.data.result.actorClass,'VERIFIED_HUMAN');
+  const approvalGrant={...d,nonce:crypto.randomBytes(24).toString('base64url'),approvalRequired:true};
+  const approvalDelegation=await call('delegations',{payload:approvalGrant,signature:signProof('DELEGATION',approvalGrant,human.privateKey)});
+  const approvalAction={...a,nonce:crypto.randomBytes(24).toString('base64url'),delegationId:approvalDelegation.record.id};
+  const approvalInput={...input,proof:{payload:approvalAction,signature:signProof('ACTION',approvalAction,agent.privateKey)}};
+  const waiting=await submit(approvalInput);assert.equal(waiting.status,202);assert.equal(waiting.data.result.actorClass,'HUMAN_APPROVAL_REQUIRED');
+  const approval={version:'1',principalId,principalKey,audience,nonce:crypto.randomBytes(24).toString('base64url'),issuedAt:new Date().toISOString(),expiresAt:approvalAction.expiresAt,actionDigest:proofDigest('ACTION',approvalAction)};
+  approvalInput.proof.approval={payload:approval,signature:signProof('APPROVAL',approval,human.privateKey)};
+  const approved=await submit(approvalInput);assert.equal(approved.status,201);assert.equal(approved.data.result.actorClass,'AUTHORIZED_AGENT');assert.ok(approved.data.result.humanApprovalDigest);
+  approvalAction.nonce=crypto.randomBytes(24).toString('base64url');approval.actionDigest=proofDigest('ACTION',approvalAction);approvalInput.proof.signature=signProof('ACTION',approvalAction,agent.privateKey);approvalInput.proof.approval.signature=signProof('APPROVAL',approval,human.privateKey);
+  const replayedApproval=await submit(approvalInput);assert.equal(replayedApproval.status,403);assert.equal(replayedApproval.data.result.reasonCodes[0],'APPROVAL_REPLAY');
+
   await call('revocations',{type:'DELEGATION',id:grant.record.id});a.nonce=crypto.randomBytes(24).toString('base64url');input.proof.signature=signProof('ACTION',a,agent.privateKey);assert.equal((await submit(input)).data.result.reasonCodes[0],'DELEGATION_UNAVAILABLE');
+  const account=async(endpoint,body,token='')=>{const r=await fetch('http://127.0.0.1:'+mainPort+'/api/account/'+endpoint,{method:'POST',headers:{origin:'https://cohibameme.site',authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
+  const who=async token=>(await fetch('http://127.0.0.1:'+mainPort+'/api/v1/agency',{headers:{origin:'https://cohibameme.site',authorization:'Bearer '+token}})).status;
+  const logins=await Promise.all(Array.from({length:6},()=>account('login',{phone,password})));
+  assert.ok(logins.every(r=>r.status===200),JSON.stringify(logins));assert.equal(new Set(logins.map(r=>r.data.token)).size,6);
+  for(const login of logins)assert.equal(await who(login.data.token),200);
+  const rotated=await account('password',{password:'AfterMigration123'},logins[0].data.token);assert.equal(rotated.status,200);
+  for(const login of logins)assert.equal(await who(login.data.token),401);assert.equal(await who(session.token),401);
+  assert.equal((await account('login',{phone,password})).status,401);
+  const recovered=await account('onboarding/profile',{onboardingToken:recoveryToken,password:'RecoveredNative123'});assert.equal(recovered.status,200,JSON.stringify(recovered));
+  assert.equal(await who(rotated.data.token),401);assert.equal(await who(recovered.data.token),200);
+  assert.equal((await account('onboarding/profile',{onboardingToken:recoveryToken,password:'RecoveredNative123'})).status,400);
+  const graph=await (await fetch('http://127.0.0.1:'+mainPort+'/api/v1/agency/graph',{headers:{authorization:'Bearer '+recovered.data.token}})).json();assert.equal(graph.graph.signals.economicInputsUsed,false);assert.equal(graph.graph.signals.authorizedActions,3);
+  assert.equal((await account('logout',{},recovered.data.token)).status,200);
+  main.kill();await once(main,'exit');main=await start('web-server.mjs',mainEnv,'COHIBA web listening');
+  assert.equal(await who(recovered.data.token),401);assert.equal((await account('login',{phone,password:'RecoveredNative123'})).status,200);
+  assert.equal(await fs.readFile(path.join(mainDir,'cohiba-human-signal-network.json'),'utf8'),'{broken historical file');
+
  }finally{for(const child of [app,main])if(child&&child.exitCode===null){child.kill();await once(child,'exit');}await fs.rm(dir,{recursive:true,force:true});}
 });

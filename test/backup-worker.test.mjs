@@ -11,5 +11,7 @@ test('offsite backup success requires exact read-back and invalid JSON fails clo
   const worker=new BackupWorker({directory,bucket:'private',database:{exportBackup:async()=>({version:'HS_PG_BACKUP_V1',tables:{}})},client:{send:async command=>{if(command.input.Body){body=command.input.Body;return {};}return {Body:{transformToByteArray:async()=>Buffer.from(body)}};}}});
   await worker.run();assert.ok(worker.status.lastSuccess);assert.equal(worker.status.lastError,null);assert.equal(JSON.parse(body).files['accounts.json'],'{"profiles":[]}');
   await fs.writeFile(path.join(directory,'accounts.json'),'broken');worker.status.lastSuccess=null;await worker.run();assert.equal(worker.status.lastSuccess,null);assert.equal(worker.status.lastError,'BACKUP_FAILED');
+  // Once PostgreSQL owns accounts, corrupt historical JSON is not live state.
+  worker.excludeFiles.add('accounts.json');await worker.run();assert.ok(worker.status.lastSuccess);assert.equal(worker.status.lastError,null);assert.equal(Object.hasOwn(JSON.parse(body).files,'accounts.json'),false);
  }finally{await fs.rm(directory,{recursive:true,force:true});}
 });

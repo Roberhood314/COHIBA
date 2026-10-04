@@ -1,3 +1,6 @@
+import {agencyGraph} from "./lib/agency-graph.mjs";
+import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
+import {AccountStateDatabase, transactionalResponse} from "./lib/account-state-postgres.mjs";
 import { BackupWorker } from "./lib/backup-worker.mjs";
 import { PohaDatabase } from "./lib/poha-postgres.mjs";
 import { readJson, writeJson } from "./lib/durable-json.mjs";
@@ -39,6 +42,7 @@ const launchAttempts = new Map();
 const apiRateWindows = new Map();
 const otpRateWindows = new Map();
 const loginRateWindows = new Map();
+const providerFetch=(url,options={})=>fetch(url,{...options,signal:options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000)});
 
 function rateLimitApi(req){
   const key=requestIp(req);
@@ -169,7 +173,11 @@ function loadLaunchRecord(network){
   }
 }
 
-function atomicWriteJson(file,value){writeJson(file,value);}
+function atomicWriteJson(file,value){
+  const id=accountStoreId(file);
+  if(accountDatabaseRequired && id){if(!accountDatabase)throw new Error("ACCOUNT_STORAGE_UNAVAILABLE");accountDatabase.write(id,value);return;}
+  writeJson(file,value);
+}
 
 function saveLaunchRecord(network,record){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -184,7 +192,7 @@ const HUMAN_SIGNAL_CORE_FILE=path.join(DATA_DIR,"cohiba-human-signal-core.json")
 const INFOBIP_2FA_FILE=path.join(DATA_DIR,"cohiba-infobip-2fa.json");
 const ACCOUNT_ONBOARDING_FILE=path.join(DATA_DIR,"cohiba-account-onboarding.json");
 
-function loadAccountOnboarding(){return readJson(ACCOUNT_ONBOARDING_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
+function loadAccountOnboarding(){return readAccountState(ACCOUNT_ONBOARDING_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
 function saveAccountOnboarding(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
   store.updatedAt=new Date().toISOString();
@@ -239,7 +247,7 @@ function validOnboardingRecord(record){
   return Boolean(record && record.status==="PROFILE_READY" && record.tokenHash && Date.parse(record.tokenExpiresAt)>Date.now() && !record.usedAt);
 }
 
-function loadHumanSignalCore(){return readJson(HUMAN_SIGNAL_CORE_FILE,{schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null},s=>Array.isArray(s.events)&&Array.isArray(s.apps||[])&&Array.isArray(s.appUtility||[]));}
+function loadHumanSignalCore(){return readAccountState(HUMAN_SIGNAL_CORE_FILE,{schemaVersion:"1.0",events:[],apps:[],appUtility:[],updatedAt:null},s=>Array.isArray(s.events)&&Array.isArray(s.apps||[])&&Array.isArray(s.appUtility||[]));}
 
 function saveHumanSignalCore(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -247,8 +255,16 @@ function saveHumanSignalCore(store){
   atomicWriteJson(HUMAN_SIGNAL_CORE_FILE,store);
 }
 
+let accountDatabase=null;
+const accountDatabaseRequired=Boolean(process.env.HUMAN_SIGNAL_DATABASE_URL)&&process.env.HS_ACCOUNT_STORAGE==="postgres";
+const accountStoreId=file=>({[HUMAN_SIGNAL_NETWORK_FILE]:"network",[ACCOUNT_ONBOARDING_FILE]:"onboarding",[HUMAN_SIGNAL_CORE_FILE]:"core",[HUMAN_SIGNAL_FILE]:"contributions"}[file]);
+function readAccountState(file,fallback,validate){
+  if(accountDatabaseRequired){if(!accountDatabase)throw new Error("ACCOUNT_STORAGE_UNAVAILABLE");return accountDatabase.read(accountStoreId(file));}
+  return readJson(file,fallback,validate);
+}
 let pohaDatabase=null;
 let backupWorker=null;
+let checkpointWorker=null;
 const pohaDatabaseRequired=Boolean(process.env.HUMAN_SIGNAL_DATABASE_URL);
 function resolvePohaPrincipal(id,audience){
   const network=loadHumanSignalNetwork();
@@ -256,7 +272,7 @@ function resolvePohaPrincipal(id,audience){
   const profile=network.profiles.find(p=>p.id===id);
   if(!profile?.wallet)return null;
   const phone=profile.humanProofs?.phone;
-  const valid=phone?.verified===true && /^[a-f0-9]{64}$/.test(phone.identityHash||"") && Number.isFinite(Date.parse(phone.verifiedAt)) && Date.parse(phone.verifiedAt)<=Date.now() && Date.now()-Date.parse(phone.verifiedAt)<30*86400000;
+  const valid=phone?.verified===true && !phone.revokedAt && /^[a-f0-9]{64}$/.test(phone.identityHash||"") && Number.isFinite(Date.parse(phone.verifiedAt)) && Date.parse(phone.verifiedAt)<=Date.now() && Date.now()-Date.parse(phone.verifiedAt)<30*86400000;
   const unique=valid && network.profiles.filter(p=>p.humanProofs?.phone?.verified===true && p.humanProofs.phone.identityHash===phone.identityHash).length===1;
   return {principalId:profile.id,principalKey:Buffer.from(new PublicKey(profile.wallet).toBytes()).toString("base64"),audience,identityAssurance:unique?"PHONE_VERIFIED":"NONE",assuranceExpiresAt:unique?new Date(Date.parse(phone.verifiedAt)+30*86400000).toISOString():null};
 }
@@ -324,7 +340,7 @@ function emitHsc(type,actor="SYSTEM",subject=null,data={}){
 }
 
 
-function loadHumanSignalNetwork(){return readJson(HUMAN_SIGNAL_NETWORK_FILE,{schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null},s=>Array.isArray(s.profiles)&&Array.isArray(s.challenges)&&Array.isArray(s.sessions));}
+function loadHumanSignalNetwork(){return readAccountState(HUMAN_SIGNAL_NETWORK_FILE,{schemaVersion:"1.0",profiles:[],challenges:[],sessions:[],updatedAt:null},s=>Array.isArray(s.profiles)&&Array.isArray(s.challenges)&&Array.isArray(s.sessions));}
 
 function saveHumanSignalNetwork(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -466,7 +482,7 @@ async function ensureInfobip2faConfig(){
   cfg.senderId=process.env.INFOBIP_SENDER_ID||cfg.senderId||"Infobip 2FA";
 
   if(!cfg.applicationId){
-    const r=await fetch(base+"/2fa/2/applications",{
+    const r=await providerFetch(base+"/2fa/2/applications",{
       method:"POST",headers,
       body:JSON.stringify({
         name:"COHIBA Human Verification",
@@ -490,7 +506,7 @@ async function ensureInfobip2faConfig(){
 
   if(cfg.applicationId && cfg.rateLimitVersion!=="10-per-day-v1"){
     try{
-      const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId),{
+      const r=await providerFetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId),{
         method:"PUT",
         headers,
         body:JSON.stringify({
@@ -517,7 +533,7 @@ async function ensureInfobip2faConfig(){
   }
 
   if(!cfg.messageId){
-    const r=await fetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId)+"/messages",{
+    const r=await providerFetch(base+"/2fa/2/applications/"+encodeURIComponent(cfg.applicationId)+"/messages",{
       method:"POST",headers,
       body:JSON.stringify({
         pinType:"NUMERIC",
@@ -542,7 +558,7 @@ async function ensureInfobip2faConfig(){
 
 async function infobipVerifyStart(phone){
   const cfg=await ensureInfobip2faConfig();
-  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin",{
+  const r=await providerFetch(infobipBaseUrl()+"/2fa/2/pin",{
     method:"POST",
     headers:infobipHeaders(),
     body:JSON.stringify({
@@ -569,7 +585,7 @@ async function infobipVerifyStart(phone){
 
 async function infobipVerifyCheck(pinId,code){
   if(!pinId) throw new Error("PHONE_VERIFICATION_CONTEXT_MISMATCH");
-  const r=await fetch(infobipBaseUrl()+"/2fa/2/pin/"+encodeURIComponent(pinId)+"/verify",{
+  const r=await providerFetch(infobipBaseUrl()+"/2fa/2/pin/"+encodeURIComponent(pinId)+"/verify",{
     method:"POST",
     headers:infobipHeaders(),
     body:JSON.stringify({pin:String(code||"")})
@@ -597,7 +613,7 @@ async function twilioVerifyStart(phone){
   const service=process.env.TWILIO_VERIFY_SERVICE_SID;
   if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
   const body=new URLSearchParams({To:phone,Channel:"sms"});
-  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/Verifications`,{
+  const r=await providerFetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/Verifications`,{
     method:"POST",
     headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
     body
@@ -613,7 +629,7 @@ async function twilioVerifyCheck(phone,code){
   const service=process.env.TWILIO_VERIFY_SERVICE_SID;
   if(!sid||!token||!service) throw new Error("PHONE_VERIFY_NOT_CONFIGURED");
   const body=new URLSearchParams({To:phone,Code:String(code||"")});
-  const r=await fetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/VerificationCheck`,{
+  const r=await providerFetch(`https://verify.twilio.com/v2/Services/${encodeURIComponent(service)}/VerificationCheck`,{
     method:"POST",
     headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64"),"content-type":"application/x-www-form-urlencoded"},
     body
@@ -639,13 +655,13 @@ async function googleExchange(code){
   const id=process.env.GOOGLE_CLIENT_ID, secret=process.env.GOOGLE_CLIENT_SECRET;
   if(!id||!secret) throw new Error("GOOGLE_OAUTH_NOT_CONFIGURED");
   const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/google/callback";
-  const tr=await fetch("https://oauth2.googleapis.com/token",{
+  const tr=await providerFetch("https://oauth2.googleapis.com/token",{
     method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},
     body:new URLSearchParams({code,client_id:id,client_secret:secret,redirect_uri:redirect,grant_type:"authorization_code"})
   });
   const tx=await tr.json().catch(()=>({}));
   if(!tr.ok||!tx.access_token) throw new Error("GOOGLE_TOKEN_EXCHANGE_FAILED");
-  const ur=await fetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{authorization:"Bearer "+tx.access_token}});
+  const ur=await providerFetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{authorization:"Bearer "+tx.access_token}});
   const u=await ur.json().catch(()=>({}));
   if(!ur.ok||!u.sub) throw new Error("GOOGLE_USERINFO_FAILED");
   return {sub:String(u.sub),emailVerified:Boolean(u.email_verified)};
@@ -675,7 +691,7 @@ async function humanProofProviderHealth(){
     out.phone.provider=out.phone.configured?"twilio":null;
     if(out.phone.configured){
       try{
-        const r=await fetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
+        const r=await providerFetch("https://verify.twilio.com/v2/Services/"+encodeURIComponent(service),{
           headers:{authorization:"Basic "+Buffer.from(sid+":"+token).toString("base64")}
         });
         out.phone.reachable=r.ok;
@@ -713,10 +729,10 @@ async function facebookExchange(code){
   if(!id||!secret||!version) throw new Error("FACEBOOK_OAUTH_NOT_CONFIGURED");
   const redirect=CANONICAL_PUBLIC_ORIGIN+"/api/human-proof/facebook/callback";
   const tq=new URLSearchParams({client_id:id,client_secret:secret,redirect_uri:redirect,code});
-  const tr=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/oauth/access_token?${tq.toString()}`);
+  const tr=await providerFetch(`https://graph.facebook.com/${encodeURIComponent(version)}/oauth/access_token?${tq.toString()}`);
   const tx=await tr.json().catch(()=>({}));
   if(!tr.ok||!tx.access_token) throw new Error("FACEBOOK_TOKEN_EXCHANGE_FAILED");
-  const ur=await fetch(`https://graph.facebook.com/${encodeURIComponent(version)}/me?fields=id&access_token=${encodeURIComponent(tx.access_token)}`);
+  const ur=await providerFetch(`https://graph.facebook.com/${encodeURIComponent(version)}/me?fields=id&access_token=${encodeURIComponent(tx.access_token)}`);
   const u=await ur.json().catch(()=>({}));
   if(!ur.ok||!u.id) throw new Error("FACEBOOK_USERINFO_FAILED");
   return {sub:String(u.id)};
@@ -771,7 +787,7 @@ function publicHumanProfile(profile,contributions=[]){
 }
 
 
-function loadHumanSignal(){return readJson(HUMAN_SIGNAL_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
+function loadHumanSignal(){return readAccountState(HUMAN_SIGNAL_FILE,{schemaVersion:"1.0",records:[],updatedAt:null},s=>Array.isArray(s.records));}
 
 function saveHumanSignal(store){
   fs.mkdirSync(DATA_DIR,{recursive:true});
@@ -1117,7 +1133,7 @@ async function createCoh(network){
   }
 }
 
-const server=http.createServer(async (req,res)=>{
+async function handleRequest(req,res){
   if(!isAllowedMethod(req.method)){
     res.writeHead(405,{...headers,"allow":"GET, HEAD, POST","content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
     res.end("Method Not Allowed");
@@ -1133,7 +1149,7 @@ const server=http.createServer(async (req,res)=>{
     return;
   }
 
-  if(raw.startsWith("/api/") && !rateLimitApi(req)){
+  if(raw.startsWith("/api/") && !req.hsRateLimitChecked && !rateLimitApi(req)){
     res.writeHead(429,{...headers,"content-type":"application/json; charset=utf-8","cache-control":"no-store","retry-after":"60"});
     res.end(JSON.stringify({ok:false,error:"RATE_LIMITED"}));
     return;
@@ -1519,8 +1535,18 @@ const server=http.createServer(async (req,res)=>{
   }
 
   if(req.method==="GET" && raw==="/api/v1/status"){
-    try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");json(res,200,{ok:true,...await pohaDatabase.health(),executionEnabled:process.env.ALLOW_POHA_AUTHORIZATION==="true",trustRootVersion:"HS_TRUST_STATE_V1",backup:backupWorker?{enabled:true,lastSuccess:backupWorker.status.lastSuccess,lastError:backupWorker.status.lastError}:{enabled:false}});}
+    try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");json(res,200,{ok:true,...await pohaDatabase.health(),executionEnabled:process.env.ALLOW_POHA_AUTHORIZATION==="true",checkpoint:checkpointWorker?checkpointWorker.status:null,accountStorage:accountDatabaseRequired?(accountDatabase?"POSTGRESQL":"UNAVAILABLE"):"JSON",trustRootVersion:"HS_TRUST_STATE_V1",backup:backupWorker?{enabled:true,lastSuccess:backupWorker.status.lastSuccess,lastError:backupWorker.status.lastError}:{enabled:false}});}
     catch{json(res,503,{ok:false,ready:false,executionEnabled:false,error:"POHA_STORAGE_UNAVAILABLE"});}return;
+  }
+  if(req.method==="GET" && raw==="/api/v1/checkpoints"){
+    try{if(!pohaDatabase)throw Error("UNAVAILABLE");json(res,200,{ok:true,checkpoints:await pohaDatabase.checkpoints()});}catch{json(res,503,{ok:false,error:"TRUST_STATE_UNAVAILABLE"});}return;
+  }
+  if(req.method==="GET" && raw==="/api/v1/agency/graph"){
+    try{
+      const profile=authHumanSignalProfile(req,loadHumanSignalNetwork());if(!pohaDatabase)throw Error("UNAVAILABLE");
+      const records=await pohaDatabase.graphRecords(profile.id);
+      json(res,200,{ok:true,graph:agencyGraph({profile,agents:records.pohaAgents,delegations:records.pohaDelegations,receipts:records.receipts,principal:records.principal,contributions:loadHumanSignal().records})});
+    }catch(error){const auth=String(error.message).startsWith("HUMAN_SIGNAL_");json(res,auth?401:503,{ok:false,error:auth?"HUMAN_SIGNAL_AUTH_REQUIRED":"TRUST_STATE_UNAVAILABLE"});}return;
   }
   if(req.method==="GET" && raw.startsWith("/api/v1/services/")){
     try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");const service=await pohaDatabase.service(raw.slice("/api/v1/services/".length));if(!service){json(res,404,{ok:false,error:"SERVICE_NOT_FOUND"});return;}json(res,200,{ok:true,service});}catch{json(res,503,{ok:false,error:"POHA_STORAGE_UNAVAILABLE"});}return;
@@ -3161,11 +3187,22 @@ const server=http.createServer(async (req,res)=>{
     }
     res.writeHead(200,{
       ...headers,
+      ...(raw==="/poha-lab.html"?{"cross-origin-opener-policy":"same-origin-allow-popups"}:{}),
       "content-type":types[path.extname(target)]||"application/octet-stream",
       "cache-control":[".html",".js"].includes(path.extname(target))?"no-cache, no-store, must-revalidate":"public, max-age=300"
     });
     res.end(data);
   });
+}
+
+const server=http.createServer((req,res)=>{
+  if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status"].includes(req.url)){
+    if(!accountDatabase){json(res,503,{ok:false,error:"ACCOUNT_STORAGE_UNAVAILABLE"});return;}
+    if(!rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
+    req.hsRateLimitChecked=true;
+    void transactionalResponse(accountDatabase,handleRequest,req,res);return;
+  }
+  void handleRequest(req,res).catch(()=>{if(!res.headersSent)json(res,503,{ok:false,error:"SERVICE_UNAVAILABLE"});else res.destroy();});
 });
 
 async function maybeBootstrapInfobip2fa(){
@@ -3240,11 +3277,24 @@ server.maxRequestsPerSocket=100;
 if(pohaDatabaseRequired){
   try{
     const database=new PohaDatabase({connectionString:process.env.HUMAN_SIGNAL_DATABASE_URL});
-    await database.initialize();const core=loadHumanSignalCore();if(core.storageRecovered||!verifyEventChain(core.events||[]).valid)throw new Error("INVALID_CORE");await database.importLegacy(core);
+    await database.initialize();
+    if(accountDatabaseRequired){
+      const specs={
+        network:{file:HUMAN_SIGNAL_NETWORK_FILE,fallback:{profiles:[],sessions:[],challenges:[]},validate:s=>Boolean(s&&Array.isArray(s.profiles)&&Array.isArray(s.sessions)&&Array.isArray(s.challenges))},
+        onboarding:{file:ACCOUNT_ONBOARDING_FILE,fallback:{records:[]},validate:s=>Boolean(s&&Array.isArray(s.records))},
+        core:{file:HUMAN_SIGNAL_CORE_FILE,fallback:{events:[],apps:[],appUtility:[]},validate:s=>Boolean(s&&Array.isArray(s.events)&&verifyEventChain(s.events).valid)},
+        contributions:{file:HUMAN_SIGNAL_FILE,fallback:{records:[]},validate:s=>Boolean(s&&Array.isArray(s.records))}
+      };
+      const stores=Object.fromEntries(Object.entries(specs).map(([id,spec])=>[id,{validate:spec.validate,readLegacy:()=>readJson(spec.file,spec.fallback,spec.validate)}]));
+      const accounts=new AccountStateDatabase({connectionString:process.env.HUMAN_SIGNAL_DATABASE_URL,stores});
+      await accounts.initialize();accountDatabase=accounts;
+    }
+    const core=accountDatabase?await accountDatabase.transaction(()=>loadHumanSignalCore()):loadHumanSignalCore();if(core.storageRecovered||!verifyEventChain(core.events||[]).valid)throw new Error("INVALID_CORE");await database.importLegacy(core);
     if(process.env.HS_PILOT_PUBLIC_KEY && process.env.HS_PILOT_AUDIENCE)await database.enrollService({id:"draft-board",publicKey:process.env.HS_PILOT_PUBLIC_KEY,audience:process.env.HS_PILOT_AUDIENCE,scopes:["DRAFT_APP_ACTION"],resourcePrefix:"draft:",requireApproval:false});
     pohaDatabase=database;
+    checkpointWorker=new CheckpointWorker({database,accounts:accountDatabase,readComposite:hscCompositeStore});checkpointWorker.start();
     if(process.env.HS_BACKUP_BUCKET && process.env.HS_BACKUP_ENDPOINT && process.env.HS_BACKUP_ACCESS_KEY && process.env.HS_BACKUP_SECRET_KEY){
-      backupWorker=new BackupWorker({directory:DATA_DIR,database,bucket:process.env.HS_BACKUP_BUCKET,endpoint:process.env.HS_BACKUP_ENDPOINT,region:process.env.HS_BACKUP_REGION||"auto",accessKeyId:process.env.HS_BACKUP_ACCESS_KEY,secretAccessKey:process.env.HS_BACKUP_SECRET_KEY});backupWorker.start();
+      backupWorker=new BackupWorker({directory:DATA_DIR,database,excludeFiles:accountDatabase?[HUMAN_SIGNAL_NETWORK_FILE,ACCOUNT_ONBOARDING_FILE,HUMAN_SIGNAL_CORE_FILE,HUMAN_SIGNAL_FILE].map(file=>path.basename(file)):[],bucket:process.env.HS_BACKUP_BUCKET,endpoint:process.env.HS_BACKUP_ENDPOINT,region:process.env.HS_BACKUP_REGION||"auto",accessKeyId:process.env.HS_BACKUP_ACCESS_KEY,secretAccessKey:process.env.HS_BACKUP_SECRET_KEY});backupWorker.start();
     }
   }catch{console.error("Human Signal PostgreSQL unavailable; PoHA routes fail closed.");}
 }

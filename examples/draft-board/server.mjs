@@ -17,13 +17,18 @@ async function authorization(request){
  const raw=Buffer.from(JSON.stringify(request)),time=new Date().toISOString(),nonce=crypto.randomBytes(24).toString('base64url');
  const signature=crypto.sign(null,serviceSigningBytes(serviceId,time,nonce,raw),key).toString('base64');
  const response=await fetch(api+'/api/v1/actions/authorize',{method:'POST',headers:{'content-type':'application/json','x-hs-service-id':serviceId,'x-hs-time':time,'x-hs-nonce':nonce,'x-hs-signature':signature},body:raw,signal:AbortSignal.timeout(10000)});
- const data=await response.json();if(!response.ok)throw Error(data.error||'HUMAN_SIGNAL_UNAVAILABLE');return data.result;
+ const data=await response.json();
+ if(!response.ok){
+  if(['APPROVAL_REPLAY','PRINCIPAL_REVOKED','INVALID_PRINCIPAL','IDENTITY_CHANGED_RETRY','PROOF_EXPIRED_RETRY'].includes(data.error))return {version:'1',mode:'AUTHORIZE',actorClass:'UNVERIFIED',decision:'DENY',executionAuthorized:false,reasonCodes:[data.error]};
+  throw Error('HUMAN_SIGNAL_UNAVAILABLE');
+ }
+ return data.result;
 }
 const json=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));};
 const server=http.createServer(async(req,res)=>{
  try{
   const url=new URL(req.url,'http://localhost');
-  if(req.method==='GET'&&url.pathname==='/health'){await pool.query('SELECT 1');json(res,200,{ok:true,application:'Independent Draft Board',servicePublicKey:publicKey,serviceId});return;}
+  if(req.method==='GET'&&url.pathname==='/health'){await pool.query('SELECT 1');json(res,200,{ok:true,application:'Independent Draft Board',servicePublicKey:publicKey,serviceId,humanSignalOrigin:new URL(api).origin});return;}
   if(req.method==='GET'&&url.pathname==='/'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'"});res.end(fs.readFileSync(new URL('./index.html',import.meta.url)));return;}
   if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(fs.readFileSync(new URL('./app.js',import.meta.url)));return;}
   if(req.method==='POST'&&url.pathname==='/drafts'){
