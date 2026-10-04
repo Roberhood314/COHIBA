@@ -19,6 +19,7 @@ test('checkpoint signature pins issuer and key, detects altered trust domains, p
  assert.equal(fs.statSync(file).mode&0o777,0o600);
  assert.equal(verifyCheckpoint({...s,createdAt:new Date(0).toISOString()},{issuer,publicKey:signer.publicKey}),false);
  assert.equal(verifyCheckpoint({...s,domains:{...s.domains,identities:'a'.repeat(64)}},{issuer,publicKey:signer.publicKey}),false);
+ assert.equal(verifyCheckpoint({...s,anchoredOnSolana:true},{issuer,publicKey:signer.publicKey}),false);
  assert.equal(verifyCheckpoint(s,{issuer:'https://evil.example',publicKey:signer.publicKey}),false);
  assert.equal(verifyCheckpoint(s,{issuer,publicKey:publicKeyBase64(crypto.generateKeyPairSync('ed25519').privateKey)}),false);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
@@ -31,4 +32,11 @@ test('database rate limiter shares counters across workers and denies database f
  const rows=await db.query('SELECT key FROM hs_rate_windows');assert.ok(rows.rows.every(r=>/^[a-f0-9]{64}$/.test(r.key)));
  await assert.rejects(new DatabaseRateLimiter({query:()=>Promise.reject(Error('offline'))}).allow('client'),/offline/);
  }finally{await db.close();}
+});
+
+test('native recovery drill proves restored replay and revocation on separate databases',{skip:!process.env.TEST_DATABASE_URL,timeout:60000},async()=>{
+ const previous=process.env.HS_RESTORE_DATABASE_URL,source=process.env.HUMAN_SIGNAL_DATABASE_URL;
+ process.env.HS_RESTORE_DATABASE_URL=process.env.TEST_DATABASE_URL;delete process.env.HUMAN_SIGNAL_DATABASE_URL;
+ try{const {nativeRecoveryExercise}=await import('../scripts/native-recovery-exercise.mjs');await nativeRecoveryExercise();}
+ finally{if(previous===undefined)delete process.env.HS_RESTORE_DATABASE_URL;else process.env.HS_RESTORE_DATABASE_URL=previous;if(source!==undefined)process.env.HUMAN_SIGNAL_DATABASE_URL=source;}
 });
