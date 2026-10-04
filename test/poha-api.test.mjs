@@ -23,7 +23,7 @@ test('PoHA HTTP chain isolates owners, persists signed records and denies revoke
   await writeFile(networkFile,JSON.stringify({profiles,challenges:[],sessions:sessions.map(s=>s.record)}));
   let child;
   const start=async()=>{
-    child=spawn(process.execPath,['web-server.mjs'],{env:{...process.env,PORT:String(port),PUBLIC_BASE_URL:'https://pilot.example',COHIBA_DATA_DIR:dir,AUTO_MAINNET_LAUNCH:'false',ALLOW_MAINNET:'false',ALLOW_HSC_DEVNET_ANCHOR:'false',INFOBIP_API_KEY:'',SYSTEM_WALLET_SECRET_JSON:''},stdio:['ignore','pipe','pipe']});
+    child=spawn(process.execPath,['web-server.mjs'],{env:{...process.env,HUMAN_SIGNAL_DATABASE_URL:'',ALLOW_POHA_AUTHORIZATION:'false',HS_PILOT_PUBLIC_KEY:'',HS_PILOT_AUDIENCE:'',HS_BACKUP_BUCKET:'',PORT:String(port),PUBLIC_BASE_URL:'https://pilot.example',COHIBA_DATA_DIR:dir,AUTO_MAINNET_LAUNCH:'false',ALLOW_MAINNET:'false',ALLOW_HSC_DEVNET_ANCHOR:'false',INFOBIP_API_KEY:'',SYSTEM_WALLET_SECRET_JSON:''},stdio:['ignore','pipe','pipe']});
     await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(new Error('startup timeout')),10000);child.stdout.on('data',c=>{output+=c;if(output.includes('COHIBA web listening')){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(new Error('early exit'));});});
   };
   const stop=async()=>{child.kill();await once(child,'exit');};

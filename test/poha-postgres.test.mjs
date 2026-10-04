@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import pg from 'pg';
+import {bindAgent} from '../lib/poha-v1.mjs';
 import {PohaDatabase,serviceSigningBytes} from '../lib/poha-postgres.mjs';
 import {signProof,publicKeyBase64,payloadDigest} from '../sdk/human-signal-node.mjs';
 
@@ -62,4 +63,13 @@ test('PostgreSQL backup restores authorization and replay ledger into an empty d
   const request={action:action.action,resource:action.resource,payloadBase64:Buffer.from('Backup draft').toString('base64'),proof:{payload:action,signature:signProof('ACTION',action,f.human.privateKey)}};
   const raw=Buffer.from(JSON.stringify(request));assert.equal((await original.authorize(f.auth(raw),raw,request,()=>f.context)).executionAuthorized,true);
   const backup=await original.exportBackup();await clone.restoreBackup(backup);assert.deepEqual((await clone.exportBackup()).tables,backup.tables);assert.equal((await clone.authorize(f.auth(raw),raw,request,()=>f.context)).reasonCodes[0],'ACTION_REPLAY');await assert.rejects(clone.restoreBackup(backup),/RESTORE_DATABASE_NOT_EMPTY/);}finally{await original.close();await clone.close();}
+});
+
+test('resumable JSON import discovers later records and never restores revoked authority',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();await db.importLegacy({});const f=fixture();
+  const record=bindAgent({},f.context,{payload:f.binding,principalSignature:signProof('AGENT_BINDING',f.binding,f.human.privateKey),agentSignature:signProof('AGENT_BINDING',f.binding,f.agent.privateKey)});
+  await db.importLegacy({pohaAgents:[record]});assert.ok((await db.listing(f.context.principalId)).pohaAgents.some(r=>r.id===record.id));
+  await db.mutate(f.context,'REVOKE',{type:'AGENT',id:record.id});await db.importLegacy({pohaAgents:[record]});assert.ok((await db.listing(f.context.principalId)).pohaAgents[0].revokedAt);
+ }finally{await db.close();}
 });
