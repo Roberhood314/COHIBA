@@ -25,7 +25,7 @@ export async function createExternalService({pool,audience,trust,requireApproval
    const expected={audience,action:'DRAFT_APP_ACTION',resource:'draft:external-note',payloadHash:sha256(bytes),requireApproval,challenge:input.challenge};
    const result=await authorizeAuthority(input.bundle,{trust:pinnedTrust,expected,consume:x=>consume(x,{onAdmit:async c=>{
     // Durable business intent and replay consumption share ONE transaction.
-    const valid=await c.query('DELETE FROM hs_external_challenges WHERE audience=$1 AND nonce=$2 AND expires_at>now() RETURNING nonce',[audience,input.challenge]);
+    const valid=await c.query('DELETE FROM hs_external_challenges WHERE audience=$1 AND nonce=$2 AND expires_at>clock_timestamp() RETURNING nonce',[audience,input.challenge]);
     if(!valid.rows.length)throw Error('CHALLENGE_UNAVAILABLE');
     await c.query('INSERT INTO hs_external_outbox(action_digest,payload) VALUES($1,$2)',[x.actionDigest,bytes]);
    }})});
