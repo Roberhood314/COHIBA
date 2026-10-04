@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Install locked dependencies
         run: npm ci
@@ -41,3 +41,9 @@ jobs:
         run: npm run typecheck
       - name: Build web
         run: npm run build
+      - name: Package standalone SDK
+        run: npm pack ./sdk --pack-destination /tmp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: human-signal-sdk-v1
+          path: /tmp/cohiba-human-signal-1.0.0.tgz

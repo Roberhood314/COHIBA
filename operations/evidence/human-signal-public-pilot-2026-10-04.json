@@ -1,0 +1,50 @@
+{
+  "version": "HS_PUBLIC_PILOT_EVIDENCE_V1",
+  "date": "2026-10-04",
+  "testedCommit": "70777c055f5f62a4e4c360b9b6f96c04bfbf15c9",
+  "pullRequest": "https://github.com/Roberhood314/COHIBA/pull/26",
+  "nativeCI": {
+    "run": 37205245442,
+    "tests": 85,
+    "passed": 85,
+    "skipped": 0
+  },
+  "securityRun": 37205245512,
+  "tokenVerifyRun": 37205245494,
+  "localLoad": {
+    "route": "/api/v1/protocol",
+    "requests": 40,
+    "concurrency": 4,
+    "http200": 40,
+    "p50Ms": 2.36,
+    "p95Ms": 12.46,
+    "productionCapacityClaim": false
+  },
+  "productionSnapshotRestore": {
+    "deployment": "984252fe-5d05-4112-b831-06728ebfa4b4",
+    "completedAt": "2026-10-04T13:20:51.306Z",
+    "separateRailwayPostgres": true,
+    "s3HashVerified": true,
+    "tablesMatch": true,
+    "revokedRecords": 0,
+    "actionNonces": 0,
+    "serviceNonces": 2,
+    "approvalNonces": 0
+  },
+  "nativeRecoveryFixture": {
+    "timestamp": "2026-10-04T13:20:51.955531075Z",
+    "identityEvidence": "SYNTHETIC_FIXTURE_ONLY",
+    "separateNativeDatabases": 2,
+    "tablesMatch": true,
+    "actionReplayDenied": true,
+    "revokedDelegationDenied": true,
+    "revokedPrincipalDenied": true
+  },
+  "pending": {
+    "realOwnerWalletAcceptance": true,
+    "independentExternalAudit": true,
+    "finalizedSolanaAnchor": true,
+    "productionMergeDeployment": true
+  },
+  "productionMergeBlockedByAutomaticApprovalReview": true
+}
