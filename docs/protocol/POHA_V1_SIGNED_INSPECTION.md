@@ -1,5 +1,7 @@
 # Human Signal PoHA v1 — signed inspection milestone
 
+Historical milestone (PR #21). The next additive implementation is documented in [POHA_DURABLE_AUTHORIZATION.md](./POHA_DURABLE_AUTHORIZATION.md).
+
 This release implements cryptographic proof construction and authenticated online inspection. It does **not** issue execution authorization, consume action nonces, execute an agent, transfer tokens, or provide a production developer trust service. The previous `/api/hsc/agency` metadata registry remains unchanged and cannot be used as signed authority.
 
 ## Implemented

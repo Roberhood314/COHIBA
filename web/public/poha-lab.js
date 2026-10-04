@@ -9,7 +9,7 @@ async function refresh(){
   $('#refresh').disabled=true;$('#records').replaceChildren();
   try{
     const data=await request('agency');
-    $('#status').textContent=`Audience: ${data.audience} · Assurance: ${data.identityAssurance} · ${data.agents.length} agent có chữ ký · ${data.delegations.length} ủy quyền. Quyền thực thi chưa bật.`;
+    $('#status').textContent=`Principal: ${data.principalId||'legacy'} · Public key: ${data.principalKey||'legacy'} · Audience: ${data.audience} · Assurance: ${data.identityAssurance} · ${data.agents.length} agent có chữ ký · ${data.delegations.length} ủy quyền. ${data.executionEnabled?"Authorization đã bật cho service được đăng ký.":"Quyền thực thi chưa bật."}`;
     for(const [type,records] of [['AGENT',data.agents],['DELEGATION',data.delegations]]){
       for(const record of records){
         const box=document.createElement('div');box.className='record';
@@ -34,3 +34,20 @@ $('#inspect').addEventListener('submit',async event=>{
   }catch(error){$('#result').textContent=error.message;}finally{button.disabled=false;}
 });
 refresh();
+
+function canonical(value){if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';return JSON.stringify(value);}
+const base64=bytes=>btoa(String.fromCharCode(...bytes));
+$('#signed-register').addEventListener('submit',async event=>{
+ event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;
+ try{
+  const input=JSON.parse($('#signed-input').value),kind=$('#signed-kind').value;
+  const wallet=window.solana;if(!wallet?.isPhantom)throw Error('Cài hoặc mở ví Phantom để ký.');
+  await wallet.connect();const bytes=wallet.publicKey.toBytes?wallet.publicKey.toBytes():wallet.publicKey.toBuffer();
+  if(base64(bytes)!==input.payload.principalKey)throw Error('Ví đang kết nối không khớp principalKey.');
+  if(kind==='AGENT_BINDING'&&!input.agentSignature)throw Error('Cần agentSignature từ Agent runtime.');
+  const message=new TextEncoder().encode('HS/1/'+kind+'\n'+canonical(input.payload));
+  const signed=await wallet.signMessage(message,'utf8'),signature=base64(signed.signature);
+  const body=kind==='AGENT_BINDING'?{payload:input.payload,agentSignature:input.agentSignature,principalSignature:signature}:{payload:input.payload,signature};
+  $('#signed-result').textContent=JSON.stringify(await request(kind==='AGENT_BINDING'?'agents/register':'delegations',body),null,2);await refresh();
+ }catch(error){$('#signed-result').textContent=error.message;}finally{button.disabled=false;}
+});
