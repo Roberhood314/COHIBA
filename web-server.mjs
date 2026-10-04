@@ -1533,7 +1533,7 @@ const server=http.createServer(async (req,res)=>{
       const auth={id:String(req.headers["x-hs-service-id"]||""),time:String(req.headers["x-hs-time"]||""),nonce:String(req.headers["x-hs-nonce"]||""),signature:String(req.headers["x-hs-signature"]||"")};
       const result=await pohaDatabase.authorize(auth,Buffer.from(body),request,resolvePohaPrincipal);
       json(res,200,{ok:true,result});
-    }catch(error){const code=String(error.message);const allowed=["SERVICE_AUTH_INVALID","SERVICE_REQUEST_REPLAY","INVALID_PRINCIPAL","IDENTITY_CHANGED_RETRY","PRINCIPAL_REVOKED","APPROVAL_REPLAY","REQUEST_TOO_LARGE","POHA_AUTHORIZATION_UNAVAILABLE"];const safe=allowed.includes(code)?code:"POHA_STORAGE_UNAVAILABLE";json(res,safe.startsWith("SERVICE_")?401:safe==="REQUEST_TOO_LARGE"?413:["POHA_STORAGE_UNAVAILABLE","POHA_AUTHORIZATION_UNAVAILABLE"].includes(safe)?503:400,{ok:false,error:safe});}return;
+    }catch(error){const code=String(error.message);const allowed=["SERVICE_AUTH_INVALID","SERVICE_REQUEST_REPLAY","INVALID_PRINCIPAL","IDENTITY_CHANGED_RETRY","PROOF_EXPIRED_RETRY","PRINCIPAL_REVOKED","APPROVAL_REPLAY","REQUEST_TOO_LARGE","POHA_AUTHORIZATION_UNAVAILABLE"];const safe=allowed.includes(code)?code:"POHA_STORAGE_UNAVAILABLE";json(res,safe.startsWith("SERVICE_")?401:safe==="REQUEST_TOO_LARGE"?413:["POHA_STORAGE_UNAVAILABLE","POHA_AUTHORIZATION_UNAVAILABLE"].includes(safe)?503:400,{ok:false,error:safe});}return;
   }
 
   if(req.method==="GET" && raw==="/api/v1/protocol"){
