@@ -24,7 +24,7 @@ The domain is `HS/EXPERIMENTAL/AUTHORITY_STATUS/1\n` + restricted sorted JSON. E
 | records | Unique sorted `{id,revoked}` entries explicitly covering required binding and delegation |
 | issuedAt, expiresAt | Canonical UTC times; future issue rejected, maximum lifetime 30 seconds |
 
-The envelope is `{payload,signature}` with canonical padded Base64 Ed25519 signature. The issuer MUST resolve current key, assurance, epoch and revocation from authoritative storage atomically when issuing it. An issuer must never sign client-supplied claims or accept unsigned record status. This experiment supplies verification and synthetic issuance fixtures; it deliberately supplies no live issuer endpoint or signing-key deployment.
+The envelope is `{payload,signature}` with canonical padded Base64 Ed25519 signature. The issuer MUST resolve current key, assurance, epoch and revocation from authoritative storage atomically when issuing it. An issuer must never sign client-supplied claims or accept unsigned record status. This experiment supplies verification and synthetic issuance fixtures; it does not enable a production issuer endpoint or signing-key deployment. The additive v0.2 reference handler and optional storage adapter are described in ISSUER_TRUST_AND_PRIVACY.md.
 
 After issuer verification, the external verifier independently checks both binding signatures, delegation signature, content-derived IDs, exact principal/Agent/audience linkage, scope/resource, expiry, revocation coverage, action signature and optional exact-action Human approval. The chain is one hop; redelegation is denied.
 

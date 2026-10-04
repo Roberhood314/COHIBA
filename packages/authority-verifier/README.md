@@ -1,6 +1,6 @@
 # Human Signal independent authority verifier
 
-Version **0.1.0-experimental.1**. Node >=22, no runtime dependencies. Copy this directory into another application; it runs without COHIBA source, accounts, token state or network access. Not published to npm; licensing/publication and independent security audit are separate gates.
+Version **0.1.0-experimental.2**. Node >=22, no runtime dependencies. Copy this directory into another application; it runs without COHIBA source, accounts, token state or network access. Not published to npm; licensing/publication and independent security audit are separate gates.
 
 ```js
 import {inspectAuthority, authorizeAuthority} from './authority-verifier/index.mjs';
@@ -31,6 +31,12 @@ The experimental authority-status statement is signed by that issuer, bound to e
 
 The verifier sees public keys, signed permissions, identifiers, scopes and hashes. It does not require raw phone, name, email, health data or GPS. This is data minimization, **not unlinkability**: stable keys/IDs and low-entropy hashes remain correlatable. Tor, zkAPI, ZK/selective-disclosure credentials and Solana proofs are not implemented by this package. COH ownership has no role.
 
-Only one Human→Agent delegation hop is supported. No wildcard scopes, implicit inheritance, Agent→Agent redelegation, token transfers or general tool execution. Expired grants, binding substitution, altered resource/audience and approvals for another action are denied. Network retrieval of issuer status, verified issuer enrollment and externally operated production acceptance remain work to do.
+Only one Human→Agent delegation hop is supported. No wildcard scopes, implicit inheritance, Agent→Agent redelegation, token transfers or general tool execution. Expired grants, binding substitution, altered resource/audience and approvals for another action are denied. A separate reference HTTP issuer/service flow now exists. Verified issuer enrollment and externally operated production acceptance remain work to do.
 
 Run `node examples/independent-verifier/demo.mjs` from the repository root for public synthetic vectors. `node --test test/independent-verifier.test.mjs` includes cross-implementation signing/classification, adversarial mutations, concurrent replay, epoch rollback, a PostgreSQL adapter and a copied standalone package with no repository dependency. These are automated checks, not an independent security audit or proof of a third-party customer's adoption.
+
+## v0.2 additive issuer and privacy controls
+
+Version 0.1.0-experimental.2 adds optional keyId-pinned issuer registries with key validity/revocation and operator-approved rotation; legacy v0.1 single-key vectors continue to verify. Registry policy remains service-side. createAuthorityIssuer projects a trusted state resolver and checks the proof chain before returning metadata; it never signs arbitrary client assurance. The optional PoHA storage adapter and HTTP issuer example are not activated in production.
+
+publicDecision removes identifying fields from returned responses/log views. This is minimization, not unlinkability. External service example queues its outbox intent in the replay transaction using a trusted onAdmit hook. See the issuer/privacy threat matrix and external-trust-service example for limitations and test evidence. Live third-party adoption and an independent audit are still outstanding.

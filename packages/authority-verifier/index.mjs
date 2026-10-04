@@ -61,9 +61,20 @@ export function inspectAuthority({proof,binding,delegation,status,expected,trust
   plain(proof);exact(proof,Object.hasOwn(proof,'approval')?['payload','signature','approval']:['payload','signature']);const a=proof.payload;
   // Proof may carry optional fresh owner approval.
   schema('ACTION',a);live(a,now,300000);const digest=proofDigest('ACTION',a);
-  envelope(status);const s=status.payload;const bytes=statusBytes(s);
+  plain(status);exact(status,Object.hasOwn(status,'keyId')?['payload','signature','keyId']:['payload','signature']);const s=status.payload;const bytes=statusBytes(s);
   plain(trust);const pinned=trust[s.issuer];if(s.identityAssurance!=='PHONE_VERIFIED'||!pinned||!Array.isArray(pinned.acceptedAssurances)||!pinned.acceptedAssurances.includes(s.identityAssurance))fail('ISSUER_OR_ASSURANCE_NOT_TRUSTED');
-  signature(bytes,pinned.publicKey,status.signature);live(s,now,30000);
+  if(pinned.enabled!==undefined&&typeof pinned.enabled!=='boolean'||pinned.minimumEpoch!==undefined&&(!Number.isSafeInteger(pinned.minimumEpoch)||pinned.minimumEpoch<1)||pinned.allowedAudiences!==undefined&&!Array.isArray(pinned.allowedAudiences))fail('INVALID_ISSUER_REGISTRY');
+  let issuerKey=pinned.publicKey;
+  if(pinned.enabled===false||pinned.allowedAudiences&&!pinned.allowedAudiences.includes(expected.audience)||pinned.minimumEpoch!==undefined&&s.credentialEpoch<pinned.minimumEpoch)fail('ISSUER_POLICY_DENIED');
+  if(pinned.keys){
+   list(pinned.keys);for(const k of pinned.keys){exact(k,['id','publicKey','notBefore','notAfter','revoked']);if(typeof k.id!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(k.id)||typeof k.revoked!=='boolean')fail('INVALID_ISSUER_REGISTRY');}
+   const ids=pinned.keys.map(k=>k.id),pubs=pinned.keys.map(k=>k.publicKey);
+   if(new Set(ids).size!==ids.length||new Set(pubs).size!==pubs.length||pinned.keys.length>8)fail('INVALID_ISSUER_REGISTRY');
+   const key=pinned.keys.find(k=>k.id===status.keyId);
+   if(!key||key.revoked===true||timestamp(key.notBefore)>now||timestamp(key.notAfter)<=now||timestamp(s.issuedAt)<timestamp(key.notBefore)||timestamp(s.expiresAt)>timestamp(key.notAfter))fail('ISSUER_KEY_UNAVAILABLE');
+   issuerKey=key.publicKey;
+  }else if(Object.hasOwn(status,'keyId'))fail('ISSUER_KEY_ID_UNEXPECTED');
+  signature(bytes,issuerKey,status.signature);live(s,now,30000);
   if(s.challenge!==expected.challenge||s.actionDigest!==digest||s.audience!==expected.audience)fail('STATUS_CONTEXT_MISMATCH');
   if(s.principalRevoked||timestamp(s.assuranceExpiresAt)<=now)fail('PRINCIPAL_OR_ASSURANCE_REVOKED');
   if(a.principalId!==s.principalId||a.audience!==s.audience||a.action!==expected.action||a.resource!==expected.resource||a.payloadHash!==expected.payloadHash)fail('ACTION_CONTEXT_MISMATCH');
@@ -107,4 +118,9 @@ export async function authorizeAuthority(input,{consume,trust,expected}={}){
   if(Date.parse(result.validUntil)<=Date.now())throw Error('EXPIRED_DURING_ADMISSION');
   return {...result,mode:'AUTHORIZE',executionAuthorized:true,reasonCodes:['EXTERNAL_SERVICE_ATOMIC_ADMISSION']};
  }catch(e){return {...result,mode:'AUTHORIZE',decision:'DENY',actorClass:'UNVERIFIED',reasonCodes:[e.message==='EXPIRED_DURING_ADMISSION'?e.message:'REPLAY_STORE_UNAVAILABLE']};}
+}
+
+// Safe response/log view. It intentionally excludes identity, keys and authority records.
+export function publicDecision(result){
+ return {actorClass:result.actorClass,decision:result.decision,executionAuthorized:result.executionAuthorized===true,reasonCodes:[...result.reasonCodes],...(result.validUntil?{validUntil:result.validUntil}:{})};
 }

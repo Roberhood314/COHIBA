@@ -5,7 +5,7 @@ export async function createPostgresReplayStore(pool){
  CREATE TABLE IF NOT EXISTS hs_verifier_actions(signer_key text NOT NULL,nonce text NOT NULL,action_digest text NOT NULL,PRIMARY KEY(signer_key,nonce));
  CREATE TABLE IF NOT EXISTS hs_verifier_approvals(principal_key text NOT NULL,nonce text NOT NULL,PRIMARY KEY(principal_key,nonce));
  CREATE TABLE IF NOT EXISTS hs_verifier_challenges(audience text NOT NULL,nonce text NOT NULL,PRIMARY KEY(audience,nonce));`);
- return async admission=>{
+ return async (admission,{onAdmit}={})=>{
   const c=await pool.connect();try{
    await c.query('BEGIN');
    const x=admission;
@@ -17,6 +17,8 @@ export async function createPostgresReplayStore(pool){
    if(x.approval)await insert('INSERT INTO hs_verifier_approvals(principal_key,nonce) VALUES($1,$2)',[x.approval.principalKey,x.approval.nonce]);
    await insert('INSERT INTO hs_verifier_challenges(audience,nonce) VALUES($1,$2)',[x.audience,x.challenge]);
    await c.query('UPDATE hs_verifier_epochs SET credential_epoch=$3 WHERE issuer=$1 AND principal_id=$2',[x.issuer,x.principalId,x.credentialEpoch]);
+   if(Date.parse(x.validUntil)<=Date.now())throw Error('REJECT');
+   if(onAdmit){if(typeof onAdmit!=='function')throw Error('INVALID_ADMISSION_HOOK');await onAdmit(c,admission);}
    if(Date.parse(x.validUntil)<=Date.now())throw Error('REJECT');
    await c.query('COMMIT');return true;
   }catch(e){await c.query('ROLLBACK').catch(()=>{});if(e.message==='REJECT')return false;throw e;}finally{c.release();}
