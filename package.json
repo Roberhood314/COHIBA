@@ -25,7 +25,10 @@
     "node:agent": "node scripts/cohiba-node-agent.mjs",
     "verify:evolution": "node scripts/verify-evolution-policy.mjs",
     "poha:pilot": "node scripts/poha-pilot.mjs",
-    "si:drill": "node scripts/sovereignty-drill.mjs"
+    "si:drill": "node scripts/sovereignty-drill.mjs",
+    "si:model": "node scripts/si-model-check.mjs",
+    "si:benchmark": "node scripts/si-benchmark.mjs",
+    "verify:si-dd": "node scripts/verify-si-due-diligence.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
