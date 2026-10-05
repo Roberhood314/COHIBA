@@ -28,7 +28,8 @@
     "si:drill": "node scripts/sovereignty-drill.mjs",
     "si:model": "node scripts/si-model-check.mjs",
     "si:benchmark": "node scripts/si-benchmark.mjs",
-    "verify:si-dd": "node scripts/verify-si-due-diligence.mjs"
+    "verify:si-dd": "node scripts/verify-si-due-diligence.mjs",
+    "verify:erc4337": "npm test --prefix examples/erc4337"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

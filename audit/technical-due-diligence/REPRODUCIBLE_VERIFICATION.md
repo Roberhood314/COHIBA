@@ -53,3 +53,7 @@ CI uploads the directory even on failure. A successful CI run should show `compl
 5. Validate negative witnesses and distinguish finite model invariants from implementation theorems.
 6. Review privileged DB writers, archival restore exception, issuer trust, clock and operator assumptions.
 7. Keep distributed consensus and arbitrary external-effect atomicity marked unimplemented until the acceptance gates in README are independently satisfied.
+
+## Separate Ethereum profile
+
+The root SI runner executes `test/*.test.mjs`; it does not install or execute the separate ERC-4337 package. For the Ethereum profile, run `npm ci --prefix examples/erc4337 --ignore-scripts` and `npm run verify:erc4337`, then inspect its dedicated CI workflow and source-bound `examples/erc4337/evidence/interop.json`. A complete root SI manifest alone does not prove EVM interoperability.

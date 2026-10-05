@@ -6,3 +6,5 @@ wallet.json
 .DS_Store
 
 operations/evidence/si-due-diligence/
+
+examples/erc4337/evidence/

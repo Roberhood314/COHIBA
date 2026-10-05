@@ -21,3 +21,7 @@ The partner should pin issuer trust explicitly, keep service private keys outsid
 Agree on an observation window and what counts as a human/organization, active participant and successfully authorized effect. Separate first-party staff, synthetic fixtures, retries and denied attempts from real activity. Publish aggregate measurements with collection definitions and privacy-preserving consent; do not expose phone hashes, principals, signatures or private drafts. Track returning participants and operational friction as well as the number of initial integrations. There is no invented universal user-count threshold in this pack.
 
 No audit invitation, partner contact or user outreach is sent by these scripts. Completing this document does not complete these three gates.
+
+## ERC-4337 reference evidence
+
+The [ERC-4337 reference adapter](../../examples/erc4337/README.md) supplies local EVM execution through upstream EntryPoint v0.7, including a human-signed revocation between validation and execution within one bundle. It is a separate Ethereum EOA authority profile, not an Ed25519 PoHA bridge or independently operated integration. EVM business-effect rollback does not undo ERC-4337 nonce consumption or gas charges. Public bundler validation, public testnet transaction evidence and third-party adoption remain acceptance gates.
