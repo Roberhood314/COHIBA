@@ -1676,8 +1676,12 @@ async function handleRequest(req,res){
       if(raw.endsWith("/agents")){
         record=registerAgent(core,profile.id,parsed);type="AGENT_REGISTERED";
       }else if(raw.endsWith("/grant")){
+        const gate=guardDirectHumanMutation(core,{profileId:profile.id,action:"AGENT_GRANT",receiptData:{route:raw,agentId:parsed.agentId||null,scopes:parsed.scopes||[]}});
+        if(gate.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(gate.reason||"DENY"));
         record=grantDelegation(core,profile.id,parsed);type="DELEGATION_GRANTED";
       }else{
+        const gate=guardDirectHumanMutation(core,{profileId:profile.id,action:"AGENT_REVOKE",receiptData:{route:raw,delegationId:parsed.delegationId||null}});
+        if(gate.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(gate.reason||"DENY"));
         const out=revokeDelegation(core,profile.id,parsed.delegationId);
         record=out.delegation;changed=out.changed;type="DELEGATION_REVOKED";
       }
@@ -2724,6 +2728,11 @@ async function handleRequest(req,res){
       const store=loadHumanSignal();
       const record=store.records.find(x=>x.id===id);
       if(!record) throw new Error("PROOF_NOT_FOUND");
+      if(status==="VERIFIED"){
+        const actorId=/^(?:HUMAN|COH)-[A-F0-9]{12}$/.test(String(record.profileId||""))?record.profileId:null;
+        if(!actorId) throw new Error("HUMAN_SIGNAL_VERIFICATION_ROOT_REQUIRED");
+        guardHumanSignalMutation(actorId,"CONTRIBUTION_VERIFY",{route:"/api/human-signal/review",contributionId:record.id});
+      }
       record.status=status;
       record.reviewedAt=new Date().toISOString();
       record.reviewNote=String(parsed.reviewNote||"").trim().slice(0,500)||null;
