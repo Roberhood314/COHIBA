@@ -6,7 +6,7 @@ Status: experimental / pre-audit.
 
 COHIBA remains the application and data plane. Human Signal Core is the authority/effect enforcement plane.
 
-The alpha core maps state-changing operations to machine-readable effect contracts. Read-only/public data stays outside the protected path. This clean PR intentionally does not patch `web-server.mjs`; route wiring will follow only after the core and tests pass CI.
+The alpha core maps state-changing operations to machine-readable effect contracts. Read-only/public data stays outside the protected path. The web server wires mining start, mining claim, app registration, delegation grant and delegation revoke to the session gate. The SI alpha extension adds deterministic authority decisions, an opt-in pinned-quorum research gate and fenced recovery; see [Sovereignty Inference and Continuity](SOVEREIGNTY_INFERENCE_AND_CONTINUITY.md).
 
 ## Existing COHIBA domains represented by the project state projection
 

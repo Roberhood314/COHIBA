@@ -6,6 +6,10 @@ import {humanSignalReleaseReadiness} from '../lib/human-signal-release.mjs';
 const root=process.cwd();
 const files=[
   "web-server.mjs","package.json","package-lock.json",
+  "lib/sovereignty-inference.mjs","lib/sovereign-quorum.mjs","lib/sovereign-continuity.mjs",
+  "lib/human-signal-core-v1-alpha.mjs","lib/poha-postgres.mjs",
+  "test/sovereign-continuity.test.mjs","scripts/sovereignty-drill.mjs",
+  "docs/SOVEREIGNTY_INFERENCE_AND_CONTINUITY.md",
   "docs/WHITEPAPER.md","docs/VERIFICATION_SPEC.md","docs/THREAT_MODEL.md",
   "docs/SECURITY_CONTROL_MATRIX.md","SECURITY.md",
   "scripts/create-token-staged.ts","scripts/revoke-authorities.ts",

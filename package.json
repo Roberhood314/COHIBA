@@ -24,7 +24,8 @@
     "verify:ops": "node scripts/run-operational-drills.mjs",
     "node:agent": "node scripts/cohiba-node-agent.mjs",
     "verify:evolution": "node scripts/verify-evolution-policy.mjs",
-    "poha:pilot": "node scripts/poha-pilot.mjs"
+    "poha:pilot": "node scripts/poha-pilot.mjs",
+    "si:drill": "node scripts/sovereignty-drill.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
