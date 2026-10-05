@@ -1,0 +1,12 @@
+{
+  "version": "HS_REVIEW_CLAIMS_1",
+  "status": "PRE-AUDIT",
+  "claims": [
+    { "id": "signed-authority", "scope": "PoHA one-level human-signed delegation and agent-signed action, synthetic principal trust", "tests": ["test/poha-v1.test.mjs", "test/poha-adversarial-signatures.test.mjs", "test/independent-verifier.test.mjs"] },
+    { "id": "bounded-si", "scope": "Trusted policy catalog, scope/effect/subject/epoch/expiry/budget checks; decision alone never executes", "tests": ["test/si-framework-api.test.mjs", "test/human-signal-core-v1-alpha.test.mjs"] },
+    { "id": "reference-effect-gate", "scope": "Offline signed PoHA → SI → memory-only effect; nine negative attempts and one valid write", "tests": ["test/human-signal-review-demo.test.mjs"] },
+    { "id": "recovery-fence", "scope": "Pinned synthetic committee and fenced authority-state recovery; no distributed consensus claim", "tests": ["test/sovereign-continuity.test.mjs"] }
+  ],
+  "openGates": ["independent audit", "operational issuer and key lifecycle", "independently operated external verifier/service", "broader adversarial/public operational evidence"],
+  "excludedClaims": ["production readiness", "globally unique human identity", "post-quantum security", "Byzantine consensus", "arbitrary external-effect atomicity", "Sepolia public execution", "official third-party endorsement"]
+}

@@ -4,6 +4,18 @@
 
 COHIBA is a human-first Solana cultural crypto project exploring identity, agency and resilience in the age of artificial intelligence. It combines meme-native storytelling with a verification-first token architecture and public technical evidence.
 
+## Review Human Signal / PoHA / SI
+
+**Status: PRE-AUDIT.** Start with the [review entry point](audit/human-signal-review/README.md), [protocol boundary specification](audit/human-signal-review/PROTOCOL_SPEC.md) and [claim-to-test index](audit/human-signal-review/claims.json).
+
+```sh
+npm run human-signal:demo
+npm ci --ignore-scripts
+npm run verify:human-signal
+```
+
+The demo needs only Node 24. The review suite needs Git and locked npm dependencies; after installation, verification runs offline without credentials. They exercise the existing signed PoHA verifier and SI core with synthetic identity and a memory-only effect. The evidence manifest records commit, source hashes, TAP results and scope; it is a focused review suite, not an independent audit or full production verification.
+
 ## Token specification
 
 - Chain: Solana
