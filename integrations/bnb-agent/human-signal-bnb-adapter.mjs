@@ -5,12 +5,6 @@ export const HS_BNB_AGENT_ADAPTER_VERSION = 'HS_BNB_AGENT_V0_1';
 export const BNB_AGENT_ADAPTER_ID = 'bnb-agent-sdk-reference';
 
 export const BNB_AGENT_ACTIONS = Object.freeze({
-  ERC8004_REGISTER: Object.freeze({
-    policyId: 'bnb-erc8004-register-v1',
-    action: 'ERC8004_REGISTER',
-    effects: Object.freeze(['EXTERNAL_CHAIN_WRITE', 'AGENT_IDENTITY_WRITE']),
-    risk: 'HIGH'
-  }),
   ERC8004_SET_METADATA: Object.freeze({
     policyId: 'bnb-erc8004-set-metadata-v1',
     action: 'ERC8004_SET_METADATA',
@@ -62,10 +56,7 @@ function agentSubject({ chainId, agentId }) {
 }
 
 function actionResource(action, context) {
-  const identity = agentSubject(context);
-  if (action === 'ERC8004_REGISTER') {
-    return `bnb-agent://${context.chainId}/registry/new/${identity}`;
-  }
+  agentSubject(context);
   if (action === 'ERC8004_SET_METADATA' || action === 'ERC8004_SET_AGENT_URI') {
     return `bnb-agent://${context.chainId}/registry/agent/${context.agentId}`;
   }
