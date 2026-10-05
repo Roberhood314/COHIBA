@@ -138,6 +138,24 @@ export async function runSepoliaEvidence({
   // Pre-broadcast revalidation against current Sepolia state.
   await provider.call({ from: deployer.address, to: ENTRYPOINT_V07, data: validData });
 
+  // Before consuming the nonce, mutate only the signed effect bytes. This
+  // isolates payload binding from replay/nonce rejection.
+  const decoded = AbiCoder.defaultAbiCoder().decode(
+    ['tuple(address agent,address target,bytes4 selector,bytes32 resource,uint256 maxCalls,uint256 gasBudget,uint48 validAfter,uint48 validUntil,uint256 epoch,bytes32 salt,address entryPoint)', 'bytes', 'bytes'],
+    '0x' + op.callData.slice(10)
+  );
+  const mutatedCallData = op.callData.slice(0, 10) + AbiCoder.defaultAbiCoder().encode(
+    ['tuple(address agent,address target,bytes4 selector,bytes32 resource,uint256 maxCalls,uint256 gasBudget,uint48 validAfter,uint48 validUntil,uint256 epoch,bytes32 salt,address entryPoint)', 'bytes', 'bytes'],
+    [decoded[0], decoded[1], sinkInterface.encodeFunctionData('commit', [resource, toUtf8Bytes('mutated')])]
+  ).slice(2);
+  const mutated = { ...op, callData: mutatedCallData };
+  const mutationRejected = await expectCallReject(provider, {
+    from: deployer.address,
+    to: ENTRYPOINT_V07,
+    data: entryInterface.encodeFunctionData('handleOps', [[mutated], deployer.address])
+  });
+  if (!mutationRejected) throw new Error('POST_SIGNATURE_MUTATION_NOT_REJECTED');
+
   const validTx = await deployer.sendTransaction({
     to: ENTRYPOINT_V07,
     data: validData,
@@ -152,22 +170,6 @@ export async function runSepoliaEvidence({
     from: deployer.address,
     to: ENTRYPOINT_V07,
     data: validData
-  });
-
-  // Payload mutation after the agent signature is rejected before another effect.
-  const decoded = AbiCoder.defaultAbiCoder().decode(
-    ['tuple(address agent,address target,bytes4 selector,bytes32 resource,uint256 maxCalls,uint256 gasBudget,uint48 validAfter,uint48 validUntil,uint256 epoch,bytes32 salt,address entryPoint)', 'bytes', 'bytes'],
-    '0x' + op.callData.slice(10)
-  );
-  const mutatedCallData = op.callData.slice(0, 10) + AbiCoder.defaultAbiCoder().encode(
-    ['tuple(address agent,address target,bytes4 selector,bytes32 resource,uint256 maxCalls,uint256 gasBudget,uint48 validAfter,uint48 validUntil,uint256 epoch,bytes32 salt,address entryPoint)', 'bytes', 'bytes'],
-    [decoded[0], decoded[1], sinkInterface.encodeFunctionData('commit', [resource, toUtf8Bytes('mutated')])]
-  ).slice(2);
-  const mutated = { ...op, nonce: nonce + 1n, callData: mutatedCallData };
-  const mutationRejected = await expectCallReject(provider, {
-    from: deployer.address,
-    to: ENTRYPOINT_V07,
-    data: entryInterface.encodeFunctionData('handleOps', [[mutated], deployer.address])
   });
 
   // Permissionlessly relay a human-signed revocation, then prove the old grant cannot authorize a fresh nonce.
