@@ -85,3 +85,13 @@ test('Concurrent workers commit one harmless effect; expired queued jobs cannot 
   assert.equal((await s.gateway.executeOne()).state,'CANCELLED');assert.equal(await drafts(s),1);
  }finally{await s.connection.end();}
 });
+test('Worker re-derives actual payload/tool intent instead of trusting persisted expected context',{timeout:60000},async()=>{
+ const s=await setup({maxCalls:3});try{
+  assert.equal((await s.gateway.submit(await request(s))).queued,true);
+  await s.connection.query("UPDATE hs_control_jobs SET payload=$2 WHERE audience=$1 AND state='QUEUED'",[s.audience,Buffer.from('CORRUPTED')]);
+  assert.equal((await s.gateway.executeOne()).state,'CANCELLED');assert.equal(await drafts(s),0);
+  assert.equal((await s.gateway.submit(await request(s,{tool:'dataset.read'}))).queued,true);
+  await s.connection.query("UPDATE hs_control_jobs SET tool='draft.create' WHERE audience=$1 AND state='QUEUED'",[s.audience]);
+  assert.equal((await s.gateway.executeOne()).state,'CANCELLED');assert.equal(await drafts(s),0);
+ }finally{await s.connection.end();}
+});

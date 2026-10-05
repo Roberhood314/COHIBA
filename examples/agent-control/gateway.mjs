@@ -62,8 +62,11 @@ export async function createAgentControlGateway({pool,audience,trust}){
     const key=[candidate.issuer,candidate.principal_id,candidate.agent_key],p=await selectPolicy(c,key,true);
     const job=(await c.query("SELECT *,deadline>clock_timestamp() AS fresh FROM hs_control_jobs WHERE audience=$1 AND id=$2 AND state='QUEUED' FOR UPDATE",[audience,candidate.id])).rows[0];
     if(!job)return {state:'EMPTY'};
-    const verified=inspectAuthority({...job.bundle,trust:pinnedTrust,expected:job.expected});
-    if(!p||!p.enabled||String(p.revision)!==String(job.revision)||!p.allowed_tools.includes(job.tool)||!job.fresh||verified.decision!=='ALLOW'){
+    // Re-derive intent from actual stored bytes/tool, not a cached expected decision.
+    const expected={audience,...tools[job.tool],challenge:job.expected.challenge,payloadHash:sha256(Buffer.from(job.payload)),requireApproval:p?.require_approval};
+    const verified=inspectAuthority({...job.bundle,trust:pinnedTrust,expected});
+    const identityMatches=job.bundle.proof?.payload?.performer==='AGENT'&&job.bundle.proof.payload.principalId===job.principal_id&&job.bundle.proof.payload.signerKey===job.agent_key&&job.bundle.status?.payload?.issuer===job.issuer&&verified.actionDigest===job.id;
+    if(!p||!p.enabled||String(p.revision)!==String(job.revision)||!p.allowed_tools.includes(job.tool)||!job.fresh||!identityMatches||verified.decision!=='ALLOW'){
      await c.query("UPDATE hs_control_jobs SET state='CANCELLED' WHERE audience=$1 AND id=$2",[audience,job.id]);return {state:'CANCELLED'};
     }
     // Only harmless built-in tools. No adapter can be supplied by Agent input.
