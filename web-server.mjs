@@ -7,6 +7,7 @@ import { PohaDatabase, serviceSigningBytes } from "./lib/poha-postgres.mjs";
 import { DISCLOSURE_POLICY_VERSION } from "./lib/poha-disclosure.mjs";
 import { readJson, writeJson } from "./lib/durable-json.mjs";
 import http from "node:http";
+import {humanSignalReleaseReadiness} from './lib/human-signal-release.mjs';
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -2281,6 +2282,13 @@ async function handleRequest(req,res){
       const status=m==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:m==="REQUEST_TOO_LARGE"?413:400;
       json(res,status,{ok:false,error:m});
     }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/v1/release-readiness"){
+    let registry=null;
+    try{registry=JSON.parse(fs.readFileSync(path.join(__dirname,'release/human-signal-gates.json'),'utf8'));}catch{}
+    json(res,200,humanSignalReleaseReadiness(registry,process.env.RAILWAY_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null));
     return;
   }
 

@@ -1,6 +1,6 @@
 # Human Signal independent authority verifier
 
-Version **0.1.0-experimental.2**. Node >=22, no runtime dependencies. Copy this directory into another application; it runs without COHIBA source, accounts, token state or network access. Not published to npm; licensing/publication and independent security audit are separate gates.
+Version **0.1.0-experimental.3**. Node >=22, no runtime dependencies. Copy this directory into another application; it runs without COHIBA source, accounts, token state or network access. Not published to npm; licensing/publication and independent security audit are separate gates.
 
 ```js
 import {inspectAuthority, authorizeAuthority} from './authority-verifier/index.mjs';
@@ -37,6 +37,12 @@ Run `node examples/independent-verifier/demo.mjs` from the repository root for p
 
 ## v0.2 additive issuer and privacy controls
 
-Version 0.1.0-experimental.2 adds optional keyId-pinned issuer registries with key validity/revocation and operator-approved rotation; legacy v0.1 single-key vectors continue to verify. Registry policy remains service-side. createAuthorityIssuer projects a trusted state resolver and checks the proof chain before returning metadata; it never signs arbitrary client assurance. The optional PoHA storage adapter and HTTP issuer example are not activated in production.
+Version 0.1.0-experimental.3 adds optional keyId-pinned issuer registries with key validity/revocation and operator-approved rotation; legacy v0.1 single-key vectors continue to verify. Registry policy remains service-side. createAuthorityIssuer projects a trusted state resolver and checks the proof chain before returning metadata; it never signs arbitrary client assurance. The optional PoHA storage adapter and HTTP issuer example are not activated in production.
 
 publicDecision removes identifying fields from returned responses/log views. This is minimization, not unlinkability. External service example queues its outbox intent in the replay transaction using a trusted onAdmit hook. See the issuer/privacy threat matrix and external-trust-service example for limitations and test evidence. Live third-party adoption and an independent audit are still outstanding.
+
+## Operator signing provider (experimental.3)
+
+Issuer accepts exactly one of privateKey or signer `{publicKey, async sign(bytes)}`. The latter allows an operator-owned Ed25519 KMS/HSM adapter without exporting the private key into this process. The callback signs exact bytes and returns canonical Base64. No cloud-provider adapter is bundled. Output is verified against the configured key at the current time after awaiting signing; timeout (default 5 s, max 30 s), invalid signature and expired status deny issuance without fallback. Timeout does not cancel a provider's remote operation; its adapter must implement cancellation/resource bounds. See operations/HUMAN_SIGNAL_ISSUER_RUNBOOK.md.
+
+Four release evidence gates are tracked separately from token launch and action authorization. Current status is PRE_AUDIT; none is complete. `/api/v1/release-readiness` is a read-only maintainer registry view, not an audit certificate or authorization endpoint. AUDIT_READY only means preparation. Independent evidence is still required.
