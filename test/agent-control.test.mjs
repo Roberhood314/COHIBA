@@ -15,17 +15,19 @@ async function pool(){
 async function setup({maxCalls=2,maxBytes=100,requireApproval=false}={}){
  const connection=await pool(),audience='https://control-'+crypto.randomBytes(6).toString('hex')+'.example',f=fixture();
  const gateway=await createAgentControlGateway({pool:connection,audience,trust:f.bundle.trust});
- const policy={issuer:'synthetic-issuer',principalId:f.context.principalId,agentKey:f.bundle.proof.payload.signerKey,enabled:true,maxCalls,maxBytes,allowedTools:['dataset.read','draft.create'],requireApproval};
+ const policy={issuer:'synthetic-issuer',principalId:'HUMAN-'+crypto.randomBytes(6).toString('hex').toUpperCase(),agentKey:f.bundle.proof.payload.signerKey,enabled:true,maxCalls,maxBytes,allowedTools:['dataset.read','draft.create'],requireApproval};
  await gateway.configurePolicy(policy);
  return {connection,audience,gateway,policy};
 }
 async function request(s,{tool='draft.create',payload='DRAFT',approve=false}={}){
  const challenge=await s.gateway.challenge(tool),f=fixture(),b=f.bundle.binding,d=f.bundle.delegation,a=f.bundle.proof;
+ f.context.principalId=s.policy.principalId;
+ for(const record of [b,d,a])record.payload.principalId=s.policy.principalId;
  b.payload.audience=s.audience;b.id='AGENT-'+proofDigest('AGENT_BINDING',b.payload);b.principalSignature=signProof('AGENT_BINDING',b.payload,f.keys.human);b.agentSignature=signProof('AGENT_BINDING',b.payload,f.keys.agent);
  d.payload.audience=s.audience;d.payload.bindingId=b.id;d.payload.scopes=[challenge.action];d.payload.resource=challenge.resource;d.id='DELEGATION-'+proofDigest('DELEGATION',d.payload);d.signature=signProof('DELEGATION',d.payload,f.keys.human);
  Object.assign(a.payload,{audience:s.audience,delegationId:d.id,action:challenge.action,resource:challenge.resource,payloadHash:sha256(Buffer.from(payload)),nonce:crypto.randomBytes(24).toString('base64url')});a.signature=signProof('ACTION',a.payload,f.keys.agent);
  if(approve){const q={version:'1',principalId:f.context.principalId,principalKey:f.context.principalKey,actionDigest:proofDigest('ACTION',a.payload),audience:s.audience,nonce:crypto.randomBytes(24).toString('base64url'),issuedAt:a.payload.issuedAt,expiresAt:a.payload.expiresAt};a.approval={payload:q,signature:signProof('APPROVAL',q,f.keys.human)};}
- Object.assign(f.bundle.status.payload,{audience:s.audience,challenge:challenge.challenge,actionDigest:proofDigest('ACTION',a.payload),records:[{id:b.id,revoked:false},{id:d.id,revoked:false}].sort((x,y)=>x.id.localeCompare(y.id))});
+ Object.assign(f.bundle.status.payload,{principalId:s.policy.principalId,audience:s.audience,challenge:challenge.challenge,actionDigest:proofDigest('ACTION',a.payload),records:[{id:b.id,revoked:false},{id:d.id,revoked:false}].sort((x,y)=>x.id.localeCompare(y.id))});
  f.bundle.status.signature=crypto.sign(null,statusBytes(f.bundle.status.payload),f.keys.issuer).toString('base64');
  return {bundle:{proof:a,binding:b,delegation:d,status:f.bundle.status},tool,challenge:challenge.challenge,payloadBase64:Buffer.from(payload).toString('base64')};
 }
