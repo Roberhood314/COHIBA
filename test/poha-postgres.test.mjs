@@ -5,7 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import pg from 'pg';
 import {bindAgent} from '../lib/poha-v1.mjs';
 import {PohaDatabase,serviceSigningBytes} from '../lib/poha-postgres.mjs';
-import {signProof,publicKeyBase64,payloadDigest} from '../sdk/human-signal-node.mjs';
+import {signProof,publicKeyBase64,payloadDigest,proofDigest} from '../sdk/human-signal-node.mjs';
 
 async function database({embedded=false}={}){
  if(process.env.TEST_DATABASE_URL&&!embedded)return new PohaDatabase({connectionString:process.env.TEST_DATABASE_URL});
@@ -70,6 +70,25 @@ test('database deferred expiry prevents a stale effect at COMMIT',{timeout:60000
   db.transaction=transaction;
   assert.equal((await db.pool.query('SELECT 1 FROM hs_actions WHERE principal_id=$1',[f.context.principalId])).rows.length,0);
   assert.equal((await db.pool.query("SELECT 1 FROM hs_effects WHERE document->>'principalId'=$1",[f.context.principalId])).rows.length,0);
+ }finally{await db.close();}
+});
+
+test('commit deadline cannot outlive fresh human approval or identity assurance',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();const transaction=db.transaction.bind(db);
+  for(const kind of ['APPROVAL','ASSURANCE']){
+   const f=await signedDraft(db),deadline=new Date(Date.now()+1500).toISOString();
+   if(kind==='ASSURANCE')f.context.assuranceExpiresAt=deadline;
+   else{
+    const approval={...f.common(),principalKey:f.principalKey,expiresAt:deadline,actionDigest:proofDigest('ACTION',f.request.proof.payload)};
+    f.request.proof.approval={payload:approval,signature:signProof('APPROVAL',approval,f.human.privateKey)};
+   }
+   const raw=Buffer.from(JSON.stringify(f.request));
+   db.transaction=(id,fn)=>transaction(id,async c=>{const result=await fn(c);await new Promise(r=>setTimeout(r,Math.max(0,Date.parse(deadline)-Date.now()+10)));return result;});
+   await assert.rejects(db.commitDraft(f.auth(raw),raw,f.request,()=>f.context),/PROOF_EXPIRED_AT_COMMIT/);
+   db.transaction=transaction;
+   assert.equal((await db.pool.query('SELECT 1 FROM hs_actions WHERE principal_id=$1',[f.context.principalId])).rows.length,0);
+  }
  }finally{await db.close();}
 });
 
