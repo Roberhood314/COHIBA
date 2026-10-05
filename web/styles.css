@@ -27,3 +27,17 @@ h1,h2,h3,p,a,span,b,strong,small{overflow-wrap:break-word}
   .verify-card b{font-size:14px;line-height:1.35}
   .verify-card p{font-size:11px;line-height:1.45}
 }
+
+/* Human Signal protocol masthead */
+.protocol-banner{position:relative;border-bottom:1px solid var(--line);background:radial-gradient(circle at 50% -20%,rgba(224,177,60,.16),transparent 46%),#050403;text-align:center;overflow:hidden}
+.protocol-banner:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(240,207,114,.035),transparent);pointer-events:none}
+.protocol-banner-inner{position:relative;padding:72px 0 58px}
+.protocol-label{margin:0 0 18px;color:var(--gold);font-size:10px;font-weight:900;letter-spacing:.28em}
+.protocol-banner h1{max-width:1040px;margin:0 auto;color:#f4efe3;font:500 clamp(42px,6.4vw,86px)/.96 Georgia,"Times New Roman",serif;letter-spacing:-.045em}
+.protocol-banner h1 span{color:var(--gold2)}
+.protocol-thesis{margin:24px auto 0;max-width:760px;color:#bbb4a9;font:400 clamp(16px,1.7vw,20px)/1.65 Georgia,serif}
+.protocol-invariant{width:max-content;max-width:100%;margin:30px auto 0;padding:13px 18px;border:1px solid rgba(222,180,74,.22);background:rgba(222,180,74,.035);display:flex;align-items:center;gap:14px}
+.protocol-invariant small{color:#817968;font-size:8px;font-weight:900;letter-spacing:.18em;white-space:nowrap}
+.protocol-invariant code{color:var(--gold2);font:600 12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace}
+.protocol-status{margin:13px 0 0;color:#696359;font-size:9px;letter-spacing:.12em;text-transform:uppercase}
+@media(max-width:700px){.protocol-banner-inner{padding:50px 0 42px}.protocol-banner h1{font-size:clamp(38px,12vw,58px)}.protocol-invariant{width:100%;flex-direction:column;gap:6px}.protocol-invariant code{font-size:10px}.protocol-label{letter-spacing:.18em}}
