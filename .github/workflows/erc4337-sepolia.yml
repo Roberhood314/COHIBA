@@ -1,0 +1,40 @@
+name: Human Signal ERC-4337 Sepolia Evidence
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_testnet:
+        description: "I confirm this run is Sepolia-only and uses a dedicated testnet key"
+        required: true
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  sepolia-e2e:
+    if: ${{ inputs.confirm_testnet }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: sepolia-evidence
+    env:
+      SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+      SEPOLIA_DEPLOYER_PRIVATE_KEY: ${{ secrets.SEPOLIA_DEPLOYER_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: examples/erc4337/package-lock.json
+      - name: Require dedicated Sepolia credentials
+        run: |
+          test -n "$SEPOLIA_RPC_URL"
+          test -n "$SEPOLIA_DEPLOYER_PRIVATE_KEY"
+      - name: Install locked ERC-4337 dependencies
+        run: npm ci --prefix examples/erc4337 --ignore-scripts
+      - name: Execute Sepolia public-network evidence harness
+        run: npm run test:sepolia --prefix examples/erc4337
+      - name: Upload public evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-signal-erc4337-sepolia
+          path: examples/erc4337/evidence/sepolia.json
+          if-no-files-found: error
