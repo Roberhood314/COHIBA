@@ -7,8 +7,8 @@ import {bindAgent} from '../lib/poha-v1.mjs';
 import {PohaDatabase,serviceSigningBytes} from '../lib/poha-postgres.mjs';
 import {signProof,publicKeyBase64,payloadDigest} from '../sdk/human-signal-node.mjs';
 
-async function database(){
- if(process.env.TEST_DATABASE_URL)return new PohaDatabase({connectionString:process.env.TEST_DATABASE_URL});
+async function database({embedded=false}={}){
+ if(process.env.TEST_DATABASE_URL&&!embedded)return new PohaDatabase({connectionString:process.env.TEST_DATABASE_URL});
  const database=new PGlite();let tail=Promise.resolve();
  // Embedded PostgreSQL has one connection. Serialize leases; real CI uses pg Pool.
  const pool={async connect(){let release;const next=new Promise(r=>release=r),previous=tail;tail=next;await previous;return {query:async(sql,args)=>sql.includes('pg_advisory_xact_lock')?{rows:[]}:(!args&&sql.includes('CREATE TABLE')?database.exec(sql).then(()=>({rows:[]})):database.query(sql,args)),release};},async query(sql,args){const c=await this.connect();try{return await c.query(sql,args);}finally{c.release();}},end:()=>database.close()};
@@ -24,6 +24,103 @@ function fixture(){
  const auth=raw=>{const time=new Date().toISOString(),nonce=crypto.randomBytes(24).toString('base64url');return {id:serviceId,time,nonce,signature:crypto.sign(null,serviceSigningBytes(serviceId,time,nonce,raw),service.privateKey).toString('base64')};};
  return {human,agent,service,serviceId,context,common,binding,auth,agentKey,principalKey};
 }
+async function signedDraft(db){
+ const f=fixture();await db.enrollService({id:f.serviceId,publicKey:publicKeyBase64(f.service.privateKey),audience:f.context.audience,scopes:['DRAFT_APP_ACTION'],resourcePrefix:'draft:',requireApproval:false});
+ const text='Production scope: a signed local draft';
+ const action={...f.common(),performer:'HUMAN',signerKey:f.principalKey,delegationId:'',action:'DRAFT_APP_ACTION',resource:'draft:production',payloadHash:payloadDigest(Buffer.from(text))};
+ const request={action:action.action,resource:action.resource,payloadBase64:Buffer.from(text).toString('base64'),proof:{payload:action,signature:signProof('ACTION',action,f.human.privateKey)}};
+ const raw=Buffer.from(JSON.stringify(request));return {...f,text,action,request,raw};
+}
+
+test('SI commits exact signed draft and replay ledger once in one durable transaction',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();const f=await signedDraft(db);
+  const changed={...f.request,payloadBase64:Buffer.from('substituted').toString('base64')},changedRaw=Buffer.from(JSON.stringify(changed));
+  assert.equal((await db.commitDraft(f.auth(changedRaw),changedRaw,changed,()=>f.context)).decision,'DENY');
+  const results=await Promise.all(Array.from({length:8},()=>db.commitDraft(f.auth(f.raw),f.raw,f.request,()=>f.context)));
+  assert.equal(results.filter(r=>r.executionAuthorized).length,1);assert.equal(results.filter(r=>r.idempotentReplay).length,7);
+  assert.ok(results.every(r=>r.effectCommitted===true&&r.effectAtomicity==='POSTGRES_TRANSACTION'));
+  const rows=(await db.pool.query("SELECT document FROM hs_effects WHERE document->>'principalId'=$1",[f.context.principalId])).rows;assert.equal(rows.length,1);assert.equal(Buffer.from(rows[0].document.payloadBase64,'base64').toString(),f.text);
+  assert.equal((await db.pool.query('SELECT digest FROM hs_actions WHERE principal_id=$1',[f.context.principalId])).rows.length,1);
+  const backup=await db.exportBackup(),clone=await database({embedded:true});try{await clone.initialize();await clone.restoreBackup(backup);assert.deepEqual((await clone.exportBackup()).tables,backup.tables);assert.equal((await clone.commitDraft(f.auth(f.raw),f.raw,f.request,()=>f.context)).idempotentReplay,true);}finally{await clone.close();}
+ }finally{await db.close();}
+});
+
+test('SI effect write failure rolls back nonce, receipt and service authentication together',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();const f=await signedDraft(db),auth=f.auth(f.raw),transaction=db.transaction.bind(db);
+  db.transaction=(id,fn)=>transaction(id,c=>fn({query(sql,args){if(sql.startsWith('INSERT INTO hs_effects'))throw Error('INJECTED_EFFECT_FAILURE');return c.query(sql,args);}}));
+  await assert.rejects(db.commitDraft(auth,f.raw,f.request,()=>f.context),/INJECTED_EFFECT_FAILURE/);
+  db.transaction=transaction;
+  assert.equal((await db.pool.query("SELECT 1 FROM hs_effects WHERE document->>'principalId'=$1",[f.context.principalId])).rows.length,0);
+  assert.equal((await db.pool.query('SELECT 1 FROM hs_actions WHERE principal_id=$1',[f.context.principalId])).rows.length,0);
+  assert.equal((await db.pool.query('SELECT 1 FROM hs_service_nonces WHERE service_id=$1',[f.serviceId])).rows.length,0);
+  assert.equal((await db.commitDraft(auth,f.raw,f.request,()=>f.context)).effectCommitted,true);
+ }finally{await db.close();}
+});
+
+test('database deferred expiry prevents a stale effect at COMMIT',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();const f=await signedDraft(db);
+  f.request.proof.payload.expiresAt=new Date(Date.now()+1500).toISOString();
+  f.request.proof.signature=signProof('ACTION',f.request.proof.payload,f.human.privateKey);const raw=Buffer.from(JSON.stringify(f.request));
+  const transaction=db.transaction.bind(db);
+  db.transaction=(id,fn)=>transaction(id,async c=>{const result=await fn(c);await new Promise(r=>setTimeout(r,Math.max(0,Date.parse(f.request.proof.payload.expiresAt)-Date.now()+10)));return result;});
+  await assert.rejects(db.commitDraft(f.auth(raw),raw,f.request,()=>f.context),/PROOF_EXPIRED_AT_COMMIT/);
+  db.transaction=transaction;
+  assert.equal((await db.pool.query('SELECT 1 FROM hs_actions WHERE principal_id=$1',[f.context.principalId])).rows.length,0);
+  assert.equal((await db.pool.query("SELECT 1 FROM hs_effects WHERE document->>'principalId'=$1",[f.context.principalId])).rows.length,0);
+ }finally{await db.close();}
+});
+
+test('SI draft commit rejects revoked identity and unsupported effect classes',{timeout:60000},async()=>{
+ const db=await database();try{
+  await db.initialize();const f=await signedDraft(db);
+  const unsupported={...f.request,action:'READ_PUBLIC_SIGNALS'},raw=Buffer.from(JSON.stringify(unsupported));
+  assert.equal((await db.commitDraft(f.auth(raw),raw,unsupported,()=>f.context)).reasonCodes[0],'UNSUPPORTED_PROTECTED_EFFECT');
+  let first=true;
+  await assert.rejects(db.commitDraft(f.auth(f.raw),f.raw,f.request,()=>{if(first){first=false;return f.context;}return {...f.context,identityAssurance:'NONE'};}),/IDENTITY_CHANGED_RETRY/);
+  assert.equal((await db.pool.query("SELECT 1 FROM hs_effects WHERE document->>'principalId'=$1",[f.context.principalId])).rows.length,0);
+  await db.commitDraft(f.auth(f.raw),f.raw,f.request,()=>f.context);await db.revokePrincipal(f.context.principalId);
+  await assert.rejects(db.commitDraft(f.auth(f.raw),f.raw,f.request,()=>f.context),/PRINCIPAL_REVOKED/);
+ }finally{await db.close();}
+});
+
+test('Draft Board HTTP uses authoritative atomic commit and idempotent retries',{timeout:60000},async()=>{
+ const {createServer}=await import('node:http'),{spawn}=await import('node:child_process'),{once}=await import('node:events');
+ const fs=await import('node:fs/promises'),os=await import('node:os'),path=await import('node:path');
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'hs-draft-commit-')),db=await database({embedded:true});
+ let child,upstream;try{
+  await db.initialize();const f=fixture();
+  upstream=createServer(async(req,res)=>{
+   try{
+    res.setHeader('content-type','application/json');
+    if(req.url==='/api/v1/sovereignty/status'){res.end(JSON.stringify({ok:true,localDraftCommitEnabled:true}));return;}
+    assert.equal(req.url,'/api/v1/actions/commit-draft');
+    let raw='';for await(const chunk of req)raw+=chunk;
+    const auth={id:req.headers['x-hs-service-id'],time:req.headers['x-hs-time'],nonce:req.headers['x-hs-nonce'],signature:req.headers['x-hs-signature']};
+    const result=await db.commitDraft(auth,Buffer.from(raw),JSON.parse(raw),()=>f.context);res.end(JSON.stringify({ok:true,result}));
+   }catch(e){res.statusCode=400;res.end(JSON.stringify({error:e.message}));}
+  });upstream.listen(0,'127.0.0.1');await once(upstream,'listening');
+  const listener=createServer();listener.listen(0,'127.0.0.1');await once(listener,'listening');const port=listener.address().port;await new Promise(r=>listener.close(r));
+  child=spawn(process.execPath,['examples/draft-board/server.mjs'],{env:{...process.env,PORT:String(port),DRAFT_BOARD_DATA_DIR:dir,HUMAN_SIGNAL_API_URL:`http://127.0.0.1:${upstream.address().port}`},stdio:['ignore','pipe','pipe']});
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout')),10000);child.stdout.on('data',b=>{if(b.toString().includes('listening')){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(Error('early exit'));});});
+  const origin=`http://127.0.0.1:${port}`,health=await fetch(origin+'/health').then(r=>r.json());assert.equal(health.commitMode,'ATOMIC_LOCAL_DRAFT');
+  await db.enrollService({id:'draft-board',publicKey:health.servicePublicKey,audience:f.context.audience,scopes:['DRAFT_APP_ACTION'],resourcePrefix:'draft:',requireApproval:false});
+  const text='Signed draft through HTTP',resource='draft:http';
+  const action={...f.common(),performer:'HUMAN',signerKey:f.principalKey,delegationId:'',action:'DRAFT_APP_ACTION',resource,payloadHash:payloadDigest(Buffer.from(text))};
+  const input={text,resource,proof:{payload:action,signature:signProof('ACTION',action,f.human.privateKey)}};
+  const post=x=>fetch(origin+'/drafts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(x)});
+  const saved=await post(input);assert.equal(saved.status,201);assert.equal((await saved.json()).saved,true);
+  const again=await post(input);assert.equal(again.status,200);assert.equal((await again.json()).result.idempotentReplay,true);
+  assert.equal((await post({...input,text:'substitution'})).status,403);
+  assert.equal((await db.pool.query('SELECT 1 FROM hs_effects')).rows.length,1);
+  await db.revokePrincipal(f.context.principalId);assert.equal((await post(input)).status,403);
+ }finally{
+  if(child&&child.exitCode===null){child.kill();await once(child,'exit');}
+  if(upstream)await new Promise(r=>upstream.close(r));await db.close();await fs.rm(dir,{recursive:true,force:true});
+ }
+});
 test('PostgreSQL authorizes exact external actions once and serializes concurrent replay',{timeout:60000},async()=>{
  const db=await database();
  try{

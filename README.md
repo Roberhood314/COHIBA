@@ -277,3 +277,7 @@ SI means Sovereignty Inference. It now evaluates the session envelope gate and v
 - [Adversarial tests](test/sovereign-continuity.test.mjs)
 - Public inspection: https://cohibameme.site/sovereignty.html
 - Local synthetic recovery drill: `npm run si:drill`
+
+## SI signed draft production deployment
+
+The opt-in `/api/v1/actions/commit-draft` path commits verified authority, replay consumption and exact private draft bytes in one PostgreSQL transaction. Draft Board uses this authoritative store for new drafts. [Supported scope, enable/disable and operational limits](docs/SI_PRODUCTION_DRAFT_COMMIT.md). This bounded deployment remains pre-audit and does not certify distributed SI or autonomous recovery.

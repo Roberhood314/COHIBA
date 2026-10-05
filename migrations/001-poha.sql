@@ -9,3 +9,16 @@ CREATE TABLE IF NOT EXISTS hs_audit (id bigint GENERATED ALWAYS AS IDENTITY PRIM
 CREATE TABLE IF NOT EXISTS hs_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS hs_state_documents (id text PRIMARY KEY, document jsonb NOT NULL, revision bigint NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS hs_state_roots (id text PRIMARY KEY, document jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS hs_effects (digest text PRIMARY KEY REFERENCES hs_actions(digest), document jsonb NOT NULL);
+CREATE OR REPLACE FUNCTION hs_check_effect_freshness() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF current_setting('hs.backup_restore',true) IS DISTINCT FROM 'true' THEN
+  IF NEW.document->>'expiresAt' IS NULL OR (NEW.document->>'expiresAt')::timestamptz<=clock_timestamp() THEN
+   RAISE EXCEPTION 'PROOF_EXPIRED_AT_COMMIT';
+  END IF;
+ END IF;
+ RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS hs_effect_freshness ON hs_effects;
+CREATE CONSTRAINT TRIGGER hs_effect_freshness AFTER INSERT ON hs_effects DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION hs_check_effect_freshness();
