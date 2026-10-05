@@ -27,7 +27,7 @@ export SI_REQUIRE_FULL_EVIDENCE=1
 npm run verify:si-dd
 ```
 
-Use `.github/workflows/ci.yml` for the native database/container setup. Without these capabilities, embedded SQL checks still execute where implemented, but native integration/container tests may skip. `SI_REQUIRE_FULL_EVIDENCE=1` makes skips, missing capabilities or failures fail verification; local partial evidence must not be labeled full. Model/benchmark output alone is never equivalent to implementation verification.
+Use `.github/workflows/ci.yml` for the native database/container setup. Start each full-suite run with a fresh disposable database: the HTTP account-migration fixture initializes fixed document IDs once and will deliberately preserve already-migrated state on restart. CI creates a separate fresh database for the evidence run after the build suite; do not reuse the build database or erase production state to make tests pass. Without these capabilities, embedded SQL checks still execute where implemented, but native integration/container tests may skip. `SI_REQUIRE_FULL_EVIDENCE=1` makes skips, missing capabilities or failures fail verification; local partial evidence must not be labeled full. Model/benchmark output alone is never equivalent to implementation verification.
 
 ## Evidence contents and interpretation
 

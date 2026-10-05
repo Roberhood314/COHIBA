@@ -18,6 +18,7 @@ const benchmark=benchmarkSI();fs.writeFileSync(path.join(output,'benchmark.json'
 const tests=files.filter(f=>/^test\/.*\.test\.mjs$/.test(f));
 const child=spawnSync(process.execPath,['--test','--test-reporter=tap',...tests],{encoding:'utf8',maxBuffer:32*1024*1024,timeout:300000});
 const tap=child.stdout||'';fs.writeFileSync(path.join(output,'tests.tap'),tap);fs.writeFileSync(path.join(output,'tests.stderr.txt'),child.stderr||'');
+if(child.status!==0){const lines=tap.split('\n');for(let i=0;i<lines.length;i++)if(/^not ok /.test(lines[i]))console.error(lines.slice(i,i+35).join('\n'));if(child.error)console.error(child.error.message);}
 const totals=Object.fromEntries(['tests','pass','fail','skipped'].map(k=>[k,Number(tap.match(new RegExp('^# '+k+' (\\d+)$','m'))?.[1]??-1)]));
 const checks={};
 for(const name of ['verify:security','verify:evolution','typecheck']){const check=spawnSync('npm',['run',name],{encoding:'utf8',maxBuffer:8*1024*1024,timeout:120000});checks[name]={exitCode:check.status,error:check.error?.message??null};fs.writeFileSync(path.join(output,name.replace(':','-')+'.log'),(check.stdout||'')+(check.stderr||''));}
