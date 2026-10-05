@@ -19,7 +19,9 @@ const files=[
   "docs/protocol/ISSUER_TRUST_AND_PRIVACY.md","docs/protocol/POHA_EXTERNAL_VERIFIER_V1.md",
   "audit/HUMAN_SIGNAL_AUDIT_SCOPE.md","operations/HUMAN_SIGNAL_ISSUER_RUNBOOK.md",
   "security/HUMAN_SIGNAL_PUBLIC_TESTING.md","examples/independent-verifier/vectors.json",
-  "examples/agent-control/gateway.mjs","examples/agent-control/README.md","test/agent-control.test.mjs"
+  "examples/agent-control/gateway.mjs","examples/agent-control/README.md","test/agent-control.test.mjs",
+  "examples/agent-control/isolation-lab.mjs","examples/agent-control/adversary.mjs",
+  "examples/agent-control/ISOLATION_LAB.md","test/agent-isolation.test.mjs"
 ].filter(p=>fs.existsSync(path.join(root,p)));
 
 const sha256=p=>crypto.createHash("sha256").update(fs.readFileSync(path.join(root,p))).digest("hex");
