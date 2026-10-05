@@ -44,6 +44,17 @@ jobs:
         run: docker pull node:22-bookworm-slim
       - name: Build web
         run: npm run build
+      - name: Reproduce SI due-diligence evidence
+        env:
+          SI_REQUIRE_FULL_EVIDENCE: '1'
+        run: npm run verify:si-dd
+      - name: Upload SI due-diligence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: si-due-diligence-evidence
+          path: operations/evidence/si-due-diligence/
+          if-no-files-found: error
       - name: Upload scripted isolation research evidence
         uses: actions/upload-artifact@v4
         with:

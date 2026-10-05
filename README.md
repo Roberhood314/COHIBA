@@ -281,3 +281,7 @@ SI means Sovereignty Inference. It now evaluates the session envelope gate and v
 ## SI signed draft production deployment
 
 The opt-in `/api/v1/actions/commit-draft` path commits verified authority, replay consumption and exact private draft bytes in one PostgreSQL transaction. Draft Board uses this authoritative store for new drafts. [Supported scope, enable/disable and operational limits](docs/SI_PRODUCTION_DRAFT_COMMIT.md). This bounded deployment remains pre-audit and does not certify distributed SI or autonomous recovery.
+
+## SI technical due diligence
+
+[Technical Due-Diligence Pack](audit/technical-due-diligence/README.md): architecture, six scoped guarantees, threat model, formal safety specification, attack matrix, microbenchmarks and reproducible source-bound verification. Global distributed consensus and arbitrary external-effect atomicity remain unproved.
