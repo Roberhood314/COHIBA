@@ -11,11 +11,20 @@ const policyKey=x=>[x.issuer,x.principalId,x.agentKey];
 export async function createAgentControlGateway({pool,audience,trust}){
  if(typeof audience!=='string'||!audience.startsWith('https://')||new URL(audience).origin!==audience)throw Error('INVALID_AUDIENCE');
  const pinnedTrust=structuredClone(trust),consume=await createPostgresReplayStore(pool);
- await pool.query(`
+ // PostgreSQL can race while concurrently creating the same relation/type even
+ // with IF NOT EXISTS. Serialize this tiny schema bootstrap across test/workers.
+ const schemaLock=await pool.connect();
+ try{
+  await schemaLock.query("SELECT pg_advisory_lock(hashtext('cohiba:agent-control:schema:v1'))");
+  await schemaLock.query(`
  CREATE TABLE IF NOT EXISTS hs_control_policy(audience text NOT NULL,issuer text NOT NULL,principal_id text NOT NULL,agent_key text NOT NULL,enabled boolean NOT NULL,revision bigint NOT NULL DEFAULT 1,max_calls bigint NOT NULL,max_bytes bigint NOT NULL,used_calls bigint NOT NULL DEFAULT 0,used_bytes bigint NOT NULL DEFAULT 0,allowed_tools jsonb NOT NULL,require_approval boolean NOT NULL,PRIMARY KEY(audience,issuer,principal_id,agent_key));
  CREATE TABLE IF NOT EXISTS hs_control_challenges(audience text NOT NULL,nonce text NOT NULL,tool text NOT NULL,expires_at timestamptz NOT NULL,PRIMARY KEY(audience,nonce));
  CREATE TABLE IF NOT EXISTS hs_control_jobs(audience text NOT NULL,id text NOT NULL,issuer text NOT NULL,principal_id text NOT NULL,agent_key text NOT NULL,revision bigint NOT NULL,tool text NOT NULL,payload bytea NOT NULL,bundle jsonb NOT NULL,expected jsonb NOT NULL,deadline timestamptz NOT NULL,state text NOT NULL DEFAULT 'QUEUED',PRIMARY KEY(audience,id));
  CREATE TABLE IF NOT EXISTS hs_control_drafts(audience text NOT NULL,id text NOT NULL,content bytea NOT NULL,PRIMARY KEY(audience,id));`);
+ }finally{
+  await schemaLock.query("SELECT pg_advisory_unlock(hashtext('cohiba:agent-control:schema:v1'))").catch(()=>{});
+  schemaLock.release();
+ }
  const selectPolicy=async(c,key,lock=false)=>(await c.query(`SELECT * FROM hs_control_policy WHERE audience=$1 AND issuer=$2 AND principal_id=$3 AND agent_key=$4${lock?' FOR UPDATE':''}`,[audience,...key])).rows[0];
  const transaction=async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}};
  return {

@@ -25,6 +25,7 @@ import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } fro
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, trustStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { guardDirectHumanMutation } from "./lib/human-signal-core-v1-alpha.mjs";
 import { bindAgent, createSignedDelegation, revokeSignedRecord, inspectAction } from "./lib/poha-v1.mjs";
 import { registerAgent, grantDelegation, revokeDelegation, agencyForOwner } from "./lib/human-agency.mjs";
 import { publicPioneerSupport, referralBoost } from "./lib/pioneer-support.mjs";
@@ -341,6 +342,15 @@ function emitHsc(type,actor="SYSTEM",subject=null,data={}){
   const event=appendCoreEvent(core,{type,actor,subject,data});
   saveHumanSignalCore(core);
   return event;
+}
+
+function guardHscMutation(profileId,action,receiptData={}){
+  const core=loadHumanSignalCore();
+  if(core.storageRecovered || !verifyEventChain(core.events||[]).valid) throw new Error("HUMAN_SIGNAL_CORE_UNAVAILABLE");
+  const out=guardDirectHumanMutation(core,{profileId,action,receiptData});
+  if(out.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(out.reason||"DENY"));
+  saveHumanSignalCore(core);
+  return out.receipt;
 }
 
 
@@ -1667,8 +1677,12 @@ async function handleRequest(req,res){
       if(raw.endsWith("/agents")){
         record=registerAgent(core,profile.id,parsed);type="AGENT_REGISTERED";
       }else if(raw.endsWith("/grant")){
+        const gate=guardDirectHumanMutation(core,{profileId:profile.id,action:"AGENT_GRANT",receiptData:{route:raw,agentId:parsed.agentId||null}});
+        if(gate.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(gate.reason||"DENY"));
         record=grantDelegation(core,profile.id,parsed);type="DELEGATION_GRANTED";
       }else{
+        const gate=guardDirectHumanMutation(core,{profileId:profile.id,action:"AGENT_REVOKE",receiptData:{route:raw,delegationId:parsed.delegationId||null}});
+        if(gate.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(gate.reason||"DENY"));
         const out=revokeDelegation(core,profile.id,parsed.delegationId);
         record=out.delegation;changed=out.changed;type="DELEGATION_REVOKED";
       }
@@ -1704,6 +1718,8 @@ async function handleRequest(req,res){
       const proof=publicHumanProof(profile);
       if(!["HUMAN_VERIFIED","STRONG_SIGNAL"].includes(proof.confidence.tier)) throw new Error("DEVELOPER_HUMAN_PROOF_REQUIRED");
       const core=loadHumanSignalCore();
+      const gate=guardDirectHumanMutation(core,{profileId:profile.id,action:"APP_REGISTER",receiptData:{route:"/api/hsc/apps/register"}});
+      if(gate.verdict!=="ALLOW") throw new Error("HUMAN_SIGNAL_"+String(gate.reason||"DENY"));
       const app=registerCoreApp(core,{name:parsed.name,description:parsed.description,developerProfileId:profile.id,homepage:parsed.homepage});
       appendCoreEvent(core,{type:"APP_REGISTERED",actor:profile.id,subject:app.id,data:{name:app.name,homepage:app.homepage}});
       saveHumanSignalCore(core);
@@ -2496,6 +2512,7 @@ async function handleRequest(req,res){
       }
       const rate=miningRateForProfile(profile,networkStore,contributionStore);
       if(rate.eligibilityFactor<=0) throw new Error("MINING_NOT_ELIGIBLE");
+      guardHscMutation(profile.id,"MINING_START",{route:"/api/human-signal/mining/start"});
       const session=newMiningSession(profile.id,rate);
       networkStore.miningSessions.push(session);
       saveHumanSignalNetwork(networkStore);
@@ -2517,6 +2534,7 @@ async function handleRequest(req,res){
       networkStore.miningSessions=Array.isArray(networkStore.miningSessions)?networkStore.miningSessions:[];
       const session=networkStore.miningSessions.slice().reverse().find(x=>x.profileId===profile.id && x.status==="ACTIVE");
       if(!session) throw new Error("NO_ACTIVE_MINING_SESSION");
+      guardHscMutation(profile.id,"MINING_CLAIM",{route:"/api/human-signal/mining/claim",sessionId:session.id});
       const claim=applyClaim(session,profile,Date.now());
       saveHumanSignalNetwork(networkStore);
       emitHsc("MINING_CLAIMED",profile.id,session.id,{amount:claim.amount,ended:claim.ended});
