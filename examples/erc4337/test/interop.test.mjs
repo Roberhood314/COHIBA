@@ -25,6 +25,12 @@ async function fixture(overrides={}){
 }
 function ok(r){assert.equal(r.execResult.exceptionError,undefined,bytesToHex(r.execResult.returnValue));}
 function rejected(r){assert.ok(r.execResult.exceptionError,'transaction must revert');}
+function highSSignature(signature){
+ const raw=getBytes(signature);if(raw.length!==65)throw Error('SIGNATURE_LENGTH');
+ const n=BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+ const lowS=BigInt(hexlify(raw.slice(32,64))),highS=n-lowS;
+ const out=Uint8Array.from(raw);out.set(getBytes('0x'+highS.toString(16).padStart(64,'0')),32);return hexlify(out);
+}
 
 test('official EntryPoint v0.7 executes human-signed delegation and exact agent intent on a local EVM',async()=>{
  const f=await fixture(),op=await f.make();
@@ -40,8 +46,8 @@ test('official EntryPoint v0.7 executes human-signed delegation and exact agent 
 
 test('forged human/agent signatures, widened effects, substituted bytes and unsupported routes deny before effects',async()=>{
  const f=await fixture();const base=await f.make();
- const forgedHuman=await f.agent.signTypedData(domain(f.chainId,f.account),delegationTypes,f.grant);
- const bad=[await f.make({sig:forgedHuman}),await f.make({text:'x'.repeat(6001)}),await f.make({signer:f.human}),await f.make({sig:'0x'}),await f.make({g:{...f.grant,maxCalls:1000n}}),await f.make({g:{...f.grant,gasBudget:10n**25n}}),await f.make({g:{...f.grant,validUntil:f.grant.validUntil+86400n}}),await f.make({g:{...f.grant,resource:keccak256(toUtf8Bytes('outside'))}}),await f.make({g:{...f.grant,target:f.human.address}}),await f.make({g:{...f.grant,selector:'0x095ea7b3'}}),{...base,callData:containedCall(f.grant,f.humanSignature,toUtf8Bytes('substituted'))},await signOperation({...operation({sender:f.account,nonce:0n,callData:'0xdeadbeef'}),signature:'0x'},f.agent,f.entry,f.chainId),{...base,paymasterAndData:f.human.address},{...base,initCode:f.human.address}];
+ const forgedHuman=await f.agent.signTypedData(domain(f.chainId,f.account),delegationTypes,f.grant),malleableHuman=highSSignature(f.humanSignature);
+ const bad=[await f.make({sig:malleableHuman}),await f.make({sig:forgedHuman}),await f.make({text:'x'.repeat(6001)}),await f.make({signer:f.human}),await f.make({sig:'0x'}),await f.make({g:{...f.grant,maxCalls:1000n}}),await f.make({g:{...f.grant,gasBudget:10n**25n}}),await f.make({g:{...f.grant,validUntil:f.grant.validUntil+86400n}}),await f.make({g:{...f.grant,resource:keccak256(toUtf8Bytes('outside'))}}),await f.make({g:{...f.grant,target:f.human.address}}),await f.make({g:{...f.grant,selector:'0x095ea7b3'}}),{...base,callData:containedCall(f.grant,f.humanSignature,toUtf8Bytes('substituted'))},await signOperation({...operation({sender:f.account,nonce:0n,callData:'0xdeadbeef'}),signature:'0x'},f.agent,f.entry,f.chainId),{...base,paymasterAndData:f.human.address},{...base,initCode:f.human.address}];
  for(const op of bad){rejected(await f.send([op]));assert.equal(await f.count(),0n);assert.equal(await f.value('usedCalls',[f.id]),0n);assert.equal(await f.value('reservedGasCost',[f.id]),0n);}
  evidence.push({scenario:'forgery-containment-profile',rejectedVariants:bad.length});
 });
