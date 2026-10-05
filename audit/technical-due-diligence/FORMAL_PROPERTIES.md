@@ -7,7 +7,7 @@ Let `Admit(i,s)` be an admission of intent `i` in state `s`; `Effect(i,s,s')` a 
 | Property | Safety obligation |
 | --- | --- |
 | Complete mediation | `Effect(i,s,s') => Admit(i,s)` and admission requires valid signature, live authority and actual intent binding |
-| Non-amplification | `Rights(child) ⊆ Rights(parent)`; expiry(child) ≤ expiry(parent); cumulative spend ≤ budget; no agent-origin authority creation |
+| Non-amplification | `Rights(child) ⊆ Rights(parent)`; effective expiry(child) ≤ effective expiry(parent); cumulative spend ≤ budget; no agent-origin authority creation |
 | Revocation | If revoke precedes admission in authoritative order, admission denies; future states retain known revocation |
 | Effect containment | Actual `(audience,action,resource,H(bytes),effectClass)` equals authorized tuple; deny unknown effect adapters |
 | Distributed enforcement | For each `(principal, signer, nonce)`, globally at most one new admission, including partitions/restarts |
