@@ -1,0 +1,15 @@
+{
+  "name": "@cohiba/human-signal-mcp-reference",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Experimental Human Signal reference enforcement wrapper for the official MCP TypeScript SDK",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/server": "2.2.0",
+    "zod": "4.6.5"
+  }
+}

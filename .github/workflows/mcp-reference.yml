@@ -1,0 +1,24 @@
+name: Human Signal MCP Reference
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mcp-interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned official MCP SDK reference dependencies
+        run: npm install --prefix examples/mcp --ignore-scripts
+      - name: Dependency audit
+        run: npm audit --prefix examples/mcp --audit-level=high
+      - name: Execute official MCP client/server interoperability and adversarial cases
+        run: npm test --prefix examples/mcp
