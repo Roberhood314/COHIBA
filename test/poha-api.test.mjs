@@ -33,6 +33,8 @@ test('PoHA HTTP chain isolates owners, persists signed records and denies revoke
   try{
     await start();
     const discovery=await api('protocol',undefined,{token:''});assert.equal(discovery.status,200);assert.equal(discovery.data.executionEnabled,false);assert.equal(discovery.data.actionNonceConsumption,false);
+    const si=await api('sovereignty/status',undefined,{token:''});assert.equal(si.status,200);assert.equal(si.data.meaning,'Sovereignty Inference');assert.equal(si.data.distributedNetworkLive,false);assert.equal(si.data.signedPohaExecutionEnabled,false);
+    const publicPage=await fetch(`http://127.0.0.1:${port}/sovereignty.html`);assert.equal(publicPage.status,200);assert.match(await publicPage.text(),/Sovereignty Inference/);
     assert.equal((await api('agency',undefined,{token:''})).status,401);
     assert.equal((await api('agents/register',{}, {origin:'https://evil.example'})).status,403);
     const common={version:'1',principalId:alice,audience:'https://pilot.example',nonce:crypto.randomBytes(24).toString('base64url'),issuedAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+60000).toISOString()};

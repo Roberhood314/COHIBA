@@ -37,7 +37,8 @@ test('PostgreSQL authorizes exact external actions once and serializes concurren
   const raw=Buffer.from(JSON.stringify(request));const resolve=()=>f.context;
   const wrong=Buffer.from(JSON.stringify({...request,payloadBase64:Buffer.from('Tampered').toString('base64')}));assert.equal((await db.authorize(f.auth(wrong),wrong,JSON.parse(wrong),resolve)).decision,'DENY');
   const results=await Promise.all(Array.from({length:8},()=>db.authorize(f.auth(raw),raw,request,resolve)));
-  assert.equal(results.filter(r=>r.executionAuthorized).length,1);assert.equal(results.filter(r=>r.reasonCodes.includes('ACTION_REPLAY')).length,7);
+  assert.equal(results.filter(r=>r.executionAuthorized).length,1);
+  const admitted=results.find(r=>r.executionAuthorized);assert.equal(admitted.sovereignty.authorityClass,'ED25519_POHA');assert.equal(admitted.sovereignty.executionAuthorized,false);assert.match(admitted.sovereignty.decisionDigest,/^[a-f0-9]{64}$/);assert.equal(results.filter(r=>r.reasonCodes.includes('ACTION_REPLAY')).length,7);
   const repeatedAuth=f.auth(raw);await db.authorize(repeatedAuth,raw,request,resolve);await assert.rejects(db.authorize(repeatedAuth,raw,request,resolve),/SERVICE_REQUEST_REPLAY/);
   // Independent pg connections can acquire locks out of invocation order.
   // Wait for the blocker to HOLD the lock before enqueueing authorization.

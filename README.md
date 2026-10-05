@@ -268,3 +268,12 @@ Architecture: [docs/HUMAN_SIGNAL_CORE.md](docs/HUMAN_SIGNAL_CORE.md)
 Wallet-linked profiles can register AI agents, grant limited draft/read permissions for up to seven days, and revoke grants from the Human Signal page. Owner-only APIs and HSC events record consent; agency records are included in the state root. This is an off-chain permission registry; external AI execution and agent authentication are not enabled.
 
 See [Human Agency](docs/HUMAN_AGENCY.md).
+
+## Sovereignty Inference and Continuity alpha
+
+SI means Sovereignty Inference. It now evaluates the session envelope gate and verified signed PoHA path. Experimental pinned-committee certificates and fenced private authority-ledger recovery are available for research. No live Byzantine network or autonomous production recovery is claimed.
+
+- [Architecture, implemented paths and remaining gates](docs/SOVEREIGNTY_INFERENCE_AND_CONTINUITY.md)
+- [Adversarial tests](test/sovereign-continuity.test.mjs)
+- Public inspection: https://cohibameme.site/sovereignty.html
+- Local synthetic recovery drill: `npm run si:drill`

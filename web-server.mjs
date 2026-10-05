@@ -25,6 +25,7 @@ import { createNodeJob, publicNodeJob, verifyNodeJob, jobCooldownRemaining } fro
 import { miningReserveState, rateUnits } from "./lib/mining-economics.mjs";
 import { hashIdentity, normalizePhone, newOauthState, isOauthStateValid, publicHumanProof } from "./lib/human-proof.mjs";
 import { appendCoreEvent, verifyEventChain, coreStateRoot, trustStateRoot, registerCoreApp, recordAppUtility, networkHealth } from "./lib/human-signal-core.mjs";
+import { sovereigntyStatus } from "./lib/sovereignty-inference.mjs";
 import { guardDirectHumanMutation } from "./lib/human-signal-core-v1-alpha.mjs";
 import { bindAgent, createSignedDelegation, revokeSignedRecord, inspectAction } from "./lib/poha-v1.mjs";
 import { registerAgent, grantDelegation, revokeDelegation, agencyForOwner } from "./lib/human-agency.mjs";
@@ -1539,6 +1540,11 @@ async function handleRequest(req,res){
         500;
       json(res,status,{ok:false,error:m});
     }
+    return;
+  }
+
+  if(req.method==="GET" && raw==="/api/v1/sovereignty/status"){
+    json(res,200,{ok:true,...sovereigntyStatus(),directSessionGate:true,signedPohaGate:Boolean(pohaDatabase),signedPohaExecutionEnabled:Boolean(pohaDatabase&&process.env.ALLOW_POHA_AUTHORIZATION==="true"),continuityMode:"PRIVATE_CHECKPOINT_RESTORE_FENCED",quorumMode:"PINNED_COMMITTEE_CERTIFICATE_VALIDATION"});
     return;
   }
 
