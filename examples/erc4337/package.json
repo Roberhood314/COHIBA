@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Experimental Human Signal ERC-4337 v0.7 reference account and local EVM verification",
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:sepolia": "node testnet/sepolia-e2e.mjs"
   },
   "devDependencies": {
     "@account-abstraction/contracts": "0.7.0",
