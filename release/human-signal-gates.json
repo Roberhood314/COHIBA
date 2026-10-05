@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "HS_RELEASE_GATES_1",
+  "auditPreparationComplete": false,
+  "gates": {
+    "independentAudit": null,
+    "liveIssuer": null,
+    "externalService": null,
+    "publicAdversarialTesting": null
+  }
+}
