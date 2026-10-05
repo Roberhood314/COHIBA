@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createAuthorityEnvelope,verifyProtectedAction,commitProtectedAction,revokeAuthorityRoot,projectStateProjection} from "../lib/human-signal-core-v1-alpha.mjs";
+import {createAuthorityEnvelope,verifyProtectedAction,commitProtectedAction,revokeAuthorityRoot,projectStateProjection,guardDirectHumanMutation,enforcementStatus} from "../lib/human-signal-core-v1-alpha.mjs";
 
 function env(actions,effects,budget=3){
  return createAuthorityEnvelope({rootId:"HUMAN-ABCDEF123456",subject:"cohiba-agent",actions,effects,budget,
@@ -36,4 +36,16 @@ test("critical mainnet action is not implicitly authorized",()=>{
  const e=env(["MINING_CLAIM"],["PENDING_COH_WRITE"]);
  const r=verifyProtectedAction({envelope:e,action:"MAINNET_LAUNCH",subject:"cohiba-agent"});
  assert.equal(r.verdict,"DENY");
+});
+
+
+test("authenticated human mutation adapter emits authority receipt",()=>{
+ const store={profiles:[{id:"HUMAN-ABCDEF123456"}]};
+ const r=guardDirectHumanMutation(store,{profileId:"HUMAN-ABCDEF123456",action:"MINING_START",receiptData:{route:"/mining/start"},nonce:"request-1"});
+ assert.equal(r.verdict,"ALLOW");
+ assert.equal(enforcementStatus(store).receipts,1);
+});
+
+test("direct human adapter fails closed for unknown protected action",()=>{
+ assert.throws(()=>guardDirectHumanMutation({}, {profileId:"HUMAN-ABCDEF123456",action:"NOT_REAL"}),/UNKNOWN_ACTION/);
 });
