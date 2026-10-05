@@ -13,7 +13,7 @@ import {newSession} from '../lib/human-signal-network.mjs';
 import {signProof,publicKeyBase64,agentBindingPayload,delegationPayload,actionPayload,proofDigest} from '../sdk/human-signal-node.mjs';
 const port=async()=>{const s=net.createServer();s.listen(0,'127.0.0.1');await once(s,'listening');const p=s.address().port;await new Promise(r=>s.close(r));return p;};
 const start=async(script,env,text)=>{const child=spawn(process.execPath,[script],{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{let out='';const timer=setTimeout(()=>reject(Error('start timeout')),20000);child.stdout.on('data',c=>{out+=c;if(out.includes(text)){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(Error('server exited'));});});return child;};
-test('independent HTTP app verifies Human Signal authority and persists exactly one draft',{skip:!process.env.TEST_DATABASE_URL,timeout:90000},async()=>{
+test('Draft Board HTTP atomically commits signed authority and exactly one draft',{skip:!process.env.TEST_DATABASE_URL,timeout:90000},async()=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'hs-http-pilot-')),mainPort=await port(),appPort=await port();let main,app;
  try{
   const human=crypto.generateKeyPairSync('ed25519'),agent=crypto.generateKeyPairSync('ed25519'),service=crypto.generateKeyPairSync('ed25519');
@@ -26,7 +26,7 @@ test('independent HTTP app verifies Human Signal authority and persists exactly 
   await fs.writeFile(path.join(mainDir,'cohiba-human-signal-network.json'),JSON.stringify({profiles:[{id:principalId,wallet:new PublicKey(Buffer.from(principalKey,'base64')).toBase58(),passwordCredential,humanProofs:{phone:{verified:true,identityHash:phoneHash,verifiedAt:new Date().toISOString()}}}],challenges:[],sessions:[session.record]}));
   await fs.writeFile(path.join(mainDir,'cohiba-account-onboarding.json'),JSON.stringify({records:[{status:'PHONE_VERIFIED',tokenHash:crypto.createHash('sha256').update(recoveryToken).digest('hex'),tokenExpiresAt:new Date(Date.now()+120000).toISOString(),phoneHash,existingProfileId:principalId}]}));
   const audience='https://outside-app.example';
-  const mainEnv={PORT:String(mainPort),COHIBA_DATA_DIR:mainDir,PUBLIC_BASE_URL:'https://cohibameme.site',HUMAN_IDENTITY_PEPPER:pepper,HUMAN_SIGNAL_DATABASE_URL:process.env.TEST_DATABASE_URL,HS_ACCOUNT_STORAGE:'postgres',HS_BACKUP_BUCKET:'',ALLOW_POHA_AUTHORIZATION:'true',HS_PILOT_PUBLIC_KEY:publicKeyBase64(service.privateKey),HS_PILOT_AUDIENCE:audience,INFOBIP_API_KEY:'',ALLOW_MAINNET:'false',AUTO_MAINNET_LAUNCH:'false'};main=await start('web-server.mjs',mainEnv,'COHIBA web listening');
+  const mainEnv={PORT:String(mainPort),COHIBA_DATA_DIR:mainDir,PUBLIC_BASE_URL:'https://cohibameme.site',HUMAN_IDENTITY_PEPPER:pepper,HUMAN_SIGNAL_DATABASE_URL:process.env.TEST_DATABASE_URL,HS_ACCOUNT_STORAGE:'postgres',HS_BACKUP_BUCKET:'',ALLOW_POHA_AUTHORIZATION:'true',ALLOW_SI_DRAFT_COMMIT:'true',HS_PILOT_PUBLIC_KEY:publicKeyBase64(service.privateKey),HS_PILOT_AUDIENCE:audience,INFOBIP_API_KEY:'',ALLOW_MAINNET:'false',AUTO_MAINNET_LAUNCH:'false'};main=await start('web-server.mjs',mainEnv,'COHIBA web listening');
   app=await start('examples/draft-board/server.mjs',{PORT:String(appPort),DRAFT_BOARD_DATA_DIR:appDir,DRAFT_BOARD_DATABASE_URL:process.env.TEST_DATABASE_URL,HUMAN_SIGNAL_API_URL:'http://127.0.0.1:'+mainPort},'Independent Draft Board listening');
   const call=async(endpoint,body)=>{const r=await fetch('http://127.0.0.1:'+mainPort+'/api/v1/'+endpoint,{method:'POST',headers:{origin:'https://cohibameme.site',authorization:'Bearer '+session.token,'content-type':'application/json'},body:JSON.stringify(body)});const data=await r.json();assert.ok(r.ok,JSON.stringify(data));return data;};
   const readiness=await (await fetch('http://127.0.0.1:'+mainPort+'/api/v1/status')).json();assert.equal(readiness.accountStorage,'POSTGRESQL');
@@ -41,7 +41,8 @@ test('independent HTTP app verifies Human Signal authority and persists exactly 
   const submit=async input=>{const r=await fetch('http://127.0.0.1:'+appPort+'/drafts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});return {status:r.status,data:await r.json()};};
   const altered=await submit({...input,text:'tampered'});assert.equal(altered.status,403);
   const saved=await submit(input);assert.equal(saved.status,201);assert.equal(saved.data.result.actorClass,'AUTHORIZED_AGENT');assert.equal(saved.data.result.principalId,principalId);
-  assert.equal((await submit(input)).status,403);
+  const repeated=await submit(input);assert.equal(repeated.status,200);assert.equal(repeated.data.result.idempotentReplay,true);assert.equal(repeated.data.result.executionAuthorized,false);
+  assert.equal(saved.data.result.effectAtomicity,'POSTGRES_TRANSACTION');
   const humanAction=actionPayload({principalId,signerKey:principalKey,delegationId:'',audience,action:'DRAFT_APP_ACTION',resource:d.resource,payloadBytes:Buffer.from(text),performer:'HUMAN'});
   const direct=await submit({...input,proof:{payload:humanAction,signature:signProof('ACTION',humanAction,human.privateKey)}});assert.equal(direct.status,201);assert.equal(direct.data.result.actorClass,'VERIFIED_HUMAN');
   const approvalGrant={...d,nonce:crypto.randomBytes(24).toString('base64url'),approvalRequired:true};
