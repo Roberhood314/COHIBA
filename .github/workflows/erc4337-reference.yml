@@ -1,0 +1,33 @@
+name: Human Signal ERC-4337 Reference
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evm-interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: examples/erc4337/package-lock.json
+      - name: Install locked reference dependencies
+        run: npm ci --prefix examples/erc4337 --ignore-scripts
+      - name: Dependency audit
+        run: npm audit --prefix examples/erc4337 --audit-level=high
+      - name: Execute official EntryPoint interoperability and adversarial cases
+        run: npm run verify:erc4337
+      - name: Upload source-bound local EVM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-signal-erc4337-local-evm
+          path: examples/erc4337/evidence/interop.json
+          if-no-files-found: error

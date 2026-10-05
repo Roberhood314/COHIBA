@@ -1,0 +1,13 @@
+import {AbiCoder,Interface,concat,getBytes,keccak256,zeroPadValue,toBeHex} from 'ethers';
+export const delegationTypes={Delegation:[['agent','address'],['target','address'],['selector','bytes4'],['resource','bytes32'],['maxCalls','uint256'],['gasBudget','uint256'],['validAfter','uint48'],['validUntil','uint48'],['epoch','uint256'],['salt','bytes32'],['entryPoint','address']].map(([name,type])=>({name,type}))};
+export const revocationTypes={Revocation:[{name:'delegationId',type:'bytes32'},{name:'epoch',type:'uint256'}]};
+export const delegationTuple='tuple(address agent,address target,bytes4 selector,bytes32 resource,uint256 maxCalls,uint256 gasBudget,uint48 validAfter,uint48 validUntil,uint256 epoch,bytes32 salt,address entryPoint)';
+export const operationTuple='tuple(address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature)';
+export const executeSelector=new Interface([`function executeUserOp(${operationTuple},bytes32)`]).getFunction('executeUserOp').selector;
+export const sinkInterface=new Interface(['function commit(bytes32 resource,bytes text)','function effectCount(address) view returns(uint256)','function payloadHashes(address,bytes32) view returns(bytes32)']);
+export const domain=(chainId,account)=>({name:'HumanSignalERC4337',version:'1',chainId,verifyingContract:account});
+export const pack128=(high,low)=>zeroPadValue(toBeHex((BigInt(high)<<128n)|BigInt(low)),32);
+export function containedCall(grant,humanSignature,text){const effect=sinkInterface.encodeFunctionData('commit',[grant.resource,text]);return concat([executeSelector,AbiCoder.defaultAbiCoder().encode([delegationTuple,'bytes','bytes'],[grant,humanSignature,effect])]);}
+export function operation({sender,nonce,callData}){return {sender,nonce,initCode:'0x',callData,accountGasLimits:pack128(1500000,1200000),preVerificationGas:50000n,gasFees:pack128(1000000000,2000000000),paymasterAndData:'0x',signature:'0x'};}
+export function userOpHash(op,entryPoint,chainId){const abi=AbiCoder.defaultAbiCoder();const inner=keccak256(abi.encode(['address','uint256','bytes32','bytes32','bytes32','uint256','bytes32','bytes32'],[op.sender,op.nonce,keccak256(op.initCode),keccak256(op.callData),op.accountGasLimits,op.preVerificationGas,op.gasFees,keccak256(op.paymasterAndData)]));return keccak256(abi.encode(['bytes32','address','uint256'],[inner,entryPoint,chainId]));}
+export async function signOperation(op,signer,entryPoint,chainId){return {...op,signature:await signer.signMessage(getBytes(userOpHash(op,entryPoint,chainId)))};}

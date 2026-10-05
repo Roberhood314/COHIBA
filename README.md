@@ -285,3 +285,5 @@ The opt-in `/api/v1/actions/commit-draft` path commits verified authority, repla
 ## SI technical due diligence
 
 [Technical Due-Diligence Pack](audit/technical-due-diligence/README.md): architecture, six scoped guarantees, threat model, formal safety specification, attack matrix, microbenchmarks and reproducible source-bound verification. Global distributed consensus and arbitrary external-effect atomicity remain unproved.
+
+[Human Signal ERC-4337 reference adapter](examples/erc4337/README.md) demonstrates bounded EIP-712 human delegation and execution-time enforcement through the official v0.7 EntryPoint on a local Ethereum EVM. Public bundler/testnet integration and independent review remain pending.
