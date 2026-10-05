@@ -12,6 +12,8 @@ Assumptions to assess: Ed25519 key custody, issuer evidence quality, shared Post
 
 ## Required handoff and acceptance
 
+Additional research scope: examples/agent-control/gateway.mjs, operator policy/approval boundaries, shared call/byte reservations, tool-bound challenges, queued-job policy revisions, worker/suspension lock ordering, expiry before effect commit and retained budgets on cancellation. Deterministic testing is not a live-model adversarial round. Assess host isolation and alternate credential/egress paths separately; gateway-only checks cannot establish containment.
+
 Provide data-flow/threat matrix in docs/protocol/ISSUER_TRUST_AND_PRIVACY.md, SDK/spec, public synthetic vectors, test commands (`npm ci`, `npm run build`) and operational runbooks. Auditor records identity, independence/conflicts, exact SHA, dates, exclusions, methods, severities and reproducible findings. Maintain findings with owner, fix SHA and auditor retest evidence. Unresolved Critical/High findings block the four-gate release; maintainer assertion or risk acceptance alone does not clear them.
 
 Public report must have stable URL and SHA-256. Separate source review from live infrastructure assessment. Local test success is not an audit. No public production probing is authorized by this file.
