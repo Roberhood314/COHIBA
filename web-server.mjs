@@ -1544,7 +1544,7 @@ async function handleRequest(req,res){
   }
 
   if(req.method==="GET" && raw==="/api/v1/sovereignty/status"){
-    json(res,200,{ok:true,...sovereigntyStatus(),directSessionGate:true,signedPohaGate:Boolean(pohaDatabase),signedPohaExecutionEnabled:Boolean(pohaDatabase&&process.env.ALLOW_POHA_AUTHORIZATION==="true"),continuityMode:"PRIVATE_CHECKPOINT_RESTORE_FENCED",quorumMode:"PINNED_COMMITTEE_CERTIFICATE_VALIDATION"});
+    json(res,200,{ok:true,...sovereigntyStatus(),directSessionGate:true,signedPohaGate:Boolean(pohaDatabase),signedPohaExecutionEnabled:Boolean(pohaDatabase&&process.env.ALLOW_POHA_AUTHORIZATION==="true"),localDraftCommitEnabled:Boolean(pohaDatabase&&accountDatabase&&accountDatabaseRequired&&process.env.ALLOW_POHA_AUTHORIZATION==="true"&&process.env.ALLOW_SI_DRAFT_COMMIT==="true"),productionScope:"SIGNED_LOCAL_DRAFT_COMMIT",independentAuditComplete:false,continuityMode:"PRIVATE_CHECKPOINT_RESTORE_FENCED",quorumMode:"PINNED_COMMITTEE_CERTIFICATE_VALIDATION"});
     return;
   }
 
@@ -1565,6 +1565,18 @@ async function handleRequest(req,res){
   if(req.method==="GET" && raw.startsWith("/api/v1/services/")){
     try{if(!pohaDatabase)throw new Error("DB_UNAVAILABLE");const service=await pohaDatabase.service(raw.slice("/api/v1/services/".length));if(!service){json(res,404,{ok:false,error:"SERVICE_NOT_FOUND"});return;}json(res,200,{ok:true,service});}catch{json(res,503,{ok:false,error:"POHA_STORAGE_UNAVAILABLE"});}return;
   }
+  if(req.method==="POST" && raw==="/api/v1/actions/commit-draft"){
+    try{
+      if(!pohaDatabase||!accountDatabase||!accountDatabaseRequired||process.env.ALLOW_POHA_AUTHORIZATION!=="true"||process.env.ALLOW_SI_DRAFT_COMMIT!=="true")throw Error("SI_DRAFT_COMMIT_UNAVAILABLE");
+      let body="";for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>24576)throw Error("REQUEST_TOO_LARGE");}
+      const request=JSON.parse(body);
+      const auth={id:String(req.headers["x-hs-service-id"]||""),time:String(req.headers["x-hs-time"]||""),nonce:String(req.headers["x-hs-nonce"]||""),signature:String(req.headers["x-hs-signature"]||"")};
+      const result=await pohaDatabase.commitDraft(auth,Buffer.from(body),request,resolvePohaPrincipal);
+      json(res,200,{ok:true,saved:result.effectCommitted===true,result});
+    }catch(error){const code=String(error.message);const safe=["SI_DRAFT_COMMIT_UNAVAILABLE","REQUEST_TOO_LARGE","SERVICE_AUTH_INVALID","SERVICE_REQUEST_REPLAY","INVALID_PRINCIPAL","PRINCIPAL_REVOKED","APPROVAL_REPLAY","IDENTITY_CHANGED_RETRY","PROOF_EXPIRED_RETRY","PROOF_EXPIRED_AT_COMMIT"].includes(code)?code:"SI_DRAFT_STORAGE_UNAVAILABLE";json(res,safe.startsWith("SERVICE_")?401:safe==="REQUEST_TOO_LARGE"?413:safe.endsWith("UNAVAILABLE")?503:400,{ok:false,saved:false,error:safe});}
+    return;
+  }
+
   if(req.method==="POST" && raw==="/api/v1/actions/authorize"){
     try{
       if(!pohaDatabase || process.env.ALLOW_POHA_AUTHORIZATION!=="true")throw new Error("POHA_AUTHORIZATION_UNAVAILABLE");
