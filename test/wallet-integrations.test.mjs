@@ -9,7 +9,7 @@ function fixture(){
  const request=createOpenUsdPaymentRequest({recipient,reference,amount:'1.25',decimals:6,message:'A & B'});
  const row=(owner,amount)=>({mint:OUSD_MINT,owner,uiTokenAmount:{decimals:6,amount}});
  const tx={slot:123,transaction:{message:{accountKeys:[{pubkey:payer,signer:true},{pubkey:reference,signer:false}]}},meta:{err:null,preTokenBalances:[row(payer,'2000000')],postTokenBalances:[row(payer,'750000'),row(recipient,'1250000')]}};
- const connection={getGenesisHash:async()=> '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',getSignatureStatuses:async()=>({value:[{err:null,confirmationStatus:'finalized'}]}),getParsedTransaction:async()=>tx};
+ const connection={getGenesisHash:async()=> '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',getSignatureStatuses:async()=>({value:[{err:null,confirmationStatus:'finalized'}]}),getParsedTransaction:async()=>tx};
  return {connection,request,payer,signature:'2'.repeat(88),tx};
 }
 test('OUSD request preserves exact integer amounts and encodes Solana Pay identity',()=>{
@@ -58,7 +58,7 @@ test('official OUSD mint inspector distinguishes disabled zero-key hook from act
  const {inspectOpenUsdSolana}=await import('../integrations/open-standard/ousd-solana.mjs');
  const {PublicKey}=await import('@solana/web3.js');const {MintLayout,ExtensionType,TOKEN_2022_PROGRAM_ID}=await import('@solana/spl-token');
  const data=Buffer.alloc(166+4+64);MintLayout.encode({mintAuthorityOption:1,mintAuthority:PublicKey.default,supply:1000000n,decimals:6,isInitialized:true,freezeAuthorityOption:0,freezeAuthority:PublicKey.default},data);data[165]=1;data.writeUInt16LE(ExtensionType.TransferHook,166);data.writeUInt16LE(64,168);
- const connection={getGenesisHash:async()=> '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',getAccountInfo:async()=>({owner:TOKEN_2022_PROGRAM_ID,data})};
+ const connection={getGenesisHash:async()=> '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',getAccountInfo:async()=>({owner:TOKEN_2022_PROGRAM_ID,data})};
  assert.equal((await inspectOpenUsdSolana(connection)).transferHook,null);
  const active=new PublicKey(address());active.toBuffer().copy(data,202);assert.equal((await inspectOpenUsdSolana(connection)).transferHook,active.toBase58());
 });

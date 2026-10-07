@@ -51,7 +51,7 @@ export async function verifyOpenUsdPayment({connection, signature, request, paye
   key(request.recipient); key(request.reference);
   if (request.amountBaseUnits !== expected.toString()) throw Error('PAYMENT_REQUEST_MISMATCH');
   if (typeof signature !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) throw Error('INVALID_SIGNATURE');
-  if (await connection.getGenesisHash() !== '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp') throw Error('OUSD_SOLANA_MAINNET_REQUIRED');
+  if (await connection.getGenesisHash() !== '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d') throw Error('OUSD_SOLANA_MAINNET_REQUIRED');
   const statuses = await connection.getSignatureStatuses([signature], {searchTransactionHistory: true});
   const status = statuses.value?.[0];
   if (!status || status.err || status.confirmationStatus !== 'finalized') throw Error('PAYMENT_NOT_FINALIZED');

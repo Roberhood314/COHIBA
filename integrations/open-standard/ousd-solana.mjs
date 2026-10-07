@@ -9,7 +9,7 @@ export const OPEN_USD_SOURCE = 'https://joinopenstandard.com/integrate';
  * Caller must supply a trusted mainnet connection; symbol alone is not identity.
  */
 export async function inspectOpenUsdSolana(connection) {
-  const expectedGenesis = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+  const expectedGenesis = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
   const address = new PublicKey(OPEN_USD_SOLANA_MINT);
   const [genesis, account] = await Promise.all([connection.getGenesisHash(), connection.getAccountInfo(address, 'finalized')]);
   if (genesis !== expectedGenesis) throw new Error('OUSD_SOLANA_MAINNET_REQUIRED');
