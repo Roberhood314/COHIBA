@@ -53,3 +53,12 @@ test('unsigned OUSD transaction binds Token-2022, exact amount, recipient and re
  await assert.rejects(prepareOpenUsdTransfer({connection,mint:{...mint,paused:true},request:f.request,payer:f.payer}),/EXTENSION_REVIEW/);
  await assert.rejects(prepareOpenUsdTransfer({connection,mint,request:{...f.request,amount:'2'},payer:f.payer}),/REQUEST_MISMATCH/);
 });
+
+test('official OUSD mint inspector distinguishes disabled zero-key hook from active hook',async()=>{
+ const {inspectOpenUsdSolana}=await import('../integrations/open-standard/ousd-solana.mjs');
+ const {PublicKey}=await import('@solana/web3.js');const {MintLayout,ExtensionType,TOKEN_2022_PROGRAM_ID}=await import('@solana/spl-token');
+ const data=Buffer.alloc(166+4+64);MintLayout.encode({mintAuthorityOption:1,mintAuthority:PublicKey.default,supply:1000000n,decimals:6,isInitialized:true,freezeAuthorityOption:0,freezeAuthority:PublicKey.default},data);data[165]=1;data.writeUInt16LE(ExtensionType.TransferHook,166);data.writeUInt16LE(64,168);
+ const connection={getGenesisHash:async()=> '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',getAccountInfo:async()=>({owner:TOKEN_2022_PROGRAM_ID,data})};
+ assert.equal((await inspectOpenUsdSolana(connection)).transferHook,null);
+ const active=new PublicKey(address());active.toBuffer().copy(data,202);assert.equal((await inspectOpenUsdSolana(connection)).transferHook,active.toBase58());
+});

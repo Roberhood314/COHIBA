@@ -17,12 +17,14 @@ export async function inspectOpenUsdSolana(connection) {
   const program = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].find(p => account.owner.equals(p));
   if (!program) throw new Error('OUSD_UNSUPPORTED_TOKEN_PROGRAM');
   const mint = unpackMint(address, account, program);
+  const hookProgram = getTransferHook(mint)?.programId;
+  const transferHook = hookProgram && !hookProgram.equals(PublicKey.default) ? hookProgram.toBase58() : null;
   return {
     asset: 'Open USD', symbol: 'OUSD', network: 'solana-mainnet',
     mint: address.toBase58(), tokenProgram: program.toBase58(),
     decimals: mint.decimals,
     paused: Boolean(getPausableConfig(mint)?.paused),
-    transferHook: getTransferHook(mint)?.programId?.toBase58() ?? null,
+    transferHook,
     transferFeeConfigured: Boolean(getTransferFeeConfig(mint)),
     supplyBaseUnits: mint.supply.toString(),
     mintAuthority: mint.mintAuthority?.toBase58() ?? null,
