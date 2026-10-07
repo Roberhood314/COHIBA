@@ -1,3 +1,8 @@
+import { humanSignalOpenAPI } from './lib/human-signal-openapi.mjs';
+import { prepareOpenUsdTransfer } from './integrations/open-standard/ousd-transaction.mjs';
+import { inspectOpenUsdSolana } from './integrations/open-standard/ousd-solana.mjs';
+import { createOpenUsdPaymentRequest, verifyOpenUsdPayment } from './integrations/open-standard/ousd-wallet-payments.mjs';
+import { verifyPiAccessToken, bindPiIdentity } from './lib/pi-network-link.mjs';
 import {allowedHumanSignalOrigins as configuredHumanOrigins,requireHumanSignalOrigin as validateHumanOrigin} from "./lib/human-signal-origin.mjs";
 import {agencyGraph} from "./lib/agency-graph.mjs";
 import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
@@ -769,6 +774,7 @@ function publicHumanProfile(profile,contributions=[]){
     id:profile.id,
     displayName:profile.displayName||profile.id,
     walletVerified:Boolean(profile.wallet),
+    piIdentity:{linked:Boolean(profile.externalIdentities?.pi),verifiedAt:profile.externalIdentities?.pi?.verifiedAt||null,validUntil:profile.externalIdentities?.pi?.validUntil||null,executionAuthorized:false},
     walletPublic:Boolean(profile.walletPublic),
     wallet:profile.walletPublic?profile.wallet:null,
     cohWallet:{
@@ -1164,6 +1170,54 @@ async function handleRequest(req,res){
     return;
   }
 
+
+  if(req.method==="GET" && raw==="/api/integrations/config"){
+    json(res,200,{ok:true,ousd:{network:"solana-mainnet",mint:"ousd2mJsPEckLHcSCDxyKD7NDGARZcfLbDZkKiatYHB",walletApprovalRequired:true},pi:{enabled:process.env.PI_APP_ENABLED==="true",sandbox:process.env.PI_APP_SANDBOX!=="false",registrationRequired:true,paymentsEnabled:false}});return;
+  }
+  if(req.method==="GET" && raw==="/api/integrations/ousd/mint"){
+    try{const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),{commitment:"finalized",disableRetryOnRateLimit:true,fetch:(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(8000)})});json(res,200,{ok:true,...await inspectOpenUsdSolana(conn)});}catch{json(res,503,{ok:false,error:"OUSD_RPC_UNAVAILABLE"});}return;
+  }
+  if(req.method==="POST" && ["/api/integrations/ousd/request","/api/integrations/ousd/prepare","/api/integrations/ousd/verify","/api/integrations/pi/link","/api/integrations/pi/unlink"].includes(raw)){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>8192)throw Error("REQUEST_TOO_LARGE");}
+      const input=JSON.parse(body||"{}");if(!input||typeof input!=="object"||Array.isArray(input))throw Error("INVALID_SCHEMA");
+      if(raw.startsWith("/api/integrations/pi/")){
+        if(!raw.endsWith("/unlink") && process.env.PI_APP_ENABLED!=="true")throw Error("PI_APP_REGISTRATION_REQUIRED");
+        // Authenticate before contacting Pi, then reload state after awaiting /me.
+        const initial=authHumanSignalProfile(req,loadHumanSignalNetwork());
+        if(!initial.wallet)throw Error("PI_LINK_SOLANA_IDENTITY_REQUIRED");
+        if(raw.endsWith("/unlink")){
+          const store=loadHumanSignalNetwork(),profile=authHumanSignalProfile(req,store);
+          if(profile.externalIdentities)delete profile.externalIdentities.pi;
+          saveHumanSignalNetwork(store);json(res,200,{ok:true,linked:false});return;
+        }
+        const identity=await verifyPiAccessToken(input.accessToken);
+        const store=loadHumanSignalNetwork(),profile=authHumanSignalProfile(req,store);
+        const result=bindPiIdentity({store,profileId:profile.id,identityHash:hashIdentity("pi",identity.uid,identityPepper()),validUntil:identity.validUntil});
+        saveHumanSignalNetwork(store);json(res,200,{ok:true,...result});return;
+      }
+      const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),{commitment:"finalized",disableRetryOnRateLimit:true,fetch:(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(8000)})});
+      const mint=await inspectOpenUsdSolana(conn);
+      if(raw.endsWith("/request")){
+        if(mint.paused||mint.transferHook||mint.transferFeeConfigured)throw Error("OUSD_WALLET_EXTENSION_REVIEW_REQUIRED");
+        const request=createOpenUsdPaymentRequest({recipient:input.recipient,amount:input.amount,decimals:mint.decimals,reference:Keypair.generate().publicKey.toBase58(),message:input.message||""});
+        json(res,200,{ok:true,request});return;
+      }
+      if(raw.endsWith("/prepare")){
+        json(res,200,{ok:true,...await prepareOpenUsdTransfer({connection:conn,mint,request:input.request,payer:input.payer})});return;
+      }
+      if(input.request?.decimals!==mint.decimals)throw Error("PAYMENT_TOKEN_METADATA_MISMATCH");
+      const result=await verifyOpenUsdPayment({connection:conn,signature:input.signature,request:input.request,payer:input.payer});
+      json(res,200,{ok:true,...result});
+    }catch(error){
+      const message=String(error?.message||"");
+      const known=/^(PI_|PAYMENT_|OUSD_|INVALID_|EXCESS_|UNIQUE_|HUMAN_SIGNAL_|REQUEST_TOO_LARGE|IDENTITY_PEPPER_)/.test(message);
+      const safe=known?message:"INTEGRATION_UNAVAILABLE";
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","PI_TOKEN_INVALID"].includes(safe)?401:safe==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:safe==="REQUEST_TOO_LARGE"?413:safe==="PI_APP_REGISTRATION_REQUIRED"?409:!known||safe.includes("UNAVAILABLE")?503:400;
+      json(res,status,{ok:false,error:safe});
+    }return;
+  }
 
   if(req.method==="POST" && raw==="/api/human-signal/auth/challenge"){
     try{
@@ -1610,6 +1664,8 @@ async function handleRequest(req,res){
       json(res,safe==="HUMAN_SIGNAL_ORIGIN_INVALID"||safe==="DISCLOSURE_OWNER_MISMATCH"?403:safe.startsWith("HUMAN_SIGNAL_")?401:safe==="REQUEST_TOO_LARGE"?413:safe.endsWith("UNAVAILABLE")?503:400,{ok:false,error:safe});
     }return;
   }
+
+  if(req.method==="GET" && raw==="/api/v1/openapi.json"){json(res,200,humanSignalOpenAPI);return;}
 
   if(req.method==="GET" && raw==="/api/v1/protocol"){
     json(res,200,{ok:true,protocol:"Human Signal PoHA",version:"1",milestone:pohaDatabase?"DURABLE_AUTHORIZATION":"SIGNED_INSPECTION",algorithm:"Ed25519",canonicalization:"HS_RESTRICTED_JSON_V1",executionEnabled:Boolean(pohaDatabase && process.env.ALLOW_POHA_AUTHORIZATION==="true"),actionNonceConsumption:Boolean(pohaDatabase),policyVersion:"PHONE_BOUND_DRAFT_V1",developerLab:"/poha-lab.html"});
@@ -3251,6 +3307,7 @@ async function handleRequest(req,res){
     }
     res.writeHead(200,{
       ...headers,
+      ...(raw==="/wallet-integrations.html"?{"cross-origin-opener-policy":"same-origin-allow-popups","content-security-policy":"default-src 'self'; script-src 'self' https://sdk.minepi.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.minepi.com; object-src 'none'; frame-src https://*.minepi.com https://*.pi.network; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"}:{}),
       ...(raw==="/poha-lab.html"?{"cross-origin-opener-policy":"same-origin-allow-popups"}:{}),
       "content-type":types[path.extname(target)]||"application/octet-stream",
       "cache-control":[".html",".js"].includes(path.extname(target))?"no-cache, no-store, must-revalidate":"public, max-age=300"
@@ -3260,7 +3317,7 @@ async function handleRequest(req,res){
 }
 
 const server=http.createServer((req,res)=>{
-  if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status"].includes(req.url)){
+  if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status","/api/integrations/config","/api/integrations/ousd/mint","/api/integrations/ousd/request","/api/integrations/ousd/prepare","/api/integrations/ousd/verify"].includes(req.url)){
     if(!accountDatabase){json(res,503,{ok:false,error:"ACCOUNT_STORAGE_UNAVAILABLE"});return;}
     if(!rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
     req.hsRateLimitChecked=true;

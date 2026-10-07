@@ -5,6 +5,7 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
-    target: "es2022"
+    target: "es2022",
+    rollupOptions: { input: { main: "web/index.html", wallets: "web/wallet-integrations.html" } }
   }
 });
