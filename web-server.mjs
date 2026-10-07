@@ -1,3 +1,4 @@
+import { humanSignalOpenAPI } from './lib/human-signal-openapi.mjs';
 import {allowedHumanSignalOrigins as configuredHumanOrigins,requireHumanSignalOrigin as validateHumanOrigin} from "./lib/human-signal-origin.mjs";
 import {agencyGraph} from "./lib/agency-graph.mjs";
 import {CheckpointWorker} from "./lib/checkpoint-worker.mjs";
@@ -1609,6 +1610,11 @@ async function handleRequest(req,res){
       const code=String(error.message),safe=["HUMAN_SIGNAL_ORIGIN_INVALID","HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","DISCLOSURE_PILOT_UNAVAILABLE","DISCLOSURE_OWNER_MISMATCH","REQUEST_TOO_LARGE","PRINCIPAL_REVOKED","APPROVAL_REPLAY"].includes(code)?code:"DISCLOSURE_VERIFICATION_UNAVAILABLE";
       json(res,safe==="HUMAN_SIGNAL_ORIGIN_INVALID"||safe==="DISCLOSURE_OWNER_MISMATCH"?403:safe.startsWith("HUMAN_SIGNAL_")?401:safe==="REQUEST_TOO_LARGE"?413:safe.endsWith("UNAVAILABLE")?503:400,{ok:false,error:safe});
     }return;
+  }
+
+  if(req.method==="GET" && raw==="/api/v1/openapi.json"){
+    json(res,200,humanSignalOpenAPI);
+    return;
   }
 
   if(req.method==="GET" && raw==="/api/v1/protocol"){
