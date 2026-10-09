@@ -106,21 +106,29 @@ export function inspectAuthority({proof,binding,delegation,status,expected,trust
 
 // Atomic storage is supplied by the integrating service, never a process-local default.
 // It MUST consume action + approval + challenge and epoch-floor checks in one transaction.
-export async function authorizeAuthority(input,{consume,trust,expected}={}){
+async function admitAuthority(input,{consume,trust,expected}={},mode='AUTHORIZE'){
  if(typeof consume!=='function')return {mode:'AUTHORIZE',decision:'DENY',actorClass:'UNVERIFIED',executionAuthorized:false,reasonCodes:['ATOMIC_REPLAY_STORE_REQUIRED']};
  let bundle;try{exact(input,['proof','binding','delegation','status']);bundle=structuredClone({...input,trust,expected});}catch{return {mode:'AUTHORIZE',decision:'DENY',actorClass:'UNVERIFIED',executionAuthorized:false,reasonCodes:['INVALID_ADMISSION_INPUT']};}
  const result=inspectAuthority(bundle);
  if(result.decision!=='ALLOW')return {...result,mode:'AUTHORIZE'};
  const a=bundle.proof.payload,s=bundle.status.payload,q=bundle.proof.approval?.payload;
- const admission={audience:a.audience,issuer:s.issuer,principalId:s.principalId,credentialEpoch:s.credentialEpoch,signerKey:a.signerKey,actionNonce:a.nonce,actionDigest:result.actionDigest,challenge:s.challenge,approval:q?{principalKey:q.principalKey,nonce:q.nonce}:null,validUntil:result.validUntil};
+ const admission={authorityIds:a.performer==='AGENT'?[bundle.binding.id,bundle.delegation.id]:[],action:a.action,resource:a.resource,payloadHash:a.payloadHash,audience:a.audience,issuer:s.issuer,principalId:s.principalId,credentialEpoch:s.credentialEpoch,signerKey:a.signerKey,actionNonce:a.nonce,actionDigest:result.actionDigest,challenge:s.challenge,approval:q?{principalKey:q.principalKey,nonce:q.nonce}:null,validUntil:result.validUntil};
  try{
   if(await consume(admission)!==true)return {...result,mode:'AUTHORIZE',decision:'DENY',actorClass:'UNVERIFIED',reasonCodes:['REPLAY_OR_EPOCH_REJECTED']};
-  if(Date.parse(result.validUntil)<=Date.now())throw Error('EXPIRED_DURING_ADMISSION');
-  return {...result,mode:'AUTHORIZE',executionAuthorized:true,reasonCodes:['EXTERNAL_SERVICE_ATOMIC_ADMISSION']};
+  if(mode==='AUTHORIZE'&&Date.parse(result.validUntil)<=Date.now())throw Error('EXPIRED_DURING_ADMISSION');
+  return {...result,mode,executionAuthorized:true,...(mode==='COMMIT'?{operationCommitted:true}:{}),reasonCodes:[mode==='COMMIT'?'EXTERNAL_SERVICE_ATOMIC_COMMIT':'EXTERNAL_SERVICE_ATOMIC_ADMISSION']};
  }catch(e){return {...result,mode:'AUTHORIZE',decision:'DENY',actorClass:'UNVERIFIED',reasonCodes:[e.message==='EXPIRED_DURING_ADMISSION'?e.message:'REPLAY_STORE_UNAVAILABLE']};}
 }
 
 // Safe response/log view. It intentionally excludes identity, keys and authority records.
 export function publicDecision(result){
- return {actorClass:result.actorClass,decision:result.decision,executionAuthorized:result.executionAuthorized===true,reasonCodes:[...result.reasonCodes],...(result.validUntil?{validUntil:result.validUntil}:{})};
+ return {actorClass:result.actorClass,decision:result.decision,executionAuthorized:result.executionAuthorized===true,reasonCodes:[...result.reasonCodes],...(result.validUntil?{validUntil:result.validUntil}:{}),...(result.mode==='COMMIT'?{operationCommitted:result.operationCommitted===true}:{})};
+}
+
+export async function authorizeAuthority(input,options){return admitAuthority(input,options);}
+
+// commit must validate fresh local revocation and write the exact effect atomically.
+export async function commitAuthority(input,{commit,trust,expected}={}){
+ const result=await admitAuthority(input,{consume:commit,trust,expected},'COMMIT');
+ return {...result,mode:'COMMIT',operationCommitted:result.operationCommitted===true};
 }
