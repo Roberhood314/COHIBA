@@ -2,6 +2,10 @@
 
 **Tagline:** Fear the Machine. Defend the Human.
 
+## Human Signal / SI — inspect the boundary
+
+**Experimental, pre-audit.** [Public verification lab](https://cohibameme.site/si-lab.html): run real dual-signature checks locally without a wallet. [HS/2 integration and roadmap](docs/HS2_INTEGRATION_AND_ROADMAP.md) separates delivered SQL authority enforcement, opt-in Ed25519 + hash-based SLH-DSA research, and future evidence gates. Production routes are not automatically migrated; this is not a blanket quantum/AI-proof claim.
+
 COHIBA is a human-first Solana cultural crypto project exploring identity, agency and resilience in the age of artificial intelligence. It combines meme-native storytelling with a verification-first token architecture and public technical evidence.
 
 ## Token specification

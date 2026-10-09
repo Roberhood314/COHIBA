@@ -1,0 +1,9 @@
+{
+  "name": "@human-signal/hs2-verifier",
+  "version": "0.1.0-experimental.1",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./index.mjs", "./wire": "./wire.mjs"},
+  "engines": {"node": ">=22"},
+  "dependencies": {"@noble/curves": "2.4.0", "@noble/post-quantum": "0.7.1"}
+}
