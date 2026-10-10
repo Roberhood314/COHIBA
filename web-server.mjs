@@ -1,4 +1,6 @@
 import { humanSignalOpenAPI } from './lib/human-signal-openapi.mjs';
+import {IntegrationCheckout, CHECKOUT_STORE, checkoutStoreSpec, checkoutReadiness} from './lib/integration-checkout.mjs';
+import {PiPlatformPayments} from './integrations/pi/platform-payments.mjs';
 import { prepareOpenUsdTransfer } from './integrations/open-standard/ousd-transaction.mjs';
 import { inspectOpenUsdSolana } from './integrations/open-standard/ousd-solana.mjs';
 import { createOpenUsdPaymentRequest, verifyOpenUsdPayment } from './integrations/open-standard/ousd-wallet-payments.mjs';
@@ -1172,7 +1174,33 @@ async function handleRequest(req,res){
 
 
   if(req.method==="GET" && raw==="/api/integrations/config"){
-    json(res,200,{ok:true,ousd:{network:"solana-mainnet",mint:"ousd2mJsPEckLHcSCDxyKD7NDGARZcfLbDZkKiatYHB",walletApprovalRequired:true},pi:{enabled:process.env.PI_APP_ENABLED==="true",sandbox:process.env.PI_APP_SANDBOX!=="false",registrationRequired:true,paymentsEnabled:false}});return;
+    const checkout=checkoutReadiness(process.env,Boolean(accountDatabase));
+    json(res,200,{ok:true,ousd:{network:"solana-mainnet",mint:"ousd2mJsPEckLHcSCDxyKD7NDGARZcfLbDZkKiatYHB",walletApprovalRequired:true},pi:{enabled:process.env.PI_APP_ENABLED==="true",sandbox:process.env.PI_APP_SANDBOX!=="false",registrationRequired:true,paymentsEnabled:checkout.pi.enabled},checkout});return;
+  }
+  if(req.method==="GET" && raw==="/api/integrations/checkout/config"){
+    json(res,200,{ok:true,...checkoutReadiness(process.env,Boolean(accountDatabase))});return;
+  }
+  const checkoutActions={"/api/integrations/checkout/order":"create","/api/integrations/checkout/status":"status","/api/integrations/checkout/ousd/prepare":"ousdPrepare","/api/integrations/checkout/ousd/settle":"ousdSettle","/api/integrations/checkout/pi/approve":"approve","/api/integrations/checkout/pi/complete":"complete","/api/integrations/checkout/pi/reconcile":"reconcile"};
+  if(req.method==="POST" && checkoutActions[raw]){
+    try{
+      requireHumanSignalOrigin(req);
+      let body="";for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>8192)throw Error("REQUEST_TOO_LARGE");}
+      const input=JSON.parse(body||"{}");if(!input||typeof input!=="object"||Array.isArray(input))throw Error("INVALID_SCHEMA");
+      if(!accountDatabase)throw Error("PAYMENT_STORAGE_UNAVAILABLE");
+      const connection=new Connection(process.env.OUSD_SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),{commitment:"finalized",disableRetryOnRateLimit:true,fetch:providerFetch});
+      const checkout=new IntegrationCheckout({database:accountDatabase,authenticate:request=>authHumanSignalProfile(request,loadHumanSignalNetwork()),env:process.env,connection,
+        pi:new PiPlatformPayments({apiKey:process.env.PI_SERVER_API_KEY}),verifyPi:verifyPiAccessToken,hashUid:uid=>hashIdentity("pi",uid,identityPepper())});
+      // Authenticate before mint/provider I/O; each ledger mutation rechecks the session.
+      await checkout.local(req,()=>true);
+      const action=checkoutActions[raw];
+      const result=["approve","complete","reconcile"].includes(action)?await checkout.piAction(req,input,action):await checkout[action](req,input);
+      json(res,200,{ok:true,...result});
+    }catch(error){
+      const message=String(error?.message||"");
+      const safe=/^(PAYMENT_|PI_|OUSD_|HUMAN_SIGNAL_|REQUEST_TOO_LARGE|INVALID_|EXCESS_|IDENTITY_PEPPER_)/.test(message)?message:"PAYMENT_SERVICE_UNAVAILABLE";
+      const status=["HUMAN_SIGNAL_AUTH_REQUIRED","HUMAN_SIGNAL_SESSION_INVALID","PI_TOKEN_INVALID"].includes(safe)?401:safe==="HUMAN_SIGNAL_ORIGIN_INVALID"?403:safe==="REQUEST_TOO_LARGE"?413:safe.includes("UNAVAILABLE")||safe.includes("UNCERTAIN")||safe.includes("RECONCILIATION_REQUIRED")?503:409;
+      json(res,status,{ok:false,error:safe,retryThroughReconciliation:true});
+    }return;
   }
   if(req.method==="GET" && raw==="/api/integrations/ousd/mint"){
     try{const conn=new Connection(process.env.SOLANA_RPC_URL||clusterApiUrl("mainnet-beta"),{commitment:"finalized",disableRetryOnRateLimit:true,fetch:(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(8000)})});json(res,200,{ok:true,...await inspectOpenUsdSolana(conn)});}catch{json(res,503,{ok:false,error:"OUSD_RPC_UNAVAILABLE"});}return;
@@ -3317,7 +3345,7 @@ async function handleRequest(req,res){
 }
 
 const server=http.createServer((req,res)=>{
-  if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !["/api/health","/api/v1/status","/api/integrations/config","/api/integrations/ousd/mint","/api/integrations/ousd/request","/api/integrations/ousd/prepare","/api/integrations/ousd/verify"].includes(req.url)){
+  if(accountDatabaseRequired && String(req.url).startsWith("/api/") && !String(req.url).startsWith("/api/integrations/checkout/") && !["/api/health","/api/v1/status","/api/integrations/config","/api/integrations/ousd/mint","/api/integrations/ousd/request","/api/integrations/ousd/prepare","/api/integrations/ousd/verify"].includes(req.url)){
     if(!accountDatabase){json(res,503,{ok:false,error:"ACCOUNT_STORAGE_UNAVAILABLE"});return;}
     if(!rateLimitApi(req)){json(res,429,{ok:false,error:"RATE_LIMITED"});return;}
     req.hsRateLimitChecked=true;
@@ -3407,6 +3435,7 @@ if(pohaDatabaseRequired){
         contributions:{file:HUMAN_SIGNAL_FILE,fallback:{records:[]},validate:s=>Boolean(s&&Array.isArray(s.records))}
       };
       const stores=Object.fromEntries(Object.entries(specs).map(([id,spec])=>[id,{validate:spec.validate,readLegacy:()=>readJson(spec.file,spec.fallback,spec.validate)}]));
+      stores[CHECKOUT_STORE]=checkoutStoreSpec;
       const accounts=new AccountStateDatabase({connectionString:process.env.HUMAN_SIGNAL_DATABASE_URL,stores});
       await accounts.initialize();accountDatabase=accounts;
     }

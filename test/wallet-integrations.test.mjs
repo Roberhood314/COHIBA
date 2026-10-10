@@ -25,7 +25,7 @@ test('OUSD settlement rejects wrong chain, pending, failed, wrong asset, amount,
 test('Pi verification uses fixed API, rejects forged/expired/provider failure, omits access token',async()=>{
  const until=new Date(Date.now()+60000).toISOString();let headers;
  const fake=async(url,opts)=>{assert.equal(url,'https://api.minepi.com/v2/me');headers=opts.headers;return {ok:true,json:async()=>({uid:'pi-user',credentials:{scopes:[],valid_until:{iso8601:until}}})};};
- assert.deepEqual(await verifyPiAccessToken('a'.repeat(32),fake),{uid:'pi-user',validUntil:until});assert.equal(headers.authorization,'Bearer '+'a'.repeat(32));
+ assert.deepEqual(await verifyPiAccessToken('a'.repeat(32),fake),{uid:'pi-user',validUntil:until,scopes:[]});assert.equal(headers.authorization,'Bearer '+'a'.repeat(32));
  await assert.rejects(verifyPiAccessToken('a'.repeat(32),async()=>({ok:false,status:401})),/PI_TOKEN_INVALID/);
  await assert.rejects(verifyPiAccessToken('a'.repeat(32),async()=>({ok:true,json:async()=>({uid:'forged'})})),/INVALID_RESPONSE/);
  await assert.rejects(verifyPiAccessToken('a'.repeat(32),async()=>{throw Error('secret-token');}),/PI_PROVIDER_UNAVAILABLE/);
