@@ -15,7 +15,11 @@ integrations/open-standard/ousd-solana.mjs exports a read-only mint inspector fo
 Official Solana mint: ousd2mJsPEckLHcSCDxyKD7NDGARZcfLbDZkKiatYHB
 Source: https://joinopenstandard.com/integrate
 
-## Next implementation gate
+## Direct-wallet checkout implementation
+
+The [Pi/Open USD checkout infrastructure](PI_OPEN_STANDARD_CHECKOUT.md) adds merchant-configured, server-priced OUSD orders, human Phantom approval and durable finalized receipt claims. It remains opt-in, pre-audit and has no live-payment or partner evidence. The direct Solana asset route does not require inventing a provider API and does not implement provider mint/burn or fiat rails.
+
+## Provider implementation gate
 
 Select one provider product or an on-chain wallet execution path. Obtain its applicable sandbox/account access and document its exact supported OUSD operations before implementing payments. Do not invent API endpoints, credentials, testnet mint addresses or acceptance by Open Standard.
 

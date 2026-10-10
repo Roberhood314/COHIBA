@@ -4,6 +4,8 @@
 
 ## Human Signal / SI — inspect the boundary
 
+[Pi Network / Open USD checkout infrastructure](docs/PI_OPEN_STANDARD_CHECKOUT.md): opt-in Pi U2A approve/complete/reconciliation and human-wallet OUSD transfers with a durable PostgreSQL order/receipt ledger. Configuration readiness is separate from live integration evidence. Agent payment authority, Pi approval and Open Standard partnership are not claimed.
+
 **Experimental, pre-audit.** [Public verification lab](https://cohibameme.site/si-lab.html): run real dual-signature checks locally without a wallet. [HS/2 integration and roadmap](docs/HS2_INTEGRATION_AND_ROADMAP.md) separates delivered SQL authority enforcement, opt-in Ed25519 + hash-based SLH-DSA research, and future evidence gates. Production routes are not automatically migrated; this is not a blanket quantum/AI-proof claim.
 
 COHIBA is a human-first Solana cultural crypto project exploring identity, agency and resilience in the age of artificial intelligence. It combines meme-native storytelling with a verification-first token architecture and public technical evidence.

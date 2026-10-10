@@ -27,7 +27,7 @@ Register COHIBA in develop.pi using Pi Browser; verify the actual hosted domain 
 
 Users need an existing authenticated COHIBA profile with verified Solana wallet. Pi SDK 2.0 authenticates in Pi Browser; the server independently checks the access token against https://api.minepi.com/v2/me and credential expiry. It stores only a keyed hash of the app-specific uid plus timestamps in the existing account state store. Access tokens are not persisted, logged or returned. Linking refuses duplicate owners and silent identity replacement; unlinking requires the authenticated COHIBA session. Pi verification never changes human assurance, PoHA keys or mining boosts. Expired verifications need rechecking; a stored link is not proof of current Pi account control.
 
-PI_APP_ENABLED is false by default. No Pi payment, conversion, bridge or partnership is claimed. Pi payments require a separate documented order ledger and server approve/complete flow.
+PI_APP_ENABLED is false by default. The opt-in [durable checkout profile](PI_OPEN_STANDARD_CHECKOUT.md) now adds server-priced orders, Pi server approve/complete/reconciliation and once-only OUSD receipt claims. It requires PostgreSQL and separate activation flags; the generic request/verify tools above remain read-only invoice inspection. No live Pi payment, conversion, bridge or partnership is claimed without external evidence.
 
 ## Validation
 
