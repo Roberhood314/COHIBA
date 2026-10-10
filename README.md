@@ -4,6 +4,8 @@
 
 ## Human Signal / SI — inspect the boundary
 
+[Paid SI engineering pilots](https://cohibameme.site/si-pilot.html): proposed scoped review/integration services for one staging action. [Offer and acceptance criteria](commercial/SI_PAID_PILOT.md) · [First-customer execution](commercial/SALES_EXECUTION.md). Experimental/pre-audit; written scope required before payment. No paid adoption or revenue claim.
+
 [Pi Network / Open USD checkout infrastructure](docs/PI_OPEN_STANDARD_CHECKOUT.md): opt-in Pi U2A approve/complete/reconciliation and human-wallet OUSD transfers with a durable PostgreSQL order/receipt ledger. Configuration readiness is separate from live integration evidence. Agent payment authority, Pi approval and Open Standard partnership are not claimed.
 
 **Experimental, pre-audit.** [Public verification lab](https://cohibameme.site/si-lab.html): run real dual-signature checks locally without a wallet. [HS/2 integration and roadmap](docs/HS2_INTEGRATION_AND_ROADMAP.md) separates delivered SQL authority enforcement, opt-in Ed25519 + hash-based SLH-DSA research, and future evidence gates. Production routes are not automatically migrated; this is not a blanket quantum/AI-proof claim.
