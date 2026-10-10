@@ -1,3 +1,7 @@
+# Current priority: a bounded SI/PostgreSQL review
+
+Start with the [pinned SI review kit](si/README.md): three falsifiable questions, one-command synthetic reproduction, native PostgreSQL evidence, finding templates and response targets. No independent audit is claimed. Outreach drafts are prepared, not sent. The token/launch review surfaces below remain available separately.
+
 # COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET
 
 ## Status

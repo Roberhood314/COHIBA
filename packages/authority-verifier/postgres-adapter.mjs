@@ -1,6 +1,16 @@
 // Inject a PostgreSQL pool owned by the integrating service. No COHIBA connection.
+// IF NOT EXISTS alone does not serialize concurrent PostgreSQL DDL. All verifier
+// initializers take the same transaction-scoped lock on a dedicated pool client.
+async function initializeSchema(pool,sql){
+ const c=await pool.connect();try{
+  await c.query('BEGIN');
+  await c.query('SELECT pg_advisory_xact_lock(721043)');
+  await c.query(sql);
+  await c.query('COMMIT');
+ }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
+}
 export async function createPostgresReplayStore(pool){
- await pool.query(`
+ await initializeSchema(pool,`
  CREATE TABLE IF NOT EXISTS hs_verifier_epochs(issuer text NOT NULL,principal_id text NOT NULL,credential_epoch bigint NOT NULL,PRIMARY KEY(issuer,principal_id));
  CREATE TABLE IF NOT EXISTS hs_verifier_actions(signer_key text NOT NULL,nonce text NOT NULL,action_digest text NOT NULL,PRIMARY KEY(signer_key,nonce));
  CREATE TABLE IF NOT EXISTS hs_verifier_approvals(principal_key text NOT NULL,nonce text NOT NULL,PRIMARY KEY(principal_key,nonce));
@@ -30,7 +40,7 @@ export async function createPostgresReplayStore(pool){
 export async function createPostgresCommitGate(pool,{onCommit}={}){
  if(typeof onCommit!=='function')throw Error('ATOMIC_COMMIT_HOOK_REQUIRED');
  const consume=await createPostgresReplayStore(pool);
- await pool.query(`CREATE TABLE IF NOT EXISTS hs_verifier_revocations(
+ await initializeSchema(pool,`CREATE TABLE IF NOT EXISTS hs_verifier_revocations(
  issuer text NOT NULL,principal_id text NOT NULL,authority_id text NOT NULL,
  PRIMARY KEY(issuer,principal_id,authority_id));
  CREATE TABLE IF NOT EXISTS hs_verifier_commits(action_digest text PRIMARY KEY,valid_until timestamptz NOT NULL);
