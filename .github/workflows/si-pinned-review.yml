@@ -47,7 +47,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/si-native"
           git rev-parse HEAD > "$RUNNER_TEMP/si-native/commit.txt"
           printf 'PostgreSQL 18; fresh CI service; independent pg.Pool clients\n' > "$RUNNER_TEMP/si-native/backend.txt"
-          node --test test/independent-verifier.test.mjs test/authority-commit-gate.test.mjs 2>&1 | tee "$RUNNER_TEMP/si-native/tests.log"
+          node --test --test-concurrency=1 test/independent-verifier.test.mjs test/authority-commit-gate.test.mjs 2>&1 | tee "$RUNNER_TEMP/si-native/tests.log"
+      # The pinned target has a documented startup-DDL race. Serialize its test
+      # files while retaining multi-client concurrency inside each test; race the
+      # fixed adapter explicitly below in a genuinely empty isolated schema.
+      - name: Validate current adapter concurrent startup fix
+        env:
+          TEST_DATABASE_URL: postgresql://postgres@localhost:5432/si_pinned_review
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/si-startup-fix"
+          git rev-parse HEAD > "$RUNNER_TEMP/si-startup-fix/commit.txt"
+          node --test test/authority-schema-init.test.mjs 2>&1 | tee "$RUNNER_TEMP/si-startup-fix/tests.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -55,4 +68,5 @@ jobs:
           path: |
             ${{ runner.temp }}/si-embedded/
             ${{ runner.temp }}/si-native/
+            ${{ runner.temp }}/si-startup-fix/
           if-no-files-found: error
