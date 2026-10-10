@@ -1,6 +1,6 @@
 {
-  "campaign": "COHIBA OPEN REVIEW — BREAK IT BEFORE MAINNET",
-  "status": "READY_TO_DISTRIBUTE",
+  "campaign": "COHIBA SI/PostgreSQL Pinned Independent Review",
+  "status": "DRAFT_NOT_SENT",
   "links": {
     "x": "https://cohibameme.site/open-review.html?utm_source=x",
     "solanaDiscord": "https://cohibameme.site/open-review.html?utm_source=solana-discord",
@@ -14,5 +14,8 @@
     "solanaDiscord": "MANUAL_COMMUNITY_POST_REQUIRED",
     "reddit": "MANUAL_COMMUNITY_POST_REQUIRED",
     "securityOutreach": "TARGETED_CONTACT_REQUIRED"
-  }
+  },
+  "reviewKit": "https://github.com/Roberhood314/COHIBA/tree/main/open-review/si",
+  "reviewCommit": "916f9f6f8d0403a32fbfe83f0f565871ec7e051c",
+  "outreachDrafts": "open-review/si/OUTREACH.md"
 }

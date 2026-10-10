@@ -1,0 +1,58 @@
+name: SI Pinned Review
+on:
+  push:
+    branches: [main]
+    paths: ['open-review/si/**', 'scripts/review-si.mjs', '.github/workflows/si-pinned-review.yml']
+  pull_request:
+    paths: ['open-review/si/**', 'scripts/review-si.mjs', '.github/workflows/si-pinned-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: si_pinned_review
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Reproduce pinned target with isolated embedded database
+        run: npm run review:si -- --output="$RUNNER_TEMP/si-embedded"
+      - name: Read exact review target
+        id: target
+        run: node -e "console.log('sha=' + JSON.parse(require('fs').readFileSync('open-review/si/manifest.json')).commit)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          path: pinned-target
+      - name: Reproduce native PostgreSQL multi-client behavior
+        working-directory: pinned-target
+        env:
+          TEST_DATABASE_URL: postgresql://postgres@localhost:5432/si_pinned_review
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/si-native"
+          git rev-parse HEAD > "$RUNNER_TEMP/si-native/commit.txt"
+          printf 'PostgreSQL 18; fresh CI service; independent pg.Pool clients\n' > "$RUNNER_TEMP/si-native/backend.txt"
+          node --test test/independent-verifier.test.mjs test/authority-commit-gate.test.mjs 2>&1 | tee "$RUNNER_TEMP/si-native/tests.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: si-pinned-review-evidence
+          path: |
+            ${{ runner.temp }}/si-embedded/
+            ${{ runner.temp }}/si-native/
+          if-no-files-found: error

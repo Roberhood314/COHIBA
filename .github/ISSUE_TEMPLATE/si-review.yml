@@ -1,0 +1,54 @@
+name: SI Boundary Review
+description: Non-sensitive, reproducible review of the pinned SI/PostgreSQL boundary
+title: '[SI REVIEW] '
+body:
+  - type: markdown
+    attributes:
+      value: 'Do not disclose sensitive exploits here. Follow SECURITY.md and request a confirmed private channel first. See open-review/si/README.md for scope and limitations.'
+  - type: input
+    id: sha
+    attributes:
+      label: Reviewed commit SHA
+      value: 916f9f6f8d0403a32fbfe83f0f565871ec7e051c
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Claim challenged, severity and concrete impact
+      description: Identify revocation, scope substitution, replay/rollback or another scoped assumption; include affected file/function.
+    validations:
+      required: true
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: Preconditions and attacker control
+      description: Identify trusted components and which documented assumption is violated.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal local reproduction and expected versus actual state
+      description: Include commands or a safe test patch, Node/backend versions, independent connections and durable effect/nonce/revocation state. PGlite serialization does not prove native PostgreSQL races.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Non-sensitive evidence and suggested fix
+      description: Report hashes, reproduction count, logs and optional remediation. Remove private material before sharing.
+  - type: input
+    id: attribution
+    attributes:
+      label: Attribution preference
+      description: Optional explicit consent and desired public name/link; blank means no public attribution consent.
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Safe review boundary
+      options:
+        - label: This report contains no secrets, sensitive exploit details or production-impacting reproduction steps.
+          required: true
+        - label: I used local synthetic testing and did not attack mainnet, production availability or third-party systems.
+          required: true

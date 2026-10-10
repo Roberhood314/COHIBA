@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/Roberhood314/COHIBA.git",
+  "commit": "916f9f6f8d0403a32fbfe83f0f565871ec7e051c",
+  "tests": ["test/independent-verifier.test.mjs", "test/authority-commit-gate.test.mjs"],
+  "sources": ["packages/authority-verifier/index.mjs", "packages/authority-verifier/postgres-adapter.mjs", "packages/authority-verifier/issuer.mjs", "lib/poha-v1.mjs", "sdk/human-signal-node.mjs", "examples/independent-verifier/fixture.mjs", "examples/independent-verifier/vectors.json", "test/independent-verifier.test.mjs", "test/authority-commit-gate.test.mjs", "package-lock.json"]
+}

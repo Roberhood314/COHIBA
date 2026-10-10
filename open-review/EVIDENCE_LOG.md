@@ -18,3 +18,6 @@ This log records externally attributable review/contribution evidence. Do not ad
 
 ## Integrity
 No entry should imply an independent audit unless an independent report covering a defined commit/scope exists.
+
+## SI boundary records
+Use [the review record template](si/REVIEW_RECORD.md) to attach exact scope, SHA, independent reviewer evidence and retest provenance. The kit and its CI do not create an external review entry.

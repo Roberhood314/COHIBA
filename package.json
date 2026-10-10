@@ -32,7 +32,8 @@
     "verify:erc4337": "npm test --prefix examples/erc4337",
     "hs2:vectors": "node scripts/generate-hs2-lab.mjs",
     "verify:hs2": "node --test test/hs2-verifier.test.mjs test/authority-commit-gate.test.mjs",
-    "hs2:demo": "node examples/hs2/verify.mjs"
+    "hs2:demo": "node examples/hs2/verify.mjs",
+    "review:si": "node scripts/review-si.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

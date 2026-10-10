@@ -1,7 +1,7 @@
 # COHIBA Security Policy
 
 ## Security objective
-COHIBA treats fixed supply, authority revocation, launch authorization and public evidence integrity as security-critical properties.
+COHIBA treats fixed supply, authority revocation, launch authorization and public evidence integrity, signed SI authority and atomic PostgreSQL commit admission as security-critical properties.
 
 ## Supported surface
 The supported security surface is the production branch `main`, the canonical site `cohibameme.site`, launch server, token scripts, persistent launch state and public verification endpoints.
@@ -52,9 +52,13 @@ Not allowed without explicit written authorization:
 ### Public disclosure
 Confirmed findings may be documented publicly only after remediation or when disclosure is otherwise safe. Public evidence should distinguish SUBMITTED, CONFIRMED, FIXED and RETESTED states.
 
+## SI review intake and response targets
+
+The pinned [SI boundary review kit](open-review/si/README.md) describes exact scope, reproduction and exclusions. Maintainer targets: acknowledgment within 2 business days, initial triage within 7 business days after sufficient evidence is received, and weekly updates on open confirmed findings. These are targets, not guaranteed SLAs. Private-channel readiness must be confirmed before sensitive details are requested. See [handling policy](open-review/si/HANDLING.md).
+
 ## Severity
-- **Critical:** signer/private-key compromise, unauthorized Mainnet launch, arbitrary minting, authority-control bypass.
-- **High:** persistent-state bypass, supply-verification bypass, launch-auth bypass.
+- **Critical:** signer/private-key compromise, unauthorized Mainnet launch, arbitrary minting, authority-control bypass, broad unauthorized SI business effects.
+- **High:** persistent-state bypass, supply-verification bypass, launch-auth bypass, confirmed SI revocation/scope/replay bypass within the documented SQL boundary.
 - **Medium:** verification-data integrity flaws, meaningful availability/security-header defects.
 - **Low:** non-sensitive information leakage or cosmetic security issues.
 
