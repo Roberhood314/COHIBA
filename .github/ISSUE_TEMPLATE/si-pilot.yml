@@ -1,0 +1,49 @@
+name: COHIBA SI integration pilot
+description: Request a scoped paid engineering review or integration pilot
+title: '[SI PILOT] '
+body:
+  - type: markdown
+    attributes:
+      value: 'This is a public, non-binding service inquiry. SI is experimental/pre-audit. No payment is requested here. Do not include private contact details, customer data, credentials or sensitive security findings. Ask for a confirmed private channel before sharing non-public materials.'
+  - type: dropdown
+    id: service
+    attributes:
+      label: Service requested
+      options:
+        - Integration pilot
+        - Scope review
+        - Maintenance
+    validations:
+      required: true
+  - type: input
+    id: project
+    attributes:
+      label: Public project name or URL
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Language, agent framework and storage
+    validations:
+      required: true
+  - type: textarea
+    id: effect
+    attributes:
+      label: One action to protect
+      description: Describe the intended authorization boundary using a non-sensitive staging example.
+    validations:
+      required: true
+  - type: input
+    id: timing
+    attributes:
+      label: Preferred timeframe
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Inquiry boundary
+      options:
+        - label: This public inquiry contains no private data, credentials or sensitive findings.
+          required: true
+        - label: I understand this is not a purchase; scope, schedule and commercial terms must be agreed separately.
+          required: true
