@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { createFrameworkAdapter } from '../../lib/si-framework-api.mjs';
 
-export const HS_MCP_ADAPTER_VERSION = 'HS_MCP_V0_1';
+export const HS_MCP_ADAPTER_VERSION = 'HS_MCP_V0_2';
 export const MCP_ADAPTER_ID = 'mcp-typescript-sdk-reference';
 
 const text = (value, max = 512) =>
@@ -14,6 +14,18 @@ function stable(value) {
     return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
   }
   return value;
+}
+
+// Only lossless JSON values may enter a signed proposal. Freeze a detached
+// snapshot before crossing any asynchronous authority-provider boundary.
+function snapshot(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return Object.freeze(value.map(snapshot));
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([k, v]) => [k, snapshot(v)])));
+  }
+  throw new Error('INVALID_MCP_JSON_VALUE');
 }
 
 function hash(value) {
@@ -45,7 +57,7 @@ export function buildMcpToolProposal({ toolName, subject, resource, arguments: a
       toolName,
       subject,
       resource,
-      arguments: stable(args)
+      arguments: stable(snapshot(args))
     }),
     effects: [...effects]
   };
@@ -96,19 +108,22 @@ export function registerHumanSignalMcpTool({
     getAuthorityState
   });
 
-  server.registerTool(name, config, async (args, extra) => {
+  server.registerTool(name, config, async (inputArgs, extra) => {
+    let args;
+    try { args = snapshot(inputArgs); }
+    catch { return denyResult('INVALID_MCP_TOOL_ARGUMENTS'); }
     const resource = resourceFor(args, extra);
-    const proposal = buildMcpToolProposal({
+    const proposal = snapshot(buildMcpToolProposal({
       toolName: name,
       subject,
       resource,
       arguments: args,
       effects
-    });
+    }));
 
     let envelope;
     try {
-      envelope = await getAuthorityEnvelope({ name, args, extra, proposal });
+      envelope = snapshot(await getAuthorityEnvelope({ name, args, extra, proposal }));
     } catch {
       return denyResult('AUTHORITY_UNAVAILABLE');
     }
@@ -122,10 +137,10 @@ export function registerHumanSignalMcpTool({
       return denyResult('EXACT_EFFECT_AUTHORITY_MISMATCH');
     }
 
-    const first = framework.evaluate({ envelope, proposal, now: now() });
+    const first = await framework.evaluateAsync({ envelope, proposal, now });
     if (first.verdict !== 'ALLOW') return denyResult(first.reason);
 
-    const commitDecision = framework.evaluate({ envelope, proposal, now: now() });
+    const commitDecision = await framework.evaluateAsync({ envelope, proposal, now });
     if (commitDecision.verdict !== 'ALLOW') return denyResult(commitDecision.reason);
 
     let committed = false;
