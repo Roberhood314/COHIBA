@@ -163,3 +163,14 @@ test('payload tampering changes the proposal binding', () => {
   assert.notEqual(a.proposalDigest, b.proposalDigest);
   assert.notEqual(a.commitBinding.payloadHash, b.commitBinding.payloadHash);
 });
+
+test('synchronous API rejects unresolved authority state even at epoch zero', () => {
+  const adapter = createFrameworkAdapter({adapterId:policy.adapterId,policies:[policy],getAuthorityState:async()=>({revoked:true})});
+  const result=adapter.evaluate({envelope:envelope({epoch:0}),proposal:proposal(),now});
+  assert.equal(result.verdict,'DENY');
+  assert.equal(result.reason,'AUTHORITY_STATE_UNAVAILABLE');
+});
+test('async API resolves authority state and rejects revocation', async () => {
+  const adapter = createFrameworkAdapter({adapterId:policy.adapterId,policies:[policy],getAuthorityState:async()=>({epoch:4,revoked:true})});
+  assert.equal((await adapter.evaluateAsync({envelope:envelope(),proposal:proposal(),now})).reason,'REVOKED');
+});
