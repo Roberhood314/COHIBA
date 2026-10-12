@@ -82,3 +82,11 @@ The older `authorizeAuthority` remains admission-only. Use `operationCommitted` 
 Cryptographic boundary: this version still uses the fixed HS/1 Ed25519 signing format and SHA-256 digests. It adds no post-quantum algorithm, no hybrid signature and no claim of resistance to future AI cryptanalysis. A future algorithm migration needs a new domain-separated signed version, operator-pinned algorithm policy, cross-implementation vectors and downgrade rejection. Do not add client-selectable algorithm fallbacks or silently reinterpret existing HS/1 keys. Keep authorization correctness, cryptographic migration and independent audit as separate evidence requirements.
 
 Run `node --test test/authority-commit-gate.test.mjs test/independent-verifier.test.mjs`. CI can run the gate tests against native PostgreSQL via `TEST_DATABASE_URL`; the local fallback uses PGlite with serialized clients and does not establish native multi-session lock behavior.
+
+## Destination-owned commit and reconciliation reference
+
+`destination-store.mjs` adds a fixed SQL draft destination with durable receipts.
+Independent source databases converge on that same ordering store; retries report
+receipts with `executionAuthorized:false`. A host-pinned policy and local durable
+revocation remain mandatory. This is an opt-in reference, not a deployed global
+network. See [resilience scope and fault evidence](../../docs/DESTINATION_RESILIENCE_V0_1.md).
