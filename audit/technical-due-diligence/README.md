@@ -28,3 +28,12 @@ The runnable model includes expected negative witnesses for independent replay l
 ## Remaining acceptance gates
 
 To claim all six properties globally: enumerate and gate every effect adapter; formally connect implementation to specification; deploy independently operated enforcement nodes with durable global admission ordering and membership governance; define revocation linearization and partition policy; integrate destination-side idempotency or a shared transactional protocol for each external sink; perform crash, partition and restore fault campaigns; obtain independent audit. Until then use the scoped conclusions above.
+
+## Destination resilience reference (v0.1)
+
+[Destination enforcement and resilience](../../docs/DESTINATION_RESILIENCE_V0_1.md)
+adds an opt-in SQL draft receiver, shared destination admission across independent
+source databases, durable receipt reconciliation and a native PostgreSQL fault
+campaign/benchmark workflow. This extends reference evidence only; it does not
+expand the existing production label or establish arbitrary HTTP/chain atomicity,
+instant issuer-wide revocation, Byzantine consensus or independent review.
